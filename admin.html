@@ -2204,7 +2204,8 @@ html.gloss-off .gloss-term::after{content:none}
                 const uploadType = upload === file ? mime : upload.type;
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro: ' + (r.error?.message || 'erro desconhecido'))); r.readAsDataURL(upload); });
                 const prepared = performance.now();
-                const model = appState.settings?.geminiModel || 'gemini-3.8-flash';
+                let model = appState.settings?.geminiModel || 'gemini-3.8-flash';
+                const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
                 setStage('Enviar ao Gemini', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao Gemini (${model})`);
                 // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
                 // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
@@ -2224,16 +2225,23 @@ html.gloss-off .gloss-term::after{content:none}
                     } finally { clearTimeout(timer); }
                 };
                 const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, maxOutputTokens: 32768 };
-                let config = { ...base, thinkingConfig: { thinkingLevel: 'low' } }, res, body;
+                let config = { ...base, thinkingConfig: { thinkingLevel: 'low' } }, res, body, fellBack = false;
                 for (let attempt = 1; ; attempt++) {
                     res = await call(config);
                     body = await res.json().catch(() => ({}));
                     if (res.status === 400 && config.thinkingConfig && /thinking/i.test(body.error?.message || '')) { config = base; continue; } // modelo que não aceita thinkingLevel
-                    // 429/500/503: Gemini sobrecarregado; tenta mais uma vez.
-                    if ([429, 500, 503].includes(res.status) && attempt < 2) { setStage('Enviar ao Gemini', 'Gemini ocupado, a tentar outra vez'); await new Promise(r => setTimeout(r, 3000)); continue; }
-                    break;
+                    if (![429, 500, 503].includes(res.status)) break;
+                    // Gemini sobrecarregado: espera 2, 4 e 8 s; se continuar, passa uma vez para o modelo mais leve.
+                    if (attempt < 4) {
+                        const wait = 2 ** attempt;
+                        setStage('Enviar ao Gemini', `${model} ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
+                        await new Promise(r => setTimeout(r, wait * 1000));
+                    } else if (!fellBack && model !== FALLBACK_MODEL) {
+                        fellBack = true; attempt = 0; model = FALLBACK_MODEL; config = { ...base, thinkingConfig: { thinkingLevel: 'low' } };
+                        setStage('Enviar ao Gemini', `Modelo principal ocupado, a tentar com ${model}`);
+                    } else break;
                 }
-                if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}`);
+                if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? `\n\nTentado 4 vezes com ${appState.settings?.geminiModel || 'gemini-3.8-flash'} e com ${FALLBACK_MODEL}. A Google está sobrecarregada: tente daqui a uns minutos.` : ''));
                 stage = 'Ler a resposta do Gemini';
                 const cand = body.candidates?.[0], finish = cand?.finishReason;
                 const text = cand?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
@@ -2246,7 +2254,7 @@ html.gloss-off .gloss-term::after{content:none}
                 const done = performance.now(), usage = body.usageMetadata || {};
                 console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
-                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', 'info');
+                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com ' + model + ' porque o modelo principal estava ocupado. Confira bem as linhas. · ' : '') + 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
             } catch (error) {
                 ocrFailure(file.name, stage, error.message);
             } finally { clearInterval(ticker); }
