@@ -170,15 +170,9 @@ function getAggregatedFinancials() {
     const keys = STORE_KEYS;
     const agg = {
         revenue: 0, cogs: 0, payroll: 0, deliveryFees: 0, fixedCosts: 0,
-        monthly: [
-            { m: 'Jun', rev: 0, cogs: 0 },
-            { m: 'Jul', rev: 0, cogs: 0 },
-            { m: 'Ago', rev: 0, cogs: 0 },
-            { m: 'Set', rev: 0, cogs: 0 },
-            { m: 'Out', rev: 0, cogs: 0 },
-            { m: 'Nov', rev: 0, cogs: 0 }
-        ]
+        monthly: appState.storeFinancials[keys[0]].monthly.map(pt => ({ m: pt.m, rev: 0, cogs: 0 }))
     };
+    const period = appState.storeFinancials[keys[0]].period;
 
     keys.forEach(k => {
         const sf = appState.storeFinancials[k];
@@ -198,7 +192,7 @@ function getAggregatedFinancials() {
     const foodCostPct = agg.revenue > 0 ? (agg.cogs / agg.revenue) * 100 : 0;
     const primeCost = agg.cogs + agg.payroll;
     const primeCostPct = agg.revenue > 0 ? (primeCost / agg.revenue) * 100 : 0;
-    const wasteCost = appState.wasteLogs.filter(w=>keys.includes(w.store)).reduce((sum,w)=>sum+w.cost,0);
+    const wasteCost = appState.wasteLogs.filter(w=>keys.includes(w.store) && (!w.period || !period || w.period === period)).reduce((sum,w)=>sum+w.cost,0);
     const ebitda = grossMargin - agg.payroll - agg.deliveryFees - agg.fixedCosts - wasteCost;
     const ebitdaPct = agg.revenue > 0 ? (ebitda / agg.revenue) * 100 : 0;
 
@@ -223,4 +217,75 @@ function validateRecipe(recipe,id,ancestors=new Set()) {
 // Custo Médio Ponderado após uma entrada de stock. Com stock nulo ou negativo, o CMP passa a ser o preço da compra.
 function weightedAverageCost(oldQty, oldCmp, qty, price) {
     return oldQty > 0 ? (oldQty*oldCmp + qty*price)/(oldQty+qty) : price;
+}
+
+// Índice de preços de um fornecedor: média das últimas 6 compras de cada insumo, normalizada ao primeiro ponto (100).
+// A inflação é a variação desse índice entre o primeiro e o último ponto.
+function supplierPriceTrend(supplierId) {
+    const series = appState.ingredients
+        .filter(i => i.supplierId === supplierId && i.priceHistory?.length && i.priceHistory[Math.max(0, i.priceHistory.length - 6)] > 0)
+        .map(i => i.priceHistory.slice(-6));
+    if (!series.length) return { inflationPct: 0, history: [100, 100] };
+    const len = Math.max(...series.map(s => s.length));
+    const history = Array.from({ length: len }, (_, k) => {
+        const pts = series.map(s => 100 * s[Math.max(0, k - (len - s.length))] / s[0]);
+        return pts.reduce((a, b) => a + b, 0) / pts.length;
+    });
+    return { inflationPct: history[history.length - 1] - 100, history: history.length > 1 ? history : [history[0], history[0]] };
+}
+
+// PVP com IVA que deixa o custo do prato na meta de food cost (sobre o preço sem IVA).
+function suggestedPvpGross(unitCost, targetFcPct, vatRate) {
+    if (!(targetFcPct > 0) || !(unitCost > 0)) return 0;
+    return unitCost / (targetFcPct / 100) * (1 + Number(vatRate ?? 13) / 100);
+}
+
+// Valor do stock do restaurante. counted=true usa a última contagem física (matéria-prima + preparações contadas);
+// caso contrário usa o stock teórico. Inclui as preparações produzidas em stock, ao custo unitário atual.
+function stockValue(counted = false) {
+    const raw = appState.ingredients.reduce((sum, ing) => {
+        const m = getIngMetricsForStore(ing);
+        const qty = counted ? m.stockCounted + (m.preparedCount || 0) : m.stockTheoretical;
+        return sum + qty * (counted ? (m.countCost ?? m.cmp) : m.cmp);
+    }, 0);
+    const preps = appState.recipes.reduce((sum, r) => sum + (r.prepStock?.[RESTAURANT] || 0) * calculateRecipeCost(r).unitCost, 0);
+    return raw + preps;
+}
+
+// Compras que deram entrada em stock no período (AAAA-MM): guias, faturas sem guia e notas de crédito (a abater).
+// Linhas de serviço não contam para o CMV.
+function periodPurchases(period) {
+    return appState.invoices.filter(inv => inv.store === RESTAURANT && inv.status === 'Aprovada' && !inv.receiptRef && String(inv.date).startsWith(period))
+        .reduce((sum, inv) => {
+            const sign = inv.docType === 'Nota de Crédito' ? -1 : 1;
+            if (!inv.lines?.length) return sum + inv.net;
+            return sum + sign * inv.lines.filter(l => !l.service).reduce((n, l) => n + l.qty * l.price, 0);
+        }, 0);
+}
+
+// CMV real = stock inicial + compras − stock final (contado). Compara com o CMV teórico das vendas.
+function periodRealCogs(opening, purchases, closing, revenue, theoretical) {
+    const realCogs = opening + purchases - closing;
+    const pct = v => revenue > 0 ? v / revenue * 100 : 0;
+    return { opening, purchases, closing, realCogs, theoretical, gapEur: realCogs - theoretical, realPct: pct(realCogs), theoPct: pct(theoretical) };
+}
+
+// Alergénios de uma ficha, incluindo os das sub-receitas.
+function recipeAllergens(recipe, visited = new Set()) {
+    if (!recipe || visited.has(recipe.id)) return [];
+    visited.add(recipe.id);
+    const found = new Set();
+    for (const item of recipe.items || []) {
+        const list = item.type === 'sub_recipe' ? recipeAllergens(getRecipe(item.refId), visited) : (getIngredient(item.refId)?.allergens || []);
+        list.forEach(a => found.add(a));
+    }
+    return [...found].sort((a, b) => a.localeCompare(b, 'pt'));
+}
+
+// Fornecedor com o preço mais baixo conhecido para um insumo (ou null).
+function bestSupplierPrice(ing) {
+    const quotes = Object.entries(ing?.supplierPrices || {}).filter(([, q]) => q.price > 0);
+    if (!quotes.length) return null;
+    const [supplierId, q] = quotes.reduce((best, cur) => cur[1].price < best[1].price ? cur : best);
+    return { supplierId, ...q };
 }

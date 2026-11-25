@@ -205,3 +205,59 @@ test('Custo Médio Ponderado após compra', () => {
     near(c.weightedAverageCost(0, 12, 5, 14), 14);
     near(c.weightedAverageCost(-2, 12, 5, 14), 14);
 });
+
+test('supplierPriceTrend: índice médio dos insumos do fornecedor', () => {
+    const ctx = load({ ingredients: [
+        { id: 'a', supplierId: 's', priceHistory: [10, 11] },
+        { id: 'b', supplierId: 's', priceHistory: [4, 4, 5] },
+        { id: 'c', supplierId: 'x', priceHistory: [1, 9] }
+    ] });
+    const t = ctx.supplierPriceTrend('s');
+    // a alinha à direita com b: a = [100, 100, 110], b = [100, 100, 125] → último ponto 117,5
+    near(t.history[2], 117.5);
+    near(t.inflationPct, 17.5);
+    near(ctx.supplierPriceTrend('nenhum').inflationPct, 0);
+});
+
+test('suggestedPvpGross: custo 3 €, meta 30%, IVA 13% → 11,30 €', () => {
+    const ctx = load({});
+    near(ctx.suggestedPvpGross(3, 30, 13), 11.3);
+    assert.equal(ctx.suggestedPvpGross(3, 0, 13), 0);
+});
+
+test('periodPurchases: guias e faturas sem guia, menos notas de crédito, sem serviços', () => {
+    const inv = (docType, date, lines, extra = {}) => ({ store: 'chiado', status: 'Aprovada', docType, date, lines, net: 0, ...extra });
+    const ctx = load({ invoices: [
+        inv('Guia de Remessa', '2026-11-02', [{ qty: 2, price: 10 }]),
+        inv('Fatura', '2026-11-03', [{ qty: 2, price: 10 }], { receiptRef: 'GR 1' }),
+        inv('Fatura', '2026-11-04', [{ qty: 1, price: 5 }, { service: true, qty: 1, price: 100 }]),
+        inv('Nota de Crédito', '2026-11-05', [{ qty: 1, price: 4 }]),
+        inv('Fatura', '2026-10-30', [{ qty: 1, price: 999 }]),
+        { store: 'chiado', status: 'Aprovada', docType: 'Fatura', date: '2026-11-01', net: 7 }
+    ] });
+    near(ctx.periodPurchases('2026-11'), 20 + 5 - 4 + 7);
+});
+
+test('periodRealCogs: inicial + compras − final', () => {
+    const r = load({}).periodRealCogs(1000, 500, 600, 3000, 800);
+    near(r.realCogs, 900);
+    near(r.gapEur, 100);
+    near(r.realPct, 30);
+});
+
+test('recipeAllergens: junta alergénios das sub-receitas sem repetir', () => {
+    const ctx = load({
+        ingredients: [{ id: 'a', allergens: ['Peixe'] }, { id: 'b', allergens: ['Leite', 'Peixe'] }, { id: 'c' }],
+        recipes: [
+            { id: 'sub', items: [{ type: 'ingredient', refId: 'b' }] },
+            { id: 'prato', items: [{ type: 'ingredient', refId: 'a' }, { type: 'sub_recipe', refId: 'sub' }, { type: 'ingredient', refId: 'c' }] }
+        ]
+    });
+    assert.deepEqual([...ctx.recipeAllergens(ctx.getRecipe('prato'))], ['Leite', 'Peixe']);
+});
+
+test('bestSupplierPrice: escolhe o preço mais baixo', () => {
+    const ctx = load({});
+    assert.equal(ctx.bestSupplierPrice({ supplierPrices: { x: { price: 5 }, y: { price: 4 } } }).supplierId, 'y');
+    assert.equal(ctx.bestSupplierPrice({}), null);
+});

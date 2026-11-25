@@ -8,3 +8,7 @@ npm test
 ```
 
 Requer Node 18 ou mais recente. Não há dependências para instalar.
+
+## Dados
+
+Tudo fica guardado no `localStorage` do browser. Use **Exportar cópia** / **Importar cópia** (barra lateral) para guardar ou mudar de computador.
