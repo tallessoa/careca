@@ -2179,30 +2179,44 @@ html.gloss-off .gloss-term::after{content:none}
             if (!file) return;
             if (!/^(application\/pdf|image\/(jpeg|png|webp|heic|heif))$/.test(file.type)) { showToast('Formato não suportado', 'Use PDF, JPG, PNG, WEBP ou HEIC.', 'warning'); return; }
             if (file.size > 15 * 1024 * 1024) { showToast('Ficheiro grande demais', 'Máximo 15 MB.', 'warning'); return; }
-            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados. Isto demora alguns segundos.</p>');
+            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
+            const started = performance.now();
+            const ticker = setInterval(() => { const el = document.getElementById('ocr-elapsed'); if (el) el.textContent = Math.round((performance.now() - started) / 1000) + ' s'; }, 500);
             try {
                 const upload = await prepareInvoiceImage(file);
+                const prepared = performance.now();
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(upload); });
                 const model = appState.settings?.geminiModel || 'gemini-3.8-flash';
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+                // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
+                // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
+                const call = generationConfig => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
                     body: JSON.stringify({
                         contents: [{ parts: [{ inline_data: { mime_type: upload.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
-                        generationConfig: { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, temperature: 0 }
+                        generationConfig
                     })
                 });
+                const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA };
+                let res = await call({ ...base, thinkingConfig: { thinkingLevel: 'low' } });
+                if (res.status === 400) {
+                    const err = await res.clone().json().catch(() => ({}));
+                    if (/thinking/i.test(err.error?.message || '')) res = await call(base); // modelo que não aceita thinkingLevel
+                }
                 const body = await res.json().catch(() => ({}));
                 if (!res.ok) throw Error(body.error?.message || 'Erro ' + res.status + ' do Gemini.');
                 const text = body.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
                 if (!text) throw Error('O Gemini não devolveu dados (' + (body.candidates?.[0]?.finishReason || body.promptFeedback?.blockReason || 'sem resposta') + ').');
                 const ex = JSON.parse(text);
                 if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos.');
+                const done = performance.now(), usage = body.usageMetadata || {};
+                console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
+                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', 'info');
             } catch (error) {
                 closeModal();
                 showToast('Leitura falhou', error.message, 'warning');
-            }
+            } finally { clearInterval(ticker); }
         }
         // Fotos: reduz para 1600 px no lado maior, passa a cinzento e estica o contraste, para gastar menos tokens no Gemini.
         // O ficheiro original não é alterado. PDFs seguem como estão; se o browser não souber abrir a imagem (ex.: HEIC), envia o original.
