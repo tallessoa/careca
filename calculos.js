@@ -289,3 +289,31 @@ function bestSupplierPrice(ing) {
     const [supplierId, q] = quotes.reduce((best, cur) => cur[1].price < best[1].price ? cur : best);
     return { supplierId, ...q };
 }
+
+// NIF só com dígitos; aceita prefixo PT e espaços.
+function normalizeNif(nif) {
+    return String(nif ?? '').toUpperCase().replace(/^PT/, '').replace(/\D/g, '');
+}
+
+// Insumo mais provável para a descrição de uma linha de fatura (SKU exato, ou mais palavras em comum). null se nada coincidir.
+function matchIngredient(description, sku = '') {
+    const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ');
+    const bySku = sku && appState.ingredients.find(i => norm(i.sku).trim() === norm(sku).trim());
+    if (bySku) return bySku;
+    const words = new Set(norm(description).split(/\s+/).filter(w => w.length > 2));
+    let best = null, score = 0;
+    for (const ing of appState.ingredients) {
+        const n = norm(ing.name).split(/\s+/).filter(w => w.length > 2 && words.has(w)).length;
+        if (n > score) { best = ing; score = n; }
+    }
+    return best;
+}
+
+// Converte uma linha lida (qtd na unidade da fatura) para a unidade base do insumo. Devolve null se as unidades não forem compatíveis.
+function invoiceLineToBase(line, ing) {
+    const units = { kg: 'kg', kgs: 'kg', g: 'g', gr: 'g', l: 'L', lt: 'L', litro: 'L', litros: 'L', cl: 'cl', ml: 'ml', un: 'un', uni: 'un', und: 'un', unid: 'un', u: 'un', uds: 'un' };
+    const unit = units[String(line.unit ?? '').trim().toLowerCase().replace('.', '')];
+    const qty = unit ? convertToBaseQty(line.qty, unit, ing.baseUnit) : NaN;
+    const total = Number(line.line_total_net) || Number(line.qty) * Number(line.unit_price_net);
+    return Number.isFinite(qty) && qty > 0 ? { qty, price: total / qty } : null;
+}

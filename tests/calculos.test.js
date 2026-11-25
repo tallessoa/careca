@@ -261,3 +261,24 @@ test('bestSupplierPrice: escolhe o preço mais baixo', () => {
     assert.equal(ctx.bestSupplierPrice({ supplierPrices: { x: { price: 5 }, y: { price: 4 } } }).supplierId, 'y');
     assert.equal(ctx.bestSupplierPrice({}), null);
 });
+
+test('normalizeNif: tira prefixo PT e espaços', () => {
+    const ctx = load({});
+    assert.equal(ctx.normalizeNif('PT 509 412 883'), '509412883');
+    assert.equal(ctx.normalizeNif(null), '');
+});
+
+test('matchIngredient: SKU primeiro, depois palavras em comum', () => {
+    const ctx = load({ ingredients: [{ id: 'a', sku: 'PEIX-001', name: 'Lombo de Salmão Fresco' }, { id: 'b', sku: 'PEIX-014', name: 'Polvo Nacional Limpo' }] });
+    assert.equal(ctx.matchIngredient('qualquer', 'peix-014').id, 'b');
+    assert.equal(ctx.matchIngredient('SALMAO FRESCO NORUEGA LOMBO').id, 'a');
+    assert.equal(ctx.matchIngredient('Detergente'), null);
+});
+
+test('invoiceLineToBase: 500 g a 6 €/kg → 0,5 kg a 6 €', () => {
+    const ctx = load({});
+    const r = ctx.invoiceLineToBase({ qty: 500, unit: 'g', unit_price_net: 0.006 }, { baseUnit: 'kg' });
+    near(r.qty, 0.5);
+    near(r.price, 6);
+    assert.equal(ctx.invoiceLineToBase({ qty: 2, unit: 'cx', unit_price_net: 5 }, { baseUnit: 'kg' }), null);
+});
