@@ -2142,13 +2142,14 @@ html.gloss-off .gloss-term::after{content:none}
             if (file.size > 15 * 1024 * 1024) { showToast('Ficheiro grande demais', 'Máximo 15 MB.', 'warning'); return; }
             openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados. Isto demora alguns segundos.</p>');
             try {
-                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(file); });
+                const upload = await prepareInvoiceImage(file);
+                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(upload); });
                 const model = appState.settings?.geminiModel || 'gemini-3.8-flash';
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ inline_data: { mime_type: file.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
+                        contents: [{ parts: [{ inline_data: { mime_type: upload.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
                         generationConfig: { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, temperature: 0 }
                     })
                 });
@@ -2163,6 +2164,29 @@ html.gloss-off .gloss-term::after{content:none}
                 closeModal();
                 showToast('Leitura falhou', error.message, 'warning');
             }
+        }
+        // Fotos: reduz para 1600 px no lado maior, passa a cinzento e estica o contraste, para gastar menos tokens no Gemini.
+        // O ficheiro original não é alterado. PDFs seguem como estão; se o browser não souber abrir a imagem (ex.: HEIC), envia o original.
+        async function prepareInvoiceImage(file) {
+            if (!file.type.startsWith('image/')) return file;
+            try {
+                const img = await createImageBitmap(file);
+                const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                const g = canvas.getContext('2d', { willReadFrequently: true });
+                g.drawImage(img, 0, 0, canvas.width, canvas.height);
+                img.close();
+                const pixels = g.getImageData(0, 0, canvas.width, canvas.height), d = pixels.data;
+                const histogram = new Array(256).fill(0);
+                for (let i = 0; i < d.length; i += 4) histogram[d[i] = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++;
+                const [lo, hi] = contrastLimits(histogram);
+                for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.max(0, Math.min(255, Math.round((d[i] - lo) * 255 / (hi - lo))));
+                g.putImageData(pixels, 0, 0);
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                return blob && blob.size < file.size ? blob : file;
+            } catch { return file; }
         }
         function openOcrReview(ex, fileName) {
             ocrDraft = { ex, fileName };
