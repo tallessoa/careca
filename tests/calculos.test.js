@@ -282,3 +282,12 @@ test('invoiceLineToBase: 500 g a 6 €/kg → 0,5 kg a 6 €', () => {
     near(r.price, 6);
     assert.equal(ctx.invoiceLineToBase({ qty: 2, unit: 'cx', unit_price_net: 5 }, { baseUnit: 'kg' }), null);
 });
+
+test('contrastLimits: corta 1% em cada ponta; imagem lisa fica igual', () => {
+    const ctx = load({});
+    const h = new Array(256).fill(0);
+    h[0] = 1; h[60] = 49; h[200] = 49; h[255] = 1;
+    assert.deepEqual([...ctx.contrastLimits(h)], [60, 200]);
+    const flat = new Array(256).fill(0); flat[128] = 10;
+    assert.deepEqual([...ctx.contrastLimits(flat)], [0, 255]);
+});

@@ -1821,7 +1821,7 @@ html.gloss-off .gloss-term::after{content:none}
                                     const typeColor = inv.docType === 'Nota de Crédito' ? 'text-rose-400' : inv.docType === 'Guia de Remessa' ? 'text-amber-300' : 'text-sky-400';
 
                                     return `
-                                        <tr class="hover:bg-[#111827]/70 transition-colors">
+                                        <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver detalhe" onclick="openInvoiceDetail(${appState.invoices.indexOf(inv)})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${appState.invoices.indexOf(inv)})">
                                             <td class="py-3.5 px-5">
                                                 <div class="font-mono font-semibold text-white">${escHtml(inv.id)}</div>
                                                 <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}${inv.source ? ' · ' + escHtml(inv.source) : ''}</div>
@@ -1838,7 +1838,7 @@ html.gloss-off .gloss-term::after{content:none}
                                             <td class="py-3.5 px-5 text-right">
                                                 ${inv.status !== 'Aprovada' ? (
                                                     role.canApproveInvoices ? `
-                                                        <button onclick="approveExistingInvoice(appState.invoices[${appState.invoices.indexOf(inv)}].id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">
+                                                        <button onclick="event.stopPropagation();approveExistingInvoice(appState.invoices[${appState.invoices.indexOf(inv)}].id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">
                                                             Aprovar
                                                         </button>
                                                     ` : `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">Em Revisão</span>`
@@ -1856,6 +1856,45 @@ html.gloss-off .gloss-term::after{content:none}
             `;
         }
 
+        function openInvoiceDetail(idx) {
+            const inv = appState.invoices[idx];
+            if (!inv) return;
+            const sup = getSupplier(inv.supplierId);
+            const sign = inv.docType === 'Nota de Crédito' ? -1 : 1;
+            const ownNif = restaurantNif();
+            const nifRow = !inv.source ? '<span class="text-slate-400">Não verificado (lançamento manual)</span>'
+                : inv.customerNif === ownNif ? `<span class="text-emerald-400">${escHtml(inv.customerNif)} · confere com o restaurante</span>`
+                : `<span class="text-rose-400">${escHtml(inv.customerNif || 'em falta')} · não é o NIF do restaurante (${escHtml(ownNif)})</span>`;
+            const info = (label, value) => `<div><div class="text-[11px] font-mono uppercase text-slate-500">${label}</div><div class="text-sm text-white">${value}</div></div>`;
+            const lines = inv.lines || [];
+            const guide = inv.receiptRef ? appState.invoices.find(g => g.id === inv.receiptRef && g.supplierId === inv.supplierId) : null;
+            openModal(inv.docType + ' ' + inv.id, sup?.name || 'Fornecedor removido', `<div class="space-y-5">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    ${info('Fornecedor', escHtml(sup?.name || 'Fornecedor removido'))}
+                    ${info('NIF do fornecedor', escHtml(sup?.nif || '—'))}
+                    ${info('Data', escHtml(inv.date))}
+                    ${info('Número', escHtml(inv.id))}
+                    ${info('ATCUD', escHtml(inv.atcud || '—'))}
+                    ${info('Estado', escHtml(inv.status))}
+                    ${info('Origem', escHtml(inv.source || 'Registo manual'))}
+                    ${inv.receiptRef ? info('Guia faturada', escHtml(inv.receiptRef)) : ''}
+                    ${inv.billedBy ? info('Faturada em', escHtml(inv.billedBy)) : ''}
+                    ${inv.orderId ? info('Encomenda', escHtml(inv.orderId)) : ''}
+                </div>
+                <div class="text-sm">NIF do adquirente: ${nifRow}</div>
+                ${lines.length ? `<div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
+                    <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Qtd.</th><th class="py-2 px-3 text-right">Preço s/ IVA</th><th class="py-2 px-3 text-right">IVA</th><th class="py-2 px-3 text-right">Total s/ IVA</th></tr></thead>
+                    <tbody class="divide-y divide-[#1E293B]/60">${lines.map(l => { const ing = !l.service && getIngredient(l.ing); return `<tr>
+                        <td class="py-2 px-3 font-sans text-white">${escHtml(l.service ? l.label || 'Despesa' : ing?.name || 'Artigo removido')}${l.service ? ' <span class="text-[11px] text-slate-500">(sem stock)</span>' : ''}</td>
+                        <td class="py-2 px-3 text-right">${fmtNum(l.qty, 3)} ${escHtml(l.service ? '' : ing?.baseUnit || '')}</td>
+                        <td class="py-2 px-3 text-right">${fmtEur(l.price, 4)}</td>
+                        <td class="py-2 px-3 text-right">${fmtNum(l.vat, 0)}%</td>
+                        <td class="py-2 px-3 text-right text-white">${fmtEur(sign * l.qty * l.price)}</td></tr>`; }).join('')}</tbody>
+                </table></div>${guide ? `<p class="text-xs text-slate-400">Linhas copiadas da guia ${escHtml(guide.id)}; o stock entrou com a guia.</p>` : ''}`
+                : `<p class="text-sm text-slate-400">${escHtml(inv.itemsSummary || '')}<br><span class="text-xs">Documento sem linhas detalhadas${inv.status !== 'Aprovada' ? ': as linhas são preenchidas ao aprovar' : ''}.</span></p>`}
+                <div class="flex justify-end gap-6 text-sm font-mono"><span class="text-slate-400">Líquido <strong class="text-white">${fmtEur(inv.net)}</strong></span><span class="text-slate-400">IVA <strong class="text-white">${fmtEur(inv.vat)}</strong></span><span class="text-slate-400">Total <strong class="text-white">${fmtEur(inv.total)}</strong></span></div>
+                <div class="flex justify-end"><button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+        }
         function postReceipt(inv) {
             if (!appState.roles[appState.activeRole].canApproveInvoices) throw Error('Perfil sem permissão de aprovação.');
             const key = value => String(value).replace(/ \(OCR\)$/i,'').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -2140,29 +2179,67 @@ html.gloss-off .gloss-term::after{content:none}
             if (!file) return;
             if (!/^(application\/pdf|image\/(jpeg|png|webp|heic|heif))$/.test(file.type)) { showToast('Formato não suportado', 'Use PDF, JPG, PNG, WEBP ou HEIC.', 'warning'); return; }
             if (file.size > 15 * 1024 * 1024) { showToast('Ficheiro grande demais', 'Máximo 15 MB.', 'warning'); return; }
-            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados. Isto demora alguns segundos.</p>');
+            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
+            const started = performance.now();
+            const ticker = setInterval(() => { const el = document.getElementById('ocr-elapsed'); if (el) el.textContent = Math.round((performance.now() - started) / 1000) + ' s'; }, 500);
             try {
-                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(file); });
+                const upload = await prepareInvoiceImage(file);
+                const prepared = performance.now();
+                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(upload); });
                 const model = appState.settings?.geminiModel || 'gemini-3.8-flash';
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+                // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
+                // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
+                const call = generationConfig => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ inline_data: { mime_type: file.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
-                        generationConfig: { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, temperature: 0 }
+                        contents: [{ parts: [{ inline_data: { mime_type: upload.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
+                        generationConfig
                     })
                 });
+                const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA };
+                let res = await call({ ...base, thinkingConfig: { thinkingLevel: 'low' } });
+                if (res.status === 400) {
+                    const err = await res.clone().json().catch(() => ({}));
+                    if (/thinking/i.test(err.error?.message || '')) res = await call(base); // modelo que não aceita thinkingLevel
+                }
                 const body = await res.json().catch(() => ({}));
                 if (!res.ok) throw Error(body.error?.message || 'Erro ' + res.status + ' do Gemini.');
                 const text = body.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
                 if (!text) throw Error('O Gemini não devolveu dados (' + (body.candidates?.[0]?.finishReason || body.promptFeedback?.blockReason || 'sem resposta') + ').');
                 const ex = JSON.parse(text);
                 if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos.');
+                const done = performance.now(), usage = body.usageMetadata || {};
+                console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
+                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', 'info');
             } catch (error) {
                 closeModal();
                 showToast('Leitura falhou', error.message, 'warning');
-            }
+            } finally { clearInterval(ticker); }
+        }
+        // Fotos: reduz para 1600 px no lado maior, passa a cinzento e estica o contraste, para gastar menos tokens no Gemini.
+        // O ficheiro original não é alterado. PDFs seguem como estão; se o browser não souber abrir a imagem (ex.: HEIC), envia o original.
+        async function prepareInvoiceImage(file) {
+            if (!file.type.startsWith('image/')) return file;
+            try {
+                const img = await createImageBitmap(file);
+                const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                const g = canvas.getContext('2d', { willReadFrequently: true });
+                g.drawImage(img, 0, 0, canvas.width, canvas.height);
+                img.close();
+                const pixels = g.getImageData(0, 0, canvas.width, canvas.height), d = pixels.data;
+                const histogram = new Array(256).fill(0);
+                for (let i = 0; i < d.length; i += 4) histogram[d[i] = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++;
+                const [lo, hi] = contrastLimits(histogram);
+                for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.max(0, Math.min(255, Math.round((d[i] - lo) * 255 / (hi - lo))));
+                g.putImageData(pixels, 0, 0);
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                return blob && blob.size < file.size ? blob : file;
+            } catch { return file; }
         }
         function openOcrReview(ex, fileName) {
             ocrDraft = { ex, fileName };

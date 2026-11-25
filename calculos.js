@@ -317,3 +317,13 @@ function invoiceLineToBase(line, ing) {
     const total = Number(line.line_total_net) || Number(line.qty) * Number(line.unit_price_net);
     return Number.isFinite(qty) && qty > 0 ? { qty, price: total / qty } : null;
 }
+
+// Limites para esticar o contraste: ignora 1% dos píxeis mais escuros e mais claros (histograma de 256 tons).
+function contrastLimits(histogram, clip = 0.01) {
+    const total = histogram.reduce((a, b) => a + b, 0);
+    let lo = 0, hi = 255, acc = 0;
+    while (lo < 255 && (acc += histogram[lo]) <= total * clip) lo++;
+    acc = 0;
+    while (hi > 0 && (acc += histogram[hi]) <= total * clip) hi--;
+    return hi > lo ? [lo, hi] : [0, 255];
+}
