@@ -1821,7 +1821,7 @@ html.gloss-off .gloss-term::after{content:none}
                                     const typeColor = inv.docType === 'Nota de Crédito' ? 'text-rose-400' : inv.docType === 'Guia de Remessa' ? 'text-amber-300' : 'text-sky-400';
 
                                     return `
-                                        <tr class="hover:bg-[#111827]/70 transition-colors">
+                                        <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver detalhe" onclick="openInvoiceDetail(${appState.invoices.indexOf(inv)})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${appState.invoices.indexOf(inv)})">
                                             <td class="py-3.5 px-5">
                                                 <div class="font-mono font-semibold text-white">${escHtml(inv.id)}</div>
                                                 <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}${inv.source ? ' · ' + escHtml(inv.source) : ''}</div>
@@ -1838,7 +1838,7 @@ html.gloss-off .gloss-term::after{content:none}
                                             <td class="py-3.5 px-5 text-right">
                                                 ${inv.status !== 'Aprovada' ? (
                                                     role.canApproveInvoices ? `
-                                                        <button onclick="approveExistingInvoice(appState.invoices[${appState.invoices.indexOf(inv)}].id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">
+                                                        <button onclick="event.stopPropagation();approveExistingInvoice(appState.invoices[${appState.invoices.indexOf(inv)}].id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">
                                                             Aprovar
                                                         </button>
                                                     ` : `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">Em Revisão</span>`
@@ -1856,6 +1856,45 @@ html.gloss-off .gloss-term::after{content:none}
             `;
         }
 
+        function openInvoiceDetail(idx) {
+            const inv = appState.invoices[idx];
+            if (!inv) return;
+            const sup = getSupplier(inv.supplierId);
+            const sign = inv.docType === 'Nota de Crédito' ? -1 : 1;
+            const ownNif = restaurantNif();
+            const nifRow = !inv.source ? '<span class="text-slate-400">Não verificado (lançamento manual)</span>'
+                : inv.customerNif === ownNif ? `<span class="text-emerald-400">${escHtml(inv.customerNif)} · confere com o restaurante</span>`
+                : `<span class="text-rose-400">${escHtml(inv.customerNif || 'em falta')} · não é o NIF do restaurante (${escHtml(ownNif)})</span>`;
+            const info = (label, value) => `<div><div class="text-[11px] font-mono uppercase text-slate-500">${label}</div><div class="text-sm text-white">${value}</div></div>`;
+            const lines = inv.lines || [];
+            const guide = inv.receiptRef ? appState.invoices.find(g => g.id === inv.receiptRef && g.supplierId === inv.supplierId) : null;
+            openModal(inv.docType + ' ' + inv.id, sup?.name || 'Fornecedor removido', `<div class="space-y-5">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    ${info('Fornecedor', escHtml(sup?.name || 'Fornecedor removido'))}
+                    ${info('NIF do fornecedor', escHtml(sup?.nif || '—'))}
+                    ${info('Data', escHtml(inv.date))}
+                    ${info('Número', escHtml(inv.id))}
+                    ${info('ATCUD', escHtml(inv.atcud || '—'))}
+                    ${info('Estado', escHtml(inv.status))}
+                    ${info('Origem', escHtml(inv.source || 'Registo manual'))}
+                    ${inv.receiptRef ? info('Guia faturada', escHtml(inv.receiptRef)) : ''}
+                    ${inv.billedBy ? info('Faturada em', escHtml(inv.billedBy)) : ''}
+                    ${inv.orderId ? info('Encomenda', escHtml(inv.orderId)) : ''}
+                </div>
+                <div class="text-sm">NIF do adquirente: ${nifRow}</div>
+                ${lines.length ? `<div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
+                    <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Qtd.</th><th class="py-2 px-3 text-right">Preço s/ IVA</th><th class="py-2 px-3 text-right">IVA</th><th class="py-2 px-3 text-right">Total s/ IVA</th></tr></thead>
+                    <tbody class="divide-y divide-[#1E293B]/60">${lines.map(l => { const ing = !l.service && getIngredient(l.ing); return `<tr>
+                        <td class="py-2 px-3 font-sans text-white">${escHtml(l.service ? l.label || 'Despesa' : ing?.name || 'Artigo removido')}${l.service ? ' <span class="text-[11px] text-slate-500">(sem stock)</span>' : ''}</td>
+                        <td class="py-2 px-3 text-right">${fmtNum(l.qty, 3)} ${escHtml(l.service ? '' : ing?.baseUnit || '')}</td>
+                        <td class="py-2 px-3 text-right">${fmtEur(l.price, 4)}</td>
+                        <td class="py-2 px-3 text-right">${fmtNum(l.vat, 0)}%</td>
+                        <td class="py-2 px-3 text-right text-white">${fmtEur(sign * l.qty * l.price)}</td></tr>`; }).join('')}</tbody>
+                </table></div>${guide ? `<p class="text-xs text-slate-400">Linhas copiadas da guia ${escHtml(guide.id)}; o stock entrou com a guia.</p>` : ''}`
+                : `<p class="text-sm text-slate-400">${escHtml(inv.itemsSummary || '')}<br><span class="text-xs">Documento sem linhas detalhadas${inv.status !== 'Aprovada' ? ': as linhas são preenchidas ao aprovar' : ''}.</span></p>`}
+                <div class="flex justify-end gap-6 text-sm font-mono"><span class="text-slate-400">Líquido <strong class="text-white">${fmtEur(inv.net)}</strong></span><span class="text-slate-400">IVA <strong class="text-white">${fmtEur(inv.vat)}</strong></span><span class="text-slate-400">Total <strong class="text-white">${fmtEur(inv.total)}</strong></span></div>
+                <div class="flex justify-end"><button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+        }
         function postReceipt(inv) {
             if (!appState.roles[appState.activeRole].canApproveInvoices) throw Error('Perfil sem permissão de aprovação.');
             const key = value => String(value).replace(/ \(OCR\)$/i,'').trim().toUpperCase().replace(/\s+/g, ' ');
