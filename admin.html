@@ -595,6 +595,11 @@ html.gloss-off .gloss-term::after{content:none}
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         <span>Repor Dados de Demo</span>
                     </button>
+                    <button onclick="openSettingsModal()" class="w-full py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Definições (NIF e Gemini)</button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="exportBackup()" class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Exportar cópia</button>
+                        <label class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white text-center cursor-pointer">Importar cópia<input type="file" accept=".json,application/json" class="hidden" onchange="importBackup(this)"></label>
+                    </div>
                 </div>
                 <div class="flex items-center gap-3 px-1">
                     <div id="sidebar-avatar" class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-sky-400 flex items-center justify-center font-bold text-xs text-white shrink-0">
@@ -723,6 +728,7 @@ html.gloss-off .gloss-term::after{content:none}
         const LEGACY_KEY = 'kareca_solutions_backoffice_v3';
         const STORAGE_KEY = 'kareca_restaurante_chiado_v1';
         const RESTAURANT = 'chiado';
+        const ALLERGENS = ['Glúten', 'Crustáceos', 'Ovos', 'Peixe', 'Amendoins', 'Soja', 'Leite', 'Frutos de casca rija', 'Aipo', 'Mostarda', 'Sésamo', 'Sulfitos', 'Tremoço', 'Moluscos'];
         const STORE_KEYS = [RESTAURANT];
 
         // ====================================================================
@@ -801,6 +807,7 @@ html.gloss-off .gloss-term::after{content:none}
                 importedSales: [], movements: [], openingVolumeDate: new Date().toISOString(),
                 activeStore: RESTAURANT,
                 activeRole: 'owner',
+                settings: { restaurantNif: '516234870', geminiModel: 'gemini-3.8-flash' },
                 supplierSubTab: 'catalog',
                 recipeSubTab: 'catalogue',
                 activeBcgQuadrant: 'star',
@@ -849,7 +856,7 @@ html.gloss-off .gloss-term::after{content:none}
 
                 storeFinancials: {
                     chiado: {
-                        revenue: 47900.00, cogs: 13028.80, payroll: 11850.00, deliveryFees: 1420.00, fixedCosts: 8600.00,
+                        period: '2026-11', targetFc: 29.0, revenue: 47900.00, cogs: 13028.80, payroll: 11850.00, deliveryFees: 1420.00, fixedCosts: 8600.00,
                         monthly: [
                             { m: 'Jun', rev: 42100, cogs: 12125 },
                             { m: 'Jul', rev: 44800, cogs: 12768 },
@@ -862,30 +869,30 @@ html.gloss-off .gloss-term::after{content:none}
                 },
 
                 suppliers: [
-                    { id: 'sup_pescados', name: 'Pescados Atlântico, Lda.', nif: '509 412 883', category: 'Peixe & Marisco', email: 'encomendas@pescadosatlantico.pt', phone: '+351 912 340 881', inflationPct: 11.4, terms: '30 dias', history: [10.9, 11.2, 11.5, 11.8, 12.1, 12.8] },
-                    { id: 'sup_horta', name: 'Horta do Oeste Frescos', nif: '504 881 209', category: 'Hortícolas & Frutas', email: 'comercial@hortadooeste.pt', phone: '+351 963 410 229', inflationPct: 3.8, terms: '15 dias', history: [2.4, 2.45, 2.5, 2.48, 2.52, 2.58] },
-                    { id: 'sup_iberica', name: 'Distribuição Ibérica Foodservice', nif: '501 774 390', category: 'Carnes, Laticínios & Secos', email: 'b2b@distribuicaoiberica.pt', phone: '+351 918 552 104', inflationPct: 7.2, terms: '30 dias', history: [17.8, 18.0, 18.4, 18.9, 19.2, 19.8] },
-                    { id: 'sup_garrafeira', name: 'Garrafeira Central Portuguesa', nif: '506 239 115', category: 'Vinhos, Bebidas & Espirituosas', email: 'pedidos@garrafeiracentral.pt', phone: '+351 934 712 900', inflationPct: 2.1, terms: '45 dias', history: [11.2, 11.2, 11.3, 11.35, 11.4, 11.45] }
+                    { id: 'sup_pescados', name: 'Pescados Atlântico, Lda.', nif: '509 412 883', category: 'Peixe & Marisco', email: 'encomendas@pescadosatlantico.pt', phone: '+351 912 340 881', terms: '30 dias' },
+                    { id: 'sup_horta', name: 'Horta do Oeste Frescos', nif: '504 881 209', category: 'Hortícolas & Frutas', email: 'comercial@hortadooeste.pt', phone: '+351 963 410 229', terms: '15 dias' },
+                    { id: 'sup_iberica', name: 'Distribuição Ibérica Foodservice', nif: '501 774 390', category: 'Carnes, Laticínios & Secos', email: 'b2b@distribuicaoiberica.pt', phone: '+351 918 552 104', terms: '30 dias' },
+                    { id: 'sup_garrafeira', name: 'Garrafeira Central Portuguesa', nif: '506 239 115', category: 'Vinhos, Bebidas & Espirituosas', email: 'pedidos@garrafeiracentral.pt', phone: '+351 934 712 900', terms: '45 dias' }
                 ],
 
                 // Stock, Mínimos e CMP diferenciados por Estabelecimento (ingredient_location_costs)
                 ingredients: [
                     {
-                        id: 'ing_salmao', sku: 'PEIX-001', name: 'Lombo de Salmão Fresco', category: 'Proteínas', supplierId: 'sup_pescados', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa Esferovite 10 kg → 10,00 kg', yieldFactor: 0.82,
+                        id: 'ing_salmao', allergens: ['Peixe'], supplierPrices: { sup_pescados: { price: 12.80, date: '2026-11-19' }, sup_iberica: { price: 13.40, date: '2026-10-28' } }, sku: 'PEIX-001', name: 'Lombo de Salmão Fresco', category: 'Proteínas', supplierId: 'sup_pescados', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa Esferovite 10 kg → 10,00 kg', yieldFactor: 0.82,
                         priceHistory: [11.20, 11.40, 11.65, 11.80, 11.80, 12.80],
                         byStore: {
                             chiado:   { stockTheoretical: 9.5, stockCounted: 9.3, minStock: 6.0, cmp: 12.35, lastCost: 12.80, prevCost: 11.80 },
                         }
                     },
                     {
-                        id: 'ing_polvo', sku: 'PEIX-014', name: 'Polvo Nacional Limpo', category: 'Proteínas', supplierId: 'sup_pescados', zone: 'Congelador', baseUnit: 'kg', packLabel: 'Caixa 8 kg → 8,00 kg', yieldFactor: 0.65,
+                        id: 'ing_polvo', allergens: ['Moluscos'], supplierPrices: { sup_pescados: { price: 15.79, date: '2026-11-19' } }, sku: 'PEIX-014', name: 'Polvo Nacional Limpo', category: 'Proteínas', supplierId: 'sup_pescados', zone: 'Congelador', baseUnit: 'kg', packLabel: 'Caixa 8 kg → 8,00 kg', yieldFactor: 0.65,
                         priceHistory: [13.50, 13.80, 14.00, 14.20, 14.20, 15.79],
                         byStore: {
                             chiado:   { stockTheoretical: 8.5, stockCounted: 6.1, minStock: 5.0, cmp: 15.10, lastCost: 15.79, prevCost: 14.20 },
                         }
                     },
                     {
-                        id: 'ing_vazia', sku: 'CARN-008', name: 'Bife da Vazia Maturado', category: 'Proteínas', supplierId: 'sup_iberica', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Peça Vácuo 4,5 kg → 4,50 kg', yieldFactor: 0.88,
+                        id: 'ing_vazia', supplierPrices: { sup_iberica: { price: 19.80, date: '2026-11-18' } }, sku: 'CARN-008', name: 'Bife da Vazia Maturado', category: 'Proteínas', supplierId: 'sup_iberica', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Peça Vácuo 4,5 kg → 4,50 kg', yieldFactor: 0.88,
                         priceHistory: [17.90, 18.20, 18.50, 18.90, 19.10, 19.80],
                         byStore: {
                             chiado:   { stockTheoretical: 5.5, stockCounted: 5.5, minStock: 7.0, cmp: 19.40, lastCost: 19.80, prevCost: 18.90 },
@@ -913,7 +920,7 @@ html.gloss-off .gloss-term::after{content:none}
                         }
                     },
                     {
-                        id: 'ing_abacate', sku: 'HORT-007', name: 'Abacate Hass Maduro', category: 'Hortícolas', supplierId: 'sup_horta', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa 4 kg → 4,00 kg', yieldFactor: 0.75,
+                        id: 'ing_abacate', supplierPrices: { sup_horta: { price: 5.50, date: '2026-11-17' }, sup_iberica: { price: 5.20, date: '2026-11-10' } }, sku: 'HORT-007', name: 'Abacate Hass Maduro', category: 'Hortícolas', supplierId: 'sup_horta', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa 4 kg → 4,00 kg', yieldFactor: 0.75,
                         priceHistory: [4.90, 5.10, 5.15, 5.20, 5.35, 5.50],
                         byStore: {
                             chiado:   { stockTheoretical: 4.2, stockCounted: 3.6, minStock: 3.5, cmp: 5.40, lastCost: 5.50, prevCost: 5.20 },
@@ -927,7 +934,7 @@ html.gloss-off .gloss-term::after{content:none}
                         }
                     },
                     {
-                        id: 'ing_vinho', sku: 'BEB-012', name: 'Vinho Branco Alentejo Reserva', category: 'Bebidas', supplierId: 'sup_garrafeira', zone: 'Bar', baseUnit: 'L', packLabel: 'Caixa 6 × 0,75 L → 4,50 L', yieldFactor: 1.00,
+                        id: 'ing_vinho', allergens: ['Sulfitos'], sku: 'BEB-012', name: 'Vinho Branco Alentejo Reserva', category: 'Bebidas', supplierId: 'sup_garrafeira', zone: 'Bar', baseUnit: 'L', packLabel: 'Caixa 6 × 0,75 L → 4,50 L', yieldFactor: 1.00,
                         priceHistory: [6.20, 6.25, 6.30, 6.40, 6.40, 6.50],
                         byStore: {
                             chiado:   { stockTheoretical: 18.0, stockCounted: 18.0, minStock: 12.0, cmp: 6.40, lastCost: 6.50, prevCost: 6.40 },
@@ -1057,9 +1064,9 @@ html.gloss-off .gloss-term::after{content:none}
                 invoices: [
                     { id: 'FT 2026/1842', docType: 'Fatura', store: 'chiado', supplierId: 'sup_pescados', date: '2026-11-19', net: 482.50, vat: 28.95, total: 511.45, status: 'Aprovada', itemsSummary: 'Lombo de Salmão Fresco (25 kg) + Polvo (10 kg)' },
                     { id: 'FT 2026/4409', docType: 'Fatura', store: 'chiado', supplierId: 'sup_iberica', date: '2026-11-18', net: 648.00, vat: 84.24, total: 732.24, status: 'Aprovada', itemsSummary: 'Bife da Vazia (22 kg) + Azeite DOP (24 L)' },
+                    { id: 'RESUMO 2026/11-A', docType: 'Fatura', store: 'chiado', supplierId: 'sup_iberica', date: '2026-11-17', net: 12310.00, vat: 1600.30, total: 13910.30, status: 'Aprovada', itemsSummary: 'Compras acumuladas de 1 a 17 de novembro (saldo de demonstração)' },
                 ],
 
-                sentOrders: [],
 
                 posMappings: [
                     { posCode: 'POS-901', posName: 'Menu Almoço Chiado (Combo 1→N)', type: 'Combo 1-para-2', targets: ['1× Sopa de Peixe da Costa', '1× Bowl de Salmão Braseado'], recipeIds: ['rec_sopa', 'rec_bowl_salmao'], channel: 'dine_in', priceGross: 21.50 },
@@ -1075,8 +1082,8 @@ html.gloss-off .gloss-term::after{content:none}
                 ],
 
                 wasteLogs: [
-                    { id: 'W-01', date: '19/11 11:20', store: 'chiado', item: 'Abacate Hass Maduro', qty: 0.6, unit: 'kg', reason: 'Validade', cost: 3.24 },
-                    { id: 'W-03', date: '18/11 16:00', store: 'chiado', item: 'Bife da Vazia Maturado', qty: 0.5, unit: 'kg', reason: 'Refeição de Equipa', cost: 9.70 }
+                    { id: 'W-01', date: '19/11 11:20', store: 'chiado', item: 'Abacate Hass Maduro', qty: 0.6, unit: 'kg', reason: 'Validade', cost: 3.24, period: '2026-11' },
+                    { id: 'W-03', date: '18/11 16:00', store: 'chiado', item: 'Bife da Vazia Maturado', qty: 0.5, unit: 'kg', reason: 'Refeição de Equipa', cost: 9.70, period: '2026-11' }
                 ],
 
                 alerts: [
@@ -1111,7 +1118,6 @@ html.gloss-off .gloss-term::after{content:none}
                 for (const key of ['invoices','salesLog','wasteLogs','alerts','movements','countHistory']) {
                     state[key] = (state[key] || []).filter(entry=>entry.store===RESTAURANT);
                 }
-                state.sentOrders = state.sentOrders.filter(key=>key.startsWith(RESTAURANT+':'));
                 state.importedSales = state.importedSales.filter(entry=>JSON.parse(entry.key)[0]===RESTAURANT);
                 return state;
             } catch (err) {
@@ -1136,6 +1142,30 @@ html.gloss-off .gloss-term::after{content:none}
             }
         }
         ensureCountBasis();
+
+        const periodKey = (d = new Date()) => d.toISOString().slice(0, 7);
+        function periodLabel(period, opts = { month: 'long', year: 'numeric' }) {
+            const [y, m] = period.split('-').map(Number);
+            return new Date(y, m - 1, 1).toLocaleDateString('pt-PT', opts).replace('.', '');
+        }
+        // Passa o mês corrente para um novo período: vendas, CMV teórico e comissões recomeçam; pessoal e fixos mantêm-se.
+        function ensureCurrentPeriod() {
+            const sf = appState.storeFinancials[RESTAURANT];
+            sf.period ??= periodKey();
+            sf.openingStockValue ??= stockValue();
+            while (sf.period < periodKey()) {
+                const previous = sf.period, [y, m] = previous.split('-').map(Number);
+                sf.period = periodKey(new Date(Date.UTC(y, m, 1)));
+                const closed = (appState.periodCloses || []).find(c => c.period === previous);
+                sf.openingStockValue = closed ? closed.closing : stockValue();
+                const label = periodLabel(sf.period, { month: 'short' });
+                sf.monthly = [...sf.monthly, { m: label[0].toUpperCase() + label.slice(1), rev: 0, cogs: 0 }].slice(-6);
+                Object.assign(sf, { revenue: 0, cogs: 0, deliveryFees: 0 });
+            }
+        }
+        ensureCurrentPeriod();
+        // Modelo por omissão antigo: a Google limitou o 2.5 a quem já o usava.
+        if (appState.settings?.geminiModel === 'gemini-2.5-flash') appState.settings.geminiModel = 'gemini-3.8-flash';
 
         let storageBaseline;
         try {storageBaseline = localStorage.getItem(STORAGE_KEY);} catch {storageBaseline = null;}
@@ -1173,6 +1203,7 @@ html.gloss-off .gloss-term::after{content:none}
         function executeResetDemoData() {
             appState = createDefaultState();
             ensureCountBasis();
+            ensureCurrentPeriod();
             persistState();
 
             const roleSel = document.getElementById('role-selector');
@@ -1182,6 +1213,29 @@ html.gloss-off .gloss-term::after{content:none}
             updateChrome();
             renderActiveView();
             showToast('Dados de demo repostos', 'Todos os stocks, preços, receitas e vendas voltaram ao estado inicial.', 'info');
+        }
+
+        function exportBackup() {
+            const blob = new Blob([JSON.stringify({ app: 'kareca-backoffice', version: 1, exportedAt: new Date().toISOString(), state: { ...appState, recipeFormRows: [] } }, null, 1)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'kareca-copia-' + new Date().toISOString().slice(0, 10) + '.json';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            showToast('Cópia exportada', a.download, 'success');
+        }
+        async function importBackup(input) {
+            const file = input.files[0];
+            input.value = '';
+            if (!file) return;
+            try {
+                const data = JSON.parse(await file.text());
+                const st = data?.state;
+                if (data?.app !== 'kareca-backoffice' || !Array.isArray(st?.ingredients) || !Array.isArray(st?.recipes) || !st?.storeFinancials?.[RESTAURANT]) throw Error('Ficheiro não é uma cópia do backoffice.');
+                if (!window.confirm('Substituir todos os dados deste browser pela cópia de ' + new Date(data.exportedAt).toLocaleString('pt-PT') + '?')) return;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
+                location.reload();
+            } catch (error) { showToast('Importação falhou', error.message, 'warning'); }
         }
 
         // ====================================================================
@@ -1243,9 +1297,10 @@ html.gloss-off .gloss-term::after{content:none}
             const invBadge = document.getElementById('nav-badge-invoices');
             if (invBadge) invBadge.textContent = reviewCount > 0 ? `${reviewCount} rev` : 'OK';
 
+            const onOrder = new Set(openOrders().flatMap(o => o.lines.map(l => l.ing)));
             const lowStockCount = appState.ingredients.filter(i => {
                 const m = getIngMetricsForStore(i, appState.activeStore);
-                return m.minStock > 0 && m.stockTheoretical < m.minStock;
+                return m.minStock > 0 && m.stockTheoretical < m.minStock && !onOrder.has(i.id);
             }).length;
             const ordBadge = document.getElementById('nav-badge-orders');
             if (ordBadge) ordBadge.textContent = lowStockCount;
@@ -1313,7 +1368,7 @@ html.gloss-off .gloss-term::after{content:none}
                 const isCrit = a.severity === 'critical';
                 const borderCol = isCrit ? 'border-rose-500/35 bg-rose-500/5' : 'border-amber-500/35 bg-amber-500/5';
                 const pillCol = isCrit ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300';
-                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA' }[a.type] || 'ALERTA';
+                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF' }[a.type] || 'ALERTA';
 
                 return `
                     <div class="p-4 rounded-xl border ${a.unread ? borderCol : 'border-[#1E293B] bg-[#111827]/60 opacity-75'} transition-all">
@@ -1376,7 +1431,10 @@ html.gloss-off .gloss-term::after{content:none}
             const inv = calculateInventoryVariance(appState.activeStore);
             const storeObj = appState.stores[appState.activeStore];
             const role = appState.roles[appState.activeRole];
-            const fcOk = fin.foodCostPct <= storeObj.targetFc;
+            const sfin = appState.storeFinancials[RESTAURANT];
+            const targetFc = sfin.targetFc ?? storeObj.targetFc;
+            const fcOk = fin.foodCostPct <= targetFc;
+            const canEditFin = role.canApproveInvoices && role.canViewDre;
 
             const maxRev = Math.max(...fin.monthly.map(m => m.rev), 10000) * 1.12;
             const chartW = 640, chartH = 230, padL = 48, padR = 40, padT = 22, padB = 34;
@@ -1421,9 +1479,11 @@ html.gloss-off .gloss-term::after{content:none}
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Dashboard Executivo &amp; DRE</h1>
-                        <p class="text-sm text-slate-400 mt-0.5">${escHtml(storeObj.name)} • Período: Novembro 2026 • Meta Food Cost: ${fmtPct(storeObj.targetFc)}</p>
+                        <p class="text-sm text-slate-400 mt-0.5">${escHtml(storeObj.name)} • Período: ${escHtml(periodLabel(sfin.period))} • Meta Food Cost: ${fmtPct(targetFc)}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
+                        ${canEditFin ? `<button onclick="openFinancialsModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-slate-200">Editar custos do mês</button>
+                        <button onclick="openPeriodCloseModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">Fechar mês (CMV real)</button>` : ''}
                         <button onclick="setActiveTab('recipes')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-slate-200 transition-all">
                             📋 Ver Fichas Técnicas
                         </button>
@@ -1453,7 +1513,7 @@ html.gloss-off .gloss-term::after{content:none}
                     <div class="p-5 rounded-2xl bg-[#111827] border border-[#1E293B] hover:border-sky-400/35 transition-colors">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Food Cost Teórico</span>
-                            <span class="text-[11px] font-mono px-2 py-0.5 rounded ${fcOk ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}">Meta ${fmtPct(storeObj.targetFc)}</span>
+                            <span class="text-[11px] font-mono px-2 py-0.5 rounded ${fcOk ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}">Meta ${fmtPct(targetFc)}</span>
                         </div>
                         <div class="mt-3 font-mono font-bold text-2xl sm:text-3xl ${fcOk ? 'text-sky-400' : 'text-rose-400'} tabular-nums">${fmtPct(fin.foodCostPct)}</div>
                         <div class="mt-2.5 w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
@@ -1615,7 +1675,74 @@ html.gloss-off .gloss-term::after{content:none}
                         </div>
                     `}
                 </div>
+                ${role.canViewDre && (appState.periodCloses || []).length ? `
+                <section class="rounded-2xl bg-[#0B1120] border border-[#1E293B] p-5 space-y-3">
+                    <h2 class="font-bold text-base text-white">CMV real vs. teórico (meses fechados)</h2>
+                    <div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
+                        <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 pr-3">Mês</th><th class="py-2 px-3 text-right">Stock inicial</th><th class="py-2 px-3 text-right">Compras</th><th class="py-2 px-3 text-right">Stock final</th><th class="py-2 px-3 text-right">CMV real</th><th class="py-2 px-3 text-right">CMV teórico</th><th class="py-2 pl-3 text-right">Diferença</th></tr></thead>
+                        <tbody class="divide-y divide-[#1E293B]/60">${appState.periodCloses.map(c => `<tr>
+                            <td class="py-2 pr-3 font-sans text-white">${escHtml(periodLabel(c.period))}</td>
+                            <td class="py-2 px-3 text-right">${fmtEur(c.opening)}</td><td class="py-2 px-3 text-right">${fmtEur(c.purchases)}</td><td class="py-2 px-3 text-right">${fmtEur(c.closing)}</td>
+                            <td class="py-2 px-3 text-right text-white">${fmtEur(c.realCogs)} <span class="text-slate-400">(${fmtPct(c.realPct)})</span></td>
+                            <td class="py-2 px-3 text-right">${fmtEur(c.theoretical)} <span class="text-slate-400">(${fmtPct(c.theoPct)})</span></td>
+                            <td class="py-2 pl-3 text-right ${c.gapEur > 0 ? 'text-rose-400' : 'text-emerald-400'}">${c.gapEur > 0 ? '+' : ''}${fmtEur(c.gapEur)}</td></tr>`).join('')}</tbody>
+                    </table></div>
+                    <p class="text-xs text-slate-400">Diferença positiva: consumiu-se mais do que as fichas técnicas preveem (quebras não registadas, porções acima da ficha, furtos ou erros de contagem).</p>
+                </section>` : ''}
             `;
+        }
+
+        function openFinancialsModal() {
+            const sf = appState.storeFinancials[RESTAURANT];
+            const field = (id, label, value) => `<label class="block text-xs text-slate-300">${label}<input id="${id}" type="number" step="0.01" min="0" required value="${value}" class="mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white"></label>`;
+            openModal('Custos do mês', periodLabel(sf.period), `<form onsubmit="saveFinancials(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    ${field('fin-payroll', 'Pessoal (salários e encargos) €', sf.payroll)}
+                    ${field('fin-fixed', 'Custos fixos (renda, energia…) €', sf.fixedCosts)}
+                    ${field('fin-target', 'Meta de food cost %', sf.targetFc ?? appState.stores[RESTAURANT].targetFc)}
+                </div>
+                <p class="text-xs text-slate-400">As vendas, o CMV teórico e as comissões de delivery vêm das vendas lançadas. Pessoal e custos fixos transitam para o mês seguinte.</p>
+                <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar</button></div></form>`);
+        }
+        function saveFinancials(e) {
+            e.preventDefault();
+            const role = appState.roles[appState.activeRole];
+            if (!role.canApproveInvoices || !role.canViewDre) return;
+            const num = id => Number(document.getElementById(id).value);
+            const values = { payroll: num('fin-payroll'), fixedCosts: num('fin-fixed'), targetFc: num('fin-target') };
+            if (Object.values(values).some(v => !(v >= 0)) || values.targetFc <= 0 || values.targetFc >= 100) { showToast('Rever valores', 'Use valores positivos e uma meta entre 0 e 100%.', 'warning'); return; }
+            Object.assign(appState.storeFinancials[RESTAURANT], values);
+            persistState(); closeModal(); renderActiveView(); showToast('Custos do mês guardados', '', 'success');
+        }
+        function currentPeriodClose() {
+            const sf = appState.storeFinancials[RESTAURANT];
+            return periodRealCogs(sf.openingStockValue, periodPurchases(sf.period), stockValue(true), sf.revenue, sf.cogs);
+        }
+        function openPeriodCloseModal() {
+            const sf = appState.storeFinancials[RESTAURANT];
+            const r = currentPeriodClose();
+            const lastCount = (appState.countHistory || [])[0];
+            const countOk = lastCount && String(lastCount.date).slice(0, 7) === sf.period && lastCount.zone === 'Todas as zonas';
+            const already = (appState.periodCloses || []).some(c => c.period === sf.period);
+            const row = (label, value, cls = '') => `<div class="flex justify-between gap-3 py-1.5 border-b border-[#1E293B]/60"><span class="text-slate-300">${label}</span><span class="font-mono ${cls}">${value}</span></div>`;
+            openModal('Fechar mês e apurar CMV real', periodLabel(sf.period), `<div class="space-y-4 text-sm">
+                ${countOk ? '' : `<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">Não há um inventário de todas as zonas fechado neste mês. O stock final usa a última contagem física disponível${lastCount ? ' (' + escHtml(new Date(lastCount.date).toLocaleDateString('pt-PT')) + ')' : ''}. Faça primeiro a contagem em Inventário para um CMV real fiável.</div>`}
+                ${already ? '<div class="p-3 rounded-xl bg-sky-500/10 border border-sky-400/30 text-xs text-sky-200">Este mês já foi fechado. Fechar de novo substitui o apuramento anterior.</div>' : ''}
+                <div>${row('Stock inicial', fmtEur(r.opening))}${row('(+) Compras com entrada em stock', fmtEur(r.purchases))}${row('(−) Stock final contado', fmtEur(r.closing))}
+                ${row('(=) CMV real', fmtEur(r.realCogs) + ' · ' + fmtPct(r.realPct), 'text-white font-bold')}${row('CMV teórico (vendas × fichas)', fmtEur(r.theoretical) + ' · ' + fmtPct(r.theoPct))}
+                ${row('Diferença', fmtEur(r.gapEur), r.gapEur > 0 ? 'text-rose-400' : 'text-emerald-400')}</div>
+                <div class="flex justify-end gap-3"><button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button onclick="executePeriodClose()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar mês</button></div></div>`);
+        }
+        function executePeriodClose() {
+            const role = appState.roles[appState.activeRole];
+            if (!role.canApproveInvoices || !role.canViewDre) return;
+            const sf = appState.storeFinancials[RESTAURANT];
+            const close = { period: sf.period, store: RESTAURANT, date: new Date().toISOString(), ...currentPeriodClose() };
+            appState.periodCloses = [close, ...(appState.periodCloses || []).filter(c => c.period !== sf.period)];
+            persistState(); closeModal(); renderActiveView();
+            showToast('Mês fechado', 'CMV real ' + fmtEur(close.realCogs) + ' (' + fmtPct(close.realPct) + ')', 'success');
         }
 
         // --------------------------------------------------------------------
@@ -1635,9 +1762,8 @@ html.gloss-off .gloss-term::after{content:none}
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canApproveInvoices ? `
-                            <button onclick="openGeminiOcrModal()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300 transition-all flex items-center gap-2">
-                                <span>✨ Testar Ecrã OCR (Google Gemini — Fase 4)</span>
-                            </button>
+                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Ler fatura com Gemini (PDF ou foto)</button>
+                            <input id="invoice-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" class="hidden" onchange="readInvoiceFile(this)">
                             <button onclick="openManualPurchaseModal()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow-lg shadow-blue-600/25 transition-all">
                                 + Registar Compra Manual
                             </button>
@@ -1659,10 +1785,15 @@ html.gloss-off .gloss-term::after{content:none}
                         <div class="mt-1.5 font-mono font-bold text-2xl text-amber-400 tabular-nums">${pendingCount}</div>
                     </div>
                     <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
-                        <div class="text-xs text-slate-400">Motor de Extração IA (Fase 4)</div>
-                        <div class="mt-1.5 font-mono font-semibold text-sm text-sky-400 flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
-                            Gemini Structured JSON Ready
+                        <div class="text-xs text-slate-400">Leitura de faturas (Google Gemini)</div>
+                        <div class="mt-1.5 font-mono font-semibold text-sm ${geminiKey() && restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full ${geminiKey() && restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
+                            ${geminiKey() && restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono">
+                            <button onclick="openSettingsModal()" class="text-sky-400 underline">Definições</button>
+                            ${role.canApproveInvoices ? `<button onclick="openOcrReview({...OCR_SAMPLE, customer_nif: restaurantNif()}, 'exemplo-fatura.pdf')" class="text-sky-400 underline">Ver exemplo</button>
+                            <button onclick="openOcrReview({...OCR_SAMPLE, invoice_number: 'FT 2026/9944', customer_nif: '501234567', customer_name: 'Outro Restaurante, Lda.'}, 'exemplo-nif-errado.pdf')" class="text-sky-400 underline">Exemplo com NIF errado</button>` : ''}
                         </div>
                     </div>
                 </div>
@@ -1693,7 +1824,8 @@ html.gloss-off .gloss-term::after{content:none}
                                         <tr class="hover:bg-[#111827]/70 transition-colors">
                                             <td class="py-3.5 px-5">
                                                 <div class="font-mono font-semibold text-white">${escHtml(inv.id)}</div>
-                                                <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}</div>
+                                                <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}${inv.source ? ' · ' + escHtml(inv.source) : ''}</div>
+                                                ${inv.source && inv.customerNif !== restaurantNif() ? `<div class="text-[11px] font-mono text-rose-400">NIF adquirente: ${escHtml(inv.customerNif || 'em falta')}</div>` : ''}
                                             </td>
                                             <td class="py-3.5 px-4">
                                                 <div class="font-medium text-white">${sup ? escHtml(sup.name) : 'Fornecedor Removido'}</div>
@@ -1757,6 +1889,7 @@ html.gloss-off .gloss-term::after{content:none}
                     m.prevCost = previous;
                     m.lastCost = l.price;
                     ing.priceHistory.push(l.price);
+                    (ing.supplierPrices ??= {})[inv.supplierId] = { price: l.price, date: inv.date };
                 }
                 m.stockTheoretical += sign*l.qty;
                 appState.movements.push({store:inv.store, ingredient:l.ing, document:inv.id, qty:sign*l.qty, date:inv.date});
@@ -1774,6 +1907,8 @@ html.gloss-off .gloss-term::after{content:none}
 
         function finishReceipt(inv) {
             try { postReceipt(inv); } catch (error) { showToast('Compra pendente', error.message,'warning'); return; }
+            const order = (appState.purchaseOrders || []).find(o => o.id === inv.orderId);
+            if (order) Object.assign(order, { status: 'Recebida', receivedBy: inv.id });
             persistState(); closeModal(); updateChrome(); renderActiveView();
             showToast('Documento aprovado',inv.id,'success');
         }
@@ -1788,7 +1923,7 @@ html.gloss-off .gloss-term::after{content:none}
             finishReceipt({...doc, lines:doc.lines || samples[doc.id]});
         }
 
-        function openManualPurchaseModal() {
+        function openManualPurchaseModal(orderId = '') {
             if (!appState.roles[appState.activeRole].canApproveInvoices) {
                 showToast('Acesso Restrito (RBAC)', 'O perfil atual não tem permissão para registar compras.', 'warning');
                 return;
@@ -1801,7 +1936,7 @@ html.gloss-off .gloss-term::after{content:none}
             }).join('');
 
             const html = `
-                <form onsubmit="submitManualPurchase(event)" class="space-y-4">
+                <form onsubmit="submitManualPurchase(event)" class="space-y-4"><input type="hidden" id="mp-order">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">Tipo de Documento</label>
@@ -1824,31 +1959,12 @@ html.gloss-off .gloss-term::after{content:none}
 
                     <div class="p-4 rounded-xl bg-[#050814] border border-[#1E293B] space-y-4">
                         <label class="block text-xs">Guia de remessa já recebida<select class="block w-full bg-slate-900 p-2" id="mp-guide" onchange="showReceiptSelection()"></select></label>
-                        <div id="mp-guide-summary" class="text-xs text-sky-300"></div><fieldset id="mp-line">
-                        <div class="text-xs font-mono uppercase text-sky-400">Linha de Artigo (Atualiza Stock &amp; CMP do restaurante)</div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Ingrediente do Catálogo</label>
-                            <select id="mp-ingredient" onchange="prefillManualPrice()" class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
-                                ${ingOpts}
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1.5">Quantidade (unidades de compra)</label>
-                                <label class="block text-xs">Unidades base por embalagem<input id="mp-factor" onchange="prefillManualPrice()" type="number" step="0.0001" min="0.0001" value="1" required class="block w-full bg-slate-900 p-2"></label><input id="mp-qty" type="number" step="0.0001" min="0.0001" value="15" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1.5">Preço por unidade de compra s/ IVA (€)</label>
-                                <input id="mp-price" type="number" step="0.0001" min="0.01" value="14.20" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1.5">Taxa IVA</label>
-                                <select id="mp-vat" class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
-                                    <option value="6">6% (Essenciais)</option>
-                                    <option value="13">13% (Intermédia)</option>
-                                    <option value="23">23% (Normal)</option>
-                                </select>
-                            </div>
+                        <div id="mp-guide-summary" class="text-xs text-sky-300"></div><fieldset id="mp-line" class="space-y-3">
+                        <div class="text-xs font-mono uppercase text-sky-400">Linhas do documento (atualizam stock &amp; CMP do restaurante)</div>
+                        <div id="mp-lines" class="space-y-3">${manualPurchaseRow(ingOpts)}</div>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <button type="button" onclick="addManualPurchaseRow()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#111827] border border-sky-400/30 text-sky-300">+ Adicionar linha</button>
+                            <div id="mp-total" class="text-xs font-mono text-slate-300"></div>
                         </div>
                         </fieldset>
                     </div>
@@ -1862,7 +1978,24 @@ html.gloss-off .gloss-term::after{content:none}
                 </form>
             `;
             openModal('Registar Compra Manual', 'Entrada em stock e CMP. Na nota de crédito, registe apenas devoluções físicas.', html);
-            prefillManualPrice();refreshReceiptOptions();
+            document.getElementById('mp-lines').dataset.options = ingOpts;
+            prefillManualPrice(document.querySelector('#mp-lines .mp-row'));
+            const order = (appState.purchaseOrders || []).find(o => o.id === orderId && o.status === 'Enviada');
+            if (order) {
+                document.getElementById('modal-subtitle').textContent = 'Receção da encomenda ' + order.id + '. Ajuste as quantidades ao que chegou.';
+                document.getElementById('mp-order').value = order.id;
+                document.getElementById('mp-supplier').value = order.supplierId;
+                document.getElementById('mp-lines').innerHTML = '';
+                for (const l of order.lines) {
+                    addManualPurchaseRow();
+                    const row = document.getElementById('mp-lines').lastElementChild;
+                    row.querySelector('.mp-ingredient').value = l.ing;
+                    row.querySelector('.mp-qty').value = l.qty;
+                    row.querySelector('.mp-price').value = l.price;
+                }
+                updateManualPurchaseTotal();
+            }
+            refreshReceiptOptions();
         }
 
         function refreshReceiptOptions() {
@@ -1881,163 +2014,240 @@ html.gloss-off .gloss-term::after{content:none}
             document.getElementById('mp-guide-summary').textContent = id ? 'Faturação integral da guia aos preços recebidos. O stock já foi movimentado.' : '';
         }
 
-        function prefillManualPrice() {
-            const storeKey = RESTAURANT;
-            const ing = getIngredient(document.getElementById('mp-ingredient').value);
-            if (ing) {
-                const m = getIngMetricsForStore(ing, storeKey);
-                document.getElementById('mp-price').value = (m.lastCost * Number(document.getElementById('mp-factor').value || 1)).toFixed(4);
-            }
+        function manualPurchaseRow(ingOpts) {
+            const field = 'w-full px-3 py-2 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400';
+            return `<div class="mp-row p-3 rounded-xl border border-[#1E293B] space-y-2" oninput="updateManualPurchaseTotal()">
+                <div class="flex items-end gap-2">
+                    <label class="flex-1 block text-xs text-slate-300">Ingrediente do catálogo
+                        <select class="mp-ingredient mt-1 ${field} font-sans" onchange="prefillManualPrice(this.closest('.mp-row'))">${ingOpts}</select></label>
+                    <button type="button" onclick="removeManualPurchaseRow(this)" class="px-2.5 py-2 rounded-lg text-xs text-rose-300 border border-[#1E293B]" aria-label="Remover linha">Remover</button>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <label class="block text-xs text-slate-300">Quantidade (emb.)<input class="mp-qty mt-1 ${field}" type="number" step="any" min="0.0001" value="1" required></label>
+                    <label class="block text-xs text-slate-300">Unid. base por emb.<input class="mp-factor mt-1 ${field}" onchange="prefillManualPrice(this.closest('.mp-row'))" type="number" step="any" min="0.0001" value="1" required></label>
+                    <label class="block text-xs text-slate-300">Preço/emb. s/ IVA (€)<input class="mp-price mt-1 ${field}" type="number" step="any" min="0" required></label>
+                    <label class="block text-xs text-slate-300">IVA<select class="mp-vat mt-1 ${field}"><option value="6">6%</option><option value="13">13%</option><option value="23">23%</option></select></label>
+                </div>
+            </div>`;
         }
-
+        function addManualPurchaseRow() {
+            const box = document.getElementById('mp-lines');
+            box.insertAdjacentHTML('beforeend', manualPurchaseRow(box.dataset.options));
+            prefillManualPrice(box.lastElementChild);
+        }
+        function removeManualPurchaseRow(btn) {
+            if (document.querySelectorAll('#mp-lines .mp-row').length <= 1) { showToast('Mínimo 1 linha', 'O documento precisa de pelo menos um artigo.', 'warning'); return; }
+            btn.closest('.mp-row').remove();
+            updateManualPurchaseTotal();
+        }
+        function manualPurchaseLines() {
+            return [...document.querySelectorAll('#mp-lines .mp-row')].map(row => {
+                const v = cls => row.querySelector('.mp-'+cls).value;
+                const factor = Number(v('factor'));
+                return { ing: v('ingredient'), qty: Number(v('qty'))*factor, price: Number(v('price'))/factor, vat: Number(v('vat')) };
+            });
+        }
+        function updateManualPurchaseTotal() {
+            const el = document.getElementById('mp-total');
+            if (!el) return;
+            const lines = manualPurchaseLines().filter(l => Number.isFinite(l.qty*l.price));
+            const net = lines.reduce((n,l) => n + l.qty*l.price, 0);
+            const vat = lines.reduce((n,l) => n + l.qty*l.price*l.vat/100, 0);
+            el.textContent = `${lines.length} linha(s) · Líquido ${fmtEur(net)} · IVA ${fmtEur(vat)} · Total ${fmtEur(net+vat)}`;
+        }
+        function prefillManualPrice(row) {
+            const ing = row && getIngredient(row.querySelector('.mp-ingredient').value);
+            if (ing) {
+                const m = getIngMetricsForStore(ing, RESTAURANT);
+                row.querySelector('.mp-price').value = (m.lastCost * Number(row.querySelector('.mp-factor').value || 1)).toFixed(4);
+            }
+            updateManualPurchaseTotal();
+        }
         function submitManualPurchase(e) {
             e.preventDefault();
-            const val = name => document.getElementById('mp-'+name).value;
-            const factor = Number(val('factor'));
-            const ing = getIngredient(val('ingredient'));
-            if (!ing || !val('number').trim() || !(factor > 0)) return;
-            const qty = Number(val('qty'))*factor, price = Number(val('price'))/factor;
-            finishReceipt({receiptRef:document.getElementById('mp-guide')?.value || '',id:val('number').trim(),docType:val('doctype'),store:RESTAURANT,supplierId:val('supplier'),
-                date:new Date().toLocaleDateString('sv-SE'),itemsSummary:ing.name+' · '+fmtNum(qty,3)+' '+ing.baseUnit,
-                lines:[{ing:ing.id,qty,price,vat:Number(val('vat'))}]});
+            const number = document.getElementById('mp-number').value.trim();
+            const guide = document.getElementById('mp-guide')?.value || '';
+            const lines = manualPurchaseLines(); // com guia, o postReceipt substitui-as pelas linhas da guia
+            if (!number || lines.some(l => !getIngredient(l.ing) || !(l.qty > 0))) return;
+            const summary = lines.map(l => { const ing = getIngredient(l.ing); return ing.name+' · '+fmtNum(l.qty,3)+' '+ing.baseUnit; }).join(' + ');
+            finishReceipt({orderId:document.getElementById('mp-order').value,receiptRef:guide,id:number,docType:document.getElementById('mp-doctype').value,store:RESTAURANT,supplierId:document.getElementById('mp-supplier').value,
+                date:new Date().toLocaleDateString('sv-SE'),itemsSummary:summary,lines});
         }
-
-        function openGeminiOcrModal() {
-            if (!appState.roles[appState.activeRole].canApproveInvoices) {
-                showToast('Acesso Restrito (RBAC)', 'O perfil atual não tem permissão para importar faturas.', 'warning');
-                return;
+        // --- LEITURA DE FATURAS COM GOOGLE GEMINI ---
+        // shortcut: a chave da API fica no localStorage deste browser e o pedido sai do browser, o que a expõe a quem usar este computador; ao passar para online, chamar o Gemini a partir do servidor.
+        const GEMINI_KEY_STORAGE = 'kareca_gemini_api_key';
+        const OCR_SCHEMA = {
+            type: 'OBJECT',
+            properties: {
+                doc_type: { type: 'STRING', description: 'Fatura, Fatura-Recibo, Fatura Simplificada, Nota de Crédito ou Guia de Remessa' },
+                invoice_number: { type: 'STRING' }, atcud: { type: 'STRING' }, date: { type: 'STRING', description: 'AAAA-MM-DD' },
+                supplier_name: { type: 'STRING' }, supplier_nif: { type: 'STRING' },
+                customer_name: { type: 'STRING' }, customer_nif: { type: 'STRING', description: 'NIF do adquirente/cliente; vazio se não existir' },
+                lines: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+                    description: { type: 'STRING' }, sku: { type: 'STRING' }, qty: { type: 'NUMBER' }, unit: { type: 'STRING', description: 'kg, g, L, cl, ml, un ou a unidade impressa' },
+                    unit_price_net: { type: 'NUMBER', description: 'preço unitário sem IVA, após descontos' }, line_total_net: { type: 'NUMBER' }, vat_rate: { type: 'NUMBER' }
+                }, required: ['description', 'qty', 'unit_price_net', 'vat_rate'] } },
+                totals: { type: 'OBJECT', properties: { net: { type: 'NUMBER' }, vat: { type: 'NUMBER' }, gross: { type: 'NUMBER' } } }
+            },
+            required: ['doc_type', 'invoice_number', 'date', 'supplier_nif', 'customer_nif', 'lines', 'totals']
+        };
+        const OCR_SAMPLE = {
+            doc_type: 'Fatura', invoice_number: 'FT 2026/9921', atcud: 'JFD8K2M1-9921', date: '2026-11-19',
+            supplier_name: 'Pescados Atlântico, Lda.', supplier_nif: '509412883', customer_name: 'Restaurante Chiado', customer_nif: '',
+            lines: [
+                { description: 'SALMAO FRESCO NORUEGA LOMBO', sku: 'PEIX-001', qty: 12, unit: 'kg', unit_price_net: 13.90, line_total_net: 166.80, vat_rate: 6 },
+                { description: 'POLVO NACIONAL LIMPO CX8', sku: 'PEIX-014', qty: 8, unit: 'kg', unit_price_net: 16.40, line_total_net: 131.20, vat_rate: 6 }
+            ],
+            totals: { net: 298.00, vat: 17.88, gross: 315.88 }
+        };
+        let ocrDraft = null;
+        function geminiKey() {
+            try { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; } catch { return ''; }
+        }
+        function restaurantNif() {
+            return appState.settings?.restaurantNif || '';
+        }
+        function openSettingsModal() {
+            const s = appState.settings || {};
+            const field = 'mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white';
+            openModal('Definições', 'Restaurante e leitura de faturas', `<form onsubmit="saveSettings(event)" class="space-y-4">
+                <label class="block text-xs text-slate-300">NIF do restaurante (adquirente nas faturas)<input id="set-nif" required value="${escHtml(s.restaurantNif || '')}" class="${field}" placeholder="500 000 000"></label>
+                <label class="block text-xs text-slate-300">Chave da API Google Gemini<input id="set-key" type="password" autocomplete="off" value="${escHtml(geminiKey())}" class="${field}" placeholder="AIza…"></label>
+                <label class="block text-xs text-slate-300">Modelo Gemini<input id="set-model" required value="${escHtml(s.geminiModel || 'gemini-3.8-flash')}" class="${field}"></label>
+                <p class="text-xs text-amber-200 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">A chave fica guardada só neste browser e não entra na cópia exportada. As faturas são enviadas diretamente para a Google. Use uma chave restrita a este fim e não a configure num computador partilhado. Crie a chave em aistudio.google.com.</p>
+                <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar</button></div></form>`);
+        }
+        function saveSettings(e) {
+            e.preventDefault();
+            const nif = normalizeNif(document.getElementById('set-nif').value);
+            if (nif.length !== 9) { showToast('NIF inválido', 'O NIF tem 9 dígitos.', 'warning'); return; }
+            appState.settings = { ...(appState.settings || {}), restaurantNif: nif, geminiModel: document.getElementById('set-model').value.trim() };
+            try {
+                const key = document.getElementById('set-key').value.trim();
+                key ? localStorage.setItem(GEMINI_KEY_STORAGE, key) : localStorage.removeItem(GEMINI_KEY_STORAGE);
+            } catch { showToast('Chave não guardada', 'O browser bloqueou o armazenamento local.', 'warning'); }
+            persistState(); closeModal(); renderActiveView(); showToast('Definições guardadas', '', 'success');
+        }
+        function pickInvoiceFile() {
+            if (!appState.roles[appState.activeRole].canApproveInvoices) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não tem permissão para importar faturas.', 'warning'); return; }
+            if (!geminiKey() || !restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante e a chave Gemini.', 'info'); openSettingsModal(); return; }
+            document.getElementById('invoice-file')?.click();
+        }
+        async function readInvoiceFile(input) {
+            const file = input.files[0];
+            input.value = '';
+            if (!file) return;
+            if (!/^(application\/pdf|image\/(jpeg|png|webp|heic|heif))$/.test(file.type)) { showToast('Formato não suportado', 'Use PDF, JPG, PNG, WEBP ou HEIC.', 'warning'); return; }
+            if (file.size > 15 * 1024 * 1024) { showToast('Ficheiro grande demais', 'Máximo 15 MB.', 'warning'); return; }
+            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados. Isto demora alguns segundos.</p>');
+            try {
+                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(file); });
+                const model = appState.settings?.geminiModel || 'gemini-3.8-flash';
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ inline_data: { mime_type: file.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
+                        generationConfig: { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, temperature: 0 }
+                    })
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) throw Error(body.error?.message || 'Erro ' + res.status + ' do Gemini.');
+                const text = body.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
+                if (!text) throw Error('O Gemini não devolveu dados (' + (body.candidates?.[0]?.finishReason || body.promptFeedback?.blockReason || 'sem resposta') + ').');
+                const ex = JSON.parse(text);
+                if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos.');
+                openOcrReview(ex, file.name);
+            } catch (error) {
+                closeModal();
+                showToast('Leitura falhou', error.message, 'warning');
             }
-            const sampleJson = JSON.stringify({
-                provider: 'google-gemini-2.5-pro-vision',
-                invoice_number: 'FT 2026/9921',
-                atcud: 'JFD8K2M1-9921',
-                supplier_nif: '509412883',
-                supplier_name: 'Pescados Atlântico, Lda.',
-                date: '2026-11-19',
-                currency: 'EUR',
-                lines: [
-                    { raw: 'SALMAO FRESCO NORUEGA LOMBO', matched_sku: 'PEIX-001', qty: 12.0, unit: 'kg', unit_price_net: 13.90, vat: 6, confidence: 0.99 },
-                    { raw: 'POLVO NACIONAL LIMPO CX8', matched_sku: 'PEIX-014', qty: 8.0, unit: 'kg', unit_price_net: 16.40, vat: 6, confidence: 0.96 }
-                ],
-                totals: { net: 298.00, vat: 17.88, gross: 315.88 }
-            }, null, 2);
-
-            const html = `
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                    <div class="lg:col-span-5 rounded-xl bg-slate-100 text-slate-900 p-5 font-mono text-xs shadow-inner flex flex-col justify-between">
-                        <div>
-                            <div class="flex justify-between items-start border-b border-slate-300 pb-3 mb-3">
-                                <div>
-                                    <div class="font-bold text-sm text-slate-900">PESCADOS ATLÂNTICO, LDA.</div>
-                                    <div class="text-[10px] text-slate-600">NIF: 509 412 883 • Doca de Pedrouços, Lisboa</div>
-                                </div>
-                                <span class="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded">ORIGINAL</span>
-                            </div>
-                            <div class="flex justify-between text-[11px] mb-3">
-                                <span><strong>Doc:</strong> FT 2026/9921</span>
-                                <span><strong>Data:</strong> 19-11-2026</span>
-                            </div>
-                            <div class="text-[10px] text-slate-600 mb-3">ATCUD: JFD8K2M1-9921</div>
-                            <table class="w-full text-[10px] border-t border-b border-slate-300 my-2">
-                                <thead>
-                                    <tr class="text-left border-b border-slate-300">
-                                        <th class="py-1.5">Descrição</th>
-                                        <th class="py-1.5 text-right">Qtd</th>
-                                        <th class="py-1.5 text-right">P.Unit</th>
-                                        <th class="py-1.5 text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="border-b border-slate-200 bg-sky-100/70">
-                                        <td class="py-1.5 font-semibold">SALMAO FRESCO NORUEGA LOMBO</td>
-                                        <td class="py-1.5 text-right">12 kg</td>
-                                        <td class="py-1.5 text-right">13,90 €</td>
-                                        <td class="py-1.5 text-right">166,80 €</td>
-                                    </tr>
-                                    <tr class="bg-sky-100/70">
-                                        <td class="py-1.5 font-semibold">POLVO NACIONAL LIMPO CX8</td>
-                                        <td class="py-1.5 text-right">8 kg</td>
-                                        <td class="py-1.5 text-right">16,40 €</td>
-                                        <td class="py-1.5 text-right">131,20 €</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="pt-3 border-t border-slate-300 flex items-end justify-between">
-                            <div class="w-14 h-14 bg-slate-900 rounded p-1 grid grid-cols-4 gap-0.5">
-                                <span class="bg-white"></span><span class="bg-white"></span><span></span><span class="bg-white"></span>
-                                <span class="bg-white"></span><span></span><span class="bg-white"></span><span></span>
-                                <span></span><span class="bg-white"></span><span class="bg-white"></span><span class="bg-white"></span>
-                                <span class="bg-white"></span><span></span><span class="bg-white"></span><span class="bg-white"></span>
-                            </div>
-                            <div class="text-right space-y-0.5 text-[11px]">
-                                <div>Base Tributável: <strong>298,00 €</strong></div>
-                                <div>IVA (6%): <strong>17,88 €</strong></div>
-                                <div class="text-sm font-bold text-blue-700">TOTAL: 315,88 €</div>
-                            </div>
-                        </div>
+        }
+        function openOcrReview(ex, fileName) {
+            ocrDraft = { ex, fileName };
+            const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
+            const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
+                : docNif !== ownNif ? `A fatura foi emitida para o NIF ${docNif}${ex.customer_name ? ' (' + ex.customer_name + ')' : ''}, que não é o do restaurante (${ownNif}).` : '';
+            if (nifIssue && !appState.alerts.some(a => a.type === 'nif_mismatch' && a.document === ex.invoice_number)) {
+                appState.alerts.unshift({ id: crypto.randomUUID(), type: 'nif_mismatch', severity: 'critical', store: RESTAURANT, unread: true, time: new Date().toLocaleString('pt-PT'),
+                    document: ex.invoice_number, title: 'NIF errado na fatura ' + ex.invoice_number, message: nifIssue + ' Peça ao fornecedor ' + (ex.supplier_name || '') + ' uma fatura corrigida.' });
+                persistState(); updateChrome();
+            }
+            const supplier = appState.suppliers.find(s => normalizeNif(s.nif) === normalizeNif(ex.supplier_nif));
+            const field = 'w-full px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white';
+            const ingOptions = sel => appState.ingredients.map(i => `<option value="${i.id}" ${sel === i.id ? 'selected' : ''}>${escHtml(i.name)} (${escHtml(i.baseUnit)})</option>`).join('');
+            const rows = ex.lines.map((l, idx) => {
+                const ing = matchIngredient(l.description, l.sku);
+                const base = ing && invoiceLineToBase(l, ing);
+                const total = Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net);
+                return `<div class="ocr-row p-3 rounded-xl border border-[#1E293B] space-y-2" data-total="${total}">
+                    <div class="text-xs text-slate-400">Linha ${idx + 1}: «${escHtml(l.description)}» · ${fmtNum(l.qty, 3)} ${escHtml(l.unit || '')} × ${fmtEur(l.unit_price_net, 4)} = <strong class="text-white">${fmtEur(total)}</strong> · IVA ${fmtNum(l.vat_rate, 0)}%</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option>${ingOptions(ing?.id)}</select></label>
+                        <label class="text-xs text-slate-300">Qtd. em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
+                        <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
                     </div>
-
-                    <div class="lg:col-span-7 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <span class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/30">
-                                ✨ Google Gemini Structured Output • Confiança Média: 97,5%
-                            </span>
-                            <button type="button" onclick="document.getElementById('ocr-json-box').classList.toggle('hidden')" class="text-xs font-mono text-slate-400 hover:text-sky-400 underline">
-                                Ver / Ocultar JSON
-                            </button>
-                        </div>
-
-                        <pre id="ocr-json-box" class="hidden p-3 rounded-xl bg-[#050814] border border-[#1E293B] text-[11px] font-mono text-sky-300 overflow-x-auto max-h-44">${escHtml(sampleJson)}</pre>
-
-                        <div class="space-y-3">
-                            <div class="p-3.5 rounded-xl bg-[#050814] border border-emerald-500/30">
-                                <div class="flex items-center justify-between gap-2 mb-1.5">
-                                    <span class="text-xs font-mono text-slate-400">Linha 1: "SALMAO FRESCO NORUEGA LOMBO"</span>
-                                    <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">Match 99%</span>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
-                                    <div class="text-white font-sans font-semibold">→ Lombo de Salmão Fresco</div>
-                                    <div class="text-slate-300">12,0 kg × <span class="text-amber-400 font-bold">13,90 €/kg</span></div>
-                                    <div class="text-right text-amber-400">+8,6% inflação</div>
-                                </div>
-                            </div>
-
-                            <div class="p-3.5 rounded-xl bg-[#050814] border border-emerald-500/30">
-                                <div class="flex items-center justify-between gap-2 mb-1.5">
-                                    <span class="text-xs font-mono text-slate-400">Linha 2: "POLVO NACIONAL LIMPO CX8"</span>
-                                    <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">Match 96%</span>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
-                                    <div class="text-white font-sans font-semibold">→ Polvo Nacional Limpo</div>
-                                    <div class="text-slate-300">8,0 kg × <span class="text-sky-400 font-bold">16,40 €/kg</span></div>
-                                    <div class="text-right text-emerald-400">+3,9% OK</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-3 rounded-xl bg-blue-500/10 border border-sky-400/25 text-xs text-sky-200">
-                            ✓ Validação matemática aprovada: <span class="font-mono">298,00 € + 17,88 € = 315,88 €</span> · documento de demonstração.
-                        </div>
-
-                        <div class="flex justify-end gap-3 pt-2">
-                            <button onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Fechar</button>
-                            <button onclick="approveSimulatedGeminiOcr()" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 shadow-lg">
-                                Validar &amp; Importar Fatura OCR
-                            </button>
-                        </div>
-                    </div>
+                    <div class="ocr-price text-[11px] font-mono ${ing && !base ? 'text-amber-300' : 'text-slate-400'}">${ing && !base ? 'Unidade «' + escHtml(l.unit || '?') + '» não convertível: indique a quantidade em ' + escHtml(ing.baseUnit) + '.' : ''}</div>
+                </div>`;
+            }).join('');
+            const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
+            const diff = Math.abs(net - (Number(ex.totals?.net) || net));
+            openModal('Rever fatura lida pelo Gemini', fileName, `<div class="space-y-4 text-sm">
+                ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+                    <label class="text-slate-300">Número<input id="ocr-number" class="${field}" value="${escHtml(ex.invoice_number || '')}"></label>
+                    <label class="text-slate-300">Data<input id="ocr-date" type="date" class="${field}" value="${escHtml(/^\d{4}-\d{2}-\d{2}$/.test(ex.date) ? ex.date : new Date().toLocaleDateString('sv-SE'))}"></label>
+                    <label class="text-slate-300">ATCUD<input id="ocr-atcud" class="${field}" value="${escHtml(ex.atcud || '')}"></label>
                 </div>
-            `;
-            openModal('Preview OCR — Google Gemini (Human-in-the-loop)', 'Demonstração do pipeline da Fase 4 ligado ao motor de custos real', html, 'xl');
+                <label class="block text-xs text-slate-300">Fornecedor (NIF lido: ${escHtml(ex.supplier_nif || '—')})<select id="ocr-supplier" class="${field} font-sans">
+                    ${supplier ? '' : `<option value="__new">+ Criar fornecedor «${escHtml(ex.supplier_name || 'Sem nome')}» (NIF ${escHtml(ex.supplier_nif || '—')})</option>`}
+                    ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
+                <div class="space-y-2">${rows}</div>
+                <div class="text-xs font-mono text-slate-300">Total lido: líquido ${fmtEur(ex.totals?.net)} · IVA ${fmtEur(ex.totals?.vat)} · total ${fmtEur(ex.totals?.gross)}${diff > 0.05 ? ` <span class="text-amber-300">· a soma das linhas (${fmtEur(net)}) não bate com o total: confira o documento.</span>` : ''}</div>
+                ${nifIssue ? '<label class="flex items-center gap-2 text-xs text-rose-200"><input type="checkbox" id="ocr-nif-ok"> Confirmo que a mercadoria foi recebida e quero lançar este documento mesmo assim.</label>' : ''}
+                <div class="flex justify-end gap-3"><button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button onclick="approveOcrInvoice()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Aprovar e atualizar stock</button></div></div>`, 'xl');
+            document.querySelectorAll('.ocr-row .ocr-ing').forEach(s => ocrRowChanged(s, true));
         }
-
-        function approveSimulatedGeminiOcr() {
-            finishReceipt({id:'FT 2026/9921 (OCR)',docType:'Fatura',store:appState.activeStore,supplierId:'sup_pescados',
-                date:'2026-11-19',itemsSummary:'Salmão 12 kg + polvo 8 kg · exemplo OCR',
-                lines:[{ing:'ing_salmao',qty:12,price:13.90,vat:6},{ing:'ing_polvo',qty:8,price:16.40,vat:6}]});
+        function ocrRowChanged(el, keepHint = false) {
+            const row = el.closest('.ocr-row'), ing = getIngredient(row.querySelector('.ocr-ing').value);
+            const qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
+            const out = row.querySelector('.ocr-price');
+            if (keepHint && out.textContent) return;
+            out.className = 'ocr-price text-[11px] font-mono text-slate-400';
+            if (!ing) { out.textContent = 'Lançada como despesa, sem movimento de stock.'; return; }
+            const m = getIngMetricsForStore(ing);
+            const price = qty > 0 ? total / qty : 0;
+            out.textContent = qty > 0 ? `${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
         }
-
+        function approveOcrInvoice() {
+            const ex = ocrDraft?.ex;
+            if (!ex) return;
+            if (document.getElementById('ocr-nif-ok') && !document.getElementById('ocr-nif-ok').checked) { showToast('NIF por confirmar', 'Marque a confirmação ou cancele e peça uma fatura corrigida.', 'warning'); return; }
+            const number = document.getElementById('ocr-number').value.trim();
+            if (!number) { showToast('Falta o número', 'Indique o número do documento.', 'warning'); return; }
+            const lines = [...document.querySelectorAll('.ocr-row')].map((row, idx) => {
+                const ing = row.querySelector('.ocr-ing').value, qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
+                const vat = Number(row.querySelector('.ocr-vat').value);
+                return ing ? { ing, qty, price: total / qty, vat } : { service: true, label: ex.lines[idx].description, qty: 1, price: total, vat };
+            });
+            if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
+            const before = structuredClone(appState);
+            let supplierId = document.getElementById('ocr-supplier').value;
+            if (supplierId === '__new') {
+                supplierId = 'sup_' + Date.now();
+                appState.suppliers.unshift({ id: supplierId, name: ex.supplier_name || 'Fornecedor ' + ex.supplier_nif, nif: ex.supplier_nif || '', category: 'Por classificar', email: '', phone: '', terms: '30 dias' });
+            }
+            const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
+            const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
+                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: 'Gemini · ' + ocrDraft.fileName, itemsSummary: summary, lines };
+            try { postReceipt(inv); } catch (error) { appState = before; showToast('Compra pendente', error.message, 'warning'); return; }
+            ocrDraft = null;
+            persistState(); closeModal(); updateChrome(); renderActiveView();
+            showToast('Fatura lançada', `${number} · ${fmtEur(inv.total)} · stock e CMP atualizados`, 'success');
+        }
         // --------------------------------------------------------------------
         // PAINEL 3: FORNECEDORES, CATÁLOGO DE INSUMOS POR LOJA & ENCOMENDAS
         // --------------------------------------------------------------------
@@ -2092,14 +2302,15 @@ html.gloss-off .gloss-term::after{content:none}
                                         <th class="py-3.5 px-5">Fornecedor</th>
                                         <th class="py-3.5 px-4">Categoria</th>
                                         <th class="py-3.5 px-4">Contactos</th>
-                                        <th class="py-3.5 px-4 text-right">Inflação (90d)</th>
+                                        <th class="py-3.5 px-4 text-right">Inflação (últimas 6 compras)</th>
                                         <th class="py-3.5 px-4 text-right">Tendência</th>
                                         <th class="py-3.5 px-5 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-[#1E293B]/60 text-sm">
                                     ${appState.suppliers.map(s => {
-                                        const isHigh = s.inflationPct > 5;
+                                        const trend = supplierPriceTrend(s.id);
+                                        const isHigh = trend.inflationPct > 5;
                                         return `
                                             <tr class="hover:bg-[#111827]/70">
                                                 <td class="py-4 px-5">
@@ -2112,10 +2323,10 @@ html.gloss-off .gloss-term::after{content:none}
                                                     <div>${escHtml(s.phone)}</div>
                                                 </td>
                                                 <td class="py-4 px-4 text-right font-mono font-bold ${isHigh ? 'text-amber-400' : 'text-emerald-400'}">
-                                                    +${fmtPct(s.inflationPct)}
+                                                    ${trend.inflationPct >= 0 ? '+' : ''}${fmtPct(trend.inflationPct)}
                                                 </td>
                                                 <td class="py-4 px-4 text-right">
-                                                    ${buildSparklineSvg(s.history, isHigh ? '#F59E0B' : '#10B981')}
+                                                    ${buildSparklineSvg(trend.history, isHigh ? '#F59E0B' : '#10B981')}
                                                 </td>
                                                 <td class="py-4 px-5 text-right">
                                                     ${role.canEditSuppliers ? `
@@ -2186,7 +2397,7 @@ html.gloss-off .gloss-term::after{content:none}
                                                     ${fmtNum(m.stockTheoretical, 1)} / ${fmtNum(m.minStock, 1)} ${escHtml(i.baseUnit)}
                                                 </td>
                                                 <td class="py-3.5 px-4 text-right font-mono font-bold tabular-nums text-sky-400">${fmtEur(m.cmp)}/${escHtml(i.baseUnit)}</td>
-                                                <td class="py-3.5 px-4 text-right">${buildSparklineSvg(i.priceHistory, '#38BDF8')}</td>
+                                                <td class="py-3.5 px-4 text-right">${buildSparklineSvg(i.priceHistory, '#38BDF8')}${(() => { const best = bestSupplierPrice(i); return best && best.supplierId !== i.supplierId ? `<div class="text-[10px] font-mono text-amber-300">Mais barato: ${fmtEur(best.price)} · ${escHtml(getSupplier(best.supplierId)?.name || '')}</div>` : ''; })()}</td>
                                                 <td class="py-3.5 px-5 text-right">
                                                     ${role.canEditIngredients ? `
                                                         <div class="inline-flex items-center gap-1.5">
@@ -2208,67 +2419,7 @@ html.gloss-off .gloss-term::after{content:none}
                     </div>
                 `;
             } else {
-                tabContent = `
-                    <div class="space-y-4">
-                        <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-center justify-between flex-wrap gap-2">
-                            <span>Em <strong>${escHtml(storeName)}</strong> existem <strong>${suggestedItems.length} insumo(s)</strong> abaixo do stock mínimo de segurança.</span>
-                            <span class="font-mono text-[11px] text-amber-300">Sugestão automática para 5 dias de cobertura</span>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            ${suggestedItems.length === 0 ? `
-                                <div class="col-span-full p-8 rounded-2xl bg-[#0B1120] border border-[#1E293B] text-center text-sm text-emerald-400">
-                                    ✓ Todos os insumos de ${escHtml(storeName)} estão acima do stock mínimo configurado!
-                                </div>
-                            ` : suggestedItems.map(i => {
-                                const m = getIngMetricsForStore(i, appState.activeStore);
-                                const sup = getSupplier(i.supplierId);
-                                const suggestedQty = Math.max(1, Math.ceil((m.minStock * 1.6) - m.stockTheoretical));
-                                const estTotal = suggestedQty * m.lastCost;
-                                const orderKey = `${appState.activeStore}:${i.id}`;
-                                const isSent = appState.sentOrders.includes(orderKey);
-
-                                return `
-                                    <div class="p-5 rounded-2xl bg-[#0B1120] border ${isSent ? 'border-emerald-500/35' : 'border-[#1E293B]'} flex flex-col justify-between gap-4">
-                                        <div>
-                                            <div class="flex items-center justify-between gap-2 mb-2">
-                                                <span class="text-[10px] font-mono px-2 py-0.5 rounded ${isSent ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-300'}">
-                                                    ${isSent ? 'PREPARADA' : 'RUTURA IMINENTE'}
-                                                </span>
-                                                <span class="text-xs font-mono text-slate-400">${escHtml(i.sku)}</span>
-                                            </div>
-                                            <h3 class="font-bold text-white">${escHtml(i.name)}</h3>
-                                            <p class="text-xs text-slate-400 mt-0.5">${sup ? escHtml(sup.name) : 'Sem fornecedor'}</p>
-                                            <div class="mt-4 grid grid-cols-2 gap-2 p-3 rounded-xl bg-[#050814] border border-[#1E293B] text-xs font-mono">
-                                                <div>
-                                                    <span class="text-slate-500 block">Stock Atual</span>
-                                                    <span class="text-rose-400 font-bold">${fmtNum(m.stockTheoretical, 1)} ${escHtml(i.baseUnit)}</span>
-                                                </div>
-                                                <div>
-                                                    <span class="text-slate-500 block">Stock Mínimo</span>
-                                                    <span class="text-slate-300">${fmtNum(m.minStock, 1)} ${escHtml(i.baseUnit)}</span>
-                                                </div>
-                                                <div>
-                                                    <span class="text-slate-500 block">Sugestão Pedido</span>
-                                                    <span class="text-sky-400 font-bold">+${suggestedQty} ${escHtml(i.baseUnit)}</span>
-                                                </div>
-                                                <div>
-                                                    <span class="text-slate-500 block">Valor Estimado</span>
-                                                    <span class="text-white font-bold">${fmtEur(estTotal)}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        ${role.canManageOrders ? `
-                                            <button onclick="generatePurchaseOrder('${i.id}', ${suggestedQty})" class="w-full py-2.5 rounded-xl text-xs font-semibold ${isSent ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-blue-600 hover:bg-blue-500 text-white'} transition-all">
-                                                ${isSent ? '✓ Encomenda preparada (ver mensagem)' : 'Gerar Encomenda (Email / WhatsApp)'}
-                                            </button>
-                                        ` : `<div class="text-center text-[11px] font-mono text-slate-500 py-2">🔒 Encomendas bloqueadas neste perfil</div>`}
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                `;
+                tabContent = buildOrdersTab(suggestedItems, role, storeName);
             }
 
             return `
@@ -2365,8 +2516,6 @@ html.gloss-off .gloss-term::after{content:none}
                 appState.suppliers.unshift({
                     id: 'sup_' + Date.now(),
                     ...payload,
-                    inflationPct: 0.0,
-                    history: [10.0, 10.0, 10.0, 10.0]
                 });
                 showToast('Fornecedor criado', `${payload.name} adicionado ao diretório.`, 'success');
             }
@@ -2489,26 +2638,36 @@ html.gloss-off .gloss-term::after{content:none}
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Stock Mínimo (Alerta)</label>
-                                <input  id="ing-min" type="number" step="0.1" min="0" value="${m.minStock}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
+                                <input  id="ing-min" type="number" step="any" min="0" value="${m.minStock}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Stock Teórico Atual</label>
-                                <input ${isEdit ? 'disabled' : ''} id="ing-stock" type="number" step="0.1" min="0" value="${m.stockTheoretical}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
+                                <input ${isEdit ? 'disabled' : ''} id="ing-stock" type="number" step="any" min="0" value="${m.stockTheoretical}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Custo Médio Ponderado — CMP (€)</label>
-                                <input ${isEdit ? 'disabled' : ''} id="ing-cmp" type="number" step="0.01" min="0.01" value="${m.cmp.toFixed(2)}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono font-bold text-sky-400 focus:outline-none focus:border-sky-400">
+                                <input ${isEdit ? 'disabled' : ''} id="ing-cmp" type="number" step="any" min="0.01" value="${m.cmp.toFixed(2)}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono font-bold text-sky-400 focus:outline-none focus:border-sky-400">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Último Custo de Compra (€)</label>
-                                <input ${isEdit ? 'disabled' : ''} id="ing-last" type="number" step="0.01" min="0.01" value="${m.lastCost.toFixed(2)}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
+                                <input ${isEdit ? 'disabled' : ''} id="ing-last" type="number" step="any" min="0.01" value="${m.lastCost.toFixed(2)}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                             </div>
                         </div>
                     </div>
 
+                    <fieldset class="p-4 rounded-xl bg-[#050814] border border-[#1E293B] space-y-2">
+                        <legend class="text-xs font-mono uppercase text-sky-400 px-1">Alergénios (Reg. UE 1169/2011)</legend>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs text-slate-300">${ALLERGENS.map(a => `<label class="flex items-center gap-2"><input type="checkbox" class="ing-allergen" value="${a}" ${ing?.allergens?.includes(a) ? 'checked' : ''}>${a}</label>`).join('')}</div>
+                    </fieldset>
+                    <fieldset class="p-4 rounded-xl bg-[#050814] border border-[#1E293B] space-y-2">
+                        <legend class="text-xs font-mono uppercase text-sky-400 px-1">Preço por fornecedor (€/${escHtml(ing?.baseUnit || 'unid. base')} s/ IVA)</legend>
+                        <p class="text-[11px] text-slate-400">As compras aprovadas atualizam estes preços. Deixe em branco os fornecedores que não vendem este artigo.</p>
+                        ${appState.suppliers.map(sp => { const q = ing?.supplierPrices?.[sp.id]; return `<label class="flex items-center justify-between gap-3 text-xs text-slate-300">${escHtml(sp.name)}${q ? ` <span class="text-slate-500">(${escHtml(q.date)})</span>` : ''}
+                            <input class="ing-quote w-28 px-2 py-1.5 rounded-lg bg-[#0B1120] border border-[#1E293B] font-mono text-white" data-sup="${sp.id}" type="number" step="any" min="0" value="${q ? q.price : ''}"></label>`; }).join('')}
+                    </fieldset>
                     <div class="flex justify-end gap-3 pt-2">
                         <button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Cancelar</button>
                         <button type="submit" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 shadow-lg">
@@ -2545,8 +2704,14 @@ html.gloss-off .gloss-term::after{content:none}
                 baseUnit: document.getElementById('ing-unit').value,
                 supplierId: document.getElementById('ing-sup').value,
                 packLabel: document.getElementById('ing-pack').value.trim(),
-                yieldFactor
+                yieldFactor,
+                allergens: [...document.querySelectorAll('.ing-allergen:checked')].map(c => c.value)
             };
+            const previousQuotes = getIngredient(ingId)?.supplierPrices || {};
+            baseMeta.supplierPrices = Object.fromEntries([...document.querySelectorAll('.ing-quote')].filter(q => Number(q.value) > 0).map(q => {
+                const old = previousQuotes[q.dataset.sup], price = Number(q.value);
+                return [q.dataset.sup, old && old.price === price ? old : { price, date: new Date().toLocaleDateString('sv-SE') }];
+            }));
 
             
 
@@ -2624,53 +2789,82 @@ html.gloss-off .gloss-term::after{content:none}
             renderActiveView();
         }
 
-        function generatePurchaseOrder(ingId, qty) {
-            if (!appState.roles[appState.activeRole].canManageOrders) {
-                showToast('Permissão RBAC insuficiente', 'O perfil atual não pode gerar encomendas.', 'warning');
-                return;
-            }
-            const ing = getIngredient(ingId);
-            const m = getIngMetricsForStore(ing, appState.activeStore);
-            const sup = getSupplier(ing.supplierId);
-            const orderKey = `${appState.activeStore}:${ingId}`;
-            if (!appState.sentOrders.includes(orderKey)) {
-                appState.sentOrders.push(orderKey);
-                persistState();
-            }
-            const storeName = appState.stores[appState.activeStore].name;
-            const supName = sup ? sup.name : 'Fornecedor';
-            const msgText = `Olá ${supName},\n\nSegue pedido de encomenda Kareca Solutions para ${storeName}:\n• Artigo: ${ing.name} (${ing.sku})\n• Quantidade: ${qty} ${ing.baseUnit}\n• Valor Estimado s/ IVA: ${fmtEur(qty * m.lastCost)}\n• Entrega pretendida: Amanhã até às 10:00.\n\nObrigado,\nEquipa ${storeName}`;
-
-            const html = `
-                <div class="space-y-4">
-                    <div class="flex items-center gap-2 text-xs font-mono text-emerald-400">
-                        <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30">Estado: PREPARADA</span>
-                        <span>Destinatário: ${sup ? escHtml(sup.email) : '-'} / ${sup ? escHtml(sup.phone) : '-'}</span>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Preview da Mensagem (WhatsApp / E-mail)</label>
-                        <textarea id="po-preview-text" rows="7" readonly class="w-full p-4 rounded-xl bg-[#050814] border border-[#1E293B] font-mono text-xs text-slate-200 focus:outline-none">${escHtml(msgText)}</textarea>
-                    </div>
-                    <div class="flex justify-end gap-3">
-                        <button onclick="copyOrderText()" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/30 text-sky-300">
-                            Copiar Mensagem
-                        </button>
-                        <button onclick="closeModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white">
-                            Concluir
-                        </button>
-                    </div>
-                </div>
-            `;
-            openModal('Encomenda Gerada & Pronta a Enviar', `${supName} • ${ing.name} (${storeName})`, html);
-            showToast('Mensagem de encomenda preparada', `${qty} ${ing.baseUnit} de ${ing.name} para ${supName}.`, 'success');
-            renderActiveView();
+        function openOrders() {
+            return (appState.purchaseOrders || []).filter(o => o.store === RESTAURANT && o.status === 'Enviada');
+        }
+        function buildOrdersTab(suggestedItems, role, storeName) {
+            const ordered = new Set(openOrders().flatMap(o => o.lines.map(l => l.ing)));
+            const pending = suggestedItems.filter(i => !ordered.has(i.id));
+            const bySupplier = Object.entries(pending.reduce((g, i) => ((g[i.supplierId || ''] ??= []).push(i), g), {}));
+            const card = 'p-5 rounded-2xl bg-[#0B1120] border border-[#1E293B] space-y-3';
+            const btn = 'px-3 py-2 rounded-xl text-xs font-semibold';
+            const field = 'w-24 px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] font-mono text-white text-right';
+            const history = (appState.purchaseOrders || []).filter(o => o.store === RESTAURANT && o.status !== 'Enviada');
+            return `<div class="space-y-6">
+                <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200">Em <strong>${escHtml(storeName)}</strong> há <strong>${suggestedItems.length} insumo(s)</strong> abaixo do stock mínimo${ordered.size ? `, ${suggestedItems.length - pending.length} já em encomenda` : ''}. A sugestão repõe 160% do mínimo.</div>
+                <section class="space-y-3"><h2 class="font-bold text-base text-white">Sugestões por fornecedor</h2>
+                ${bySupplier.length === 0 ? `<div class="${card} text-sm text-emerald-400">✓ Nada por encomendar.</div>` : `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${bySupplier.map(([supId, items]) => {
+                    const sup = getSupplier(supId);
+                    return `<div class="${card}" id="po-sup-${escHtml(supId)}"><div class="flex justify-between gap-2"><h3 class="font-bold text-white">${escHtml(sup?.name || 'Sem fornecedor')}</h3><span class="text-xs text-slate-400">${items.length} artigo(s)</span></div>
+                        <div class="space-y-2">${items.map(i => {
+                            const m = getIngMetricsForStore(i), qty = Math.max(1, Math.ceil(m.minStock * 1.6 - m.stockTheoretical));
+                            const best = bestSupplierPrice(i);
+                            return `<label class="flex items-center justify-between gap-3 text-xs text-slate-300"><span><strong class="text-white">${escHtml(i.name)}</strong><br>Stock ${fmtNum(m.stockTheoretical, 2)} / mín. ${fmtNum(m.minStock, 2)} ${escHtml(i.baseUnit)} · ${fmtEur(m.lastCost)}/${escHtml(i.baseUnit)}${best && best.supplierId !== supId ? `<br><span class="text-amber-300">Mais barato em ${escHtml(getSupplier(best.supplierId)?.name || '')}: ${fmtEur(best.price)}</span>` : ''}</span>
+                                <span class="whitespace-nowrap"><input class="po-qty ${field}" data-ing="${i.id}" type="number" step="any" min="0" value="${qty}"> ${escHtml(i.baseUnit)}</span></label>`;
+                        }).join('')}</div>
+                        ${role.canManageOrders && sup ? `<button onclick="createPurchaseOrder('${supId}')" class="${btn} w-full bg-blue-600 hover:bg-blue-500 text-white">Criar encomenda</button>` : !sup ? '<p class="text-xs text-slate-500">Associe um fornecedor ao insumo para encomendar.</p>' : '<p class="text-xs text-slate-500">🔒 Encomendas bloqueadas neste perfil</p>'}</div>`;
+                }).join('')}</div>`}</section>
+                <section class="space-y-3"><h2 class="font-bold text-base text-white">Encomendas em curso (${openOrders().length})</h2>
+                ${openOrders().length === 0 ? `<div class="${card} text-sm text-slate-400">Sem encomendas por receber.</div>` : openOrders().map(o => `<div class="${card}">
+                    <div class="flex flex-wrap justify-between gap-2"><h3 class="font-bold text-white">${escHtml(o.id)} · ${escHtml(getSupplier(o.supplierId)?.name || '')}</h3><span class="text-xs font-mono text-slate-400">${escHtml(o.date)} · ${fmtEur(o.lines.reduce((n, l) => n + l.qty * l.price, 0))} s/ IVA</span></div>
+                    <div class="text-xs text-slate-300">${o.lines.map(l => `${escHtml(getIngredient(l.ing)?.name || '?')}: ${fmtNum(l.qty, 3)} ${escHtml(getIngredient(l.ing)?.baseUnit || '')}`).join(' · ')}</div>
+                    <div class="flex flex-wrap gap-2"><button onclick="showOrderMessage('${o.id}')" class="${btn} bg-[#111827] border border-sky-400/30 text-sky-300">Ver mensagem</button>
+                    ${role.canApproveInvoices ? `<button onclick="openManualPurchaseModal('${o.id}')" class="${btn} bg-blue-600 hover:bg-blue-500 text-white">Receber mercadoria</button>` : ''}
+                    ${role.canManageOrders ? `<button onclick="cancelPurchaseOrder('${o.id}')" class="${btn} bg-[#111827] border border-[#1E293B] text-rose-300">Cancelar</button>` : ''}</div></div>`).join('')}</section>
+                ${history.length ? `<details class="${card}"><summary class="text-sm text-white cursor-pointer">Histórico de encomendas (${history.length})</summary>${history.map(o => `<div class="text-xs text-slate-300 py-1">${escHtml(o.id)} · ${escHtml(getSupplier(o.supplierId)?.name || '')} · ${escHtml(o.date)} · ${escHtml(o.status)}${o.receivedBy ? ' · ' + escHtml(o.receivedBy) : ''}</div>`).join('')}</details>` : ''}
+            </div>`;
+        }
+        function createPurchaseOrder(supId) {
+            if (!appState.roles[appState.activeRole].canManageOrders) return;
+            const lines = [...document.querySelectorAll(`#po-sup-${CSS.escape(supId)} .po-qty`)].map(input => {
+                const ing = getIngredient(input.dataset.ing);
+                return { ing: ing.id, qty: Number(input.value), price: ing.supplierPrices?.[supId]?.price ?? getIngMetricsForStore(ing).lastCost };
+            }).filter(l => l.qty > 0);
+            if (!lines.length) { showToast('Encomenda vazia', 'Indique pelo menos uma quantidade.', 'warning'); return; }
+            appState.purchaseOrders ??= [];
+            const id = 'EC ' + new Date().getFullYear() + '/' + String(appState.purchaseOrders.length + 1).padStart(4, '0');
+            appState.purchaseOrders.unshift({ id, store: RESTAURANT, supplierId: supId, date: new Date().toLocaleDateString('sv-SE'), status: 'Enviada', lines });
+            persistState(); updateChrome(); renderActiveView();
+            showOrderMessage(id);
+        }
+        function cancelPurchaseOrder(id) {
+            const o = (appState.purchaseOrders || []).find(x => x.id === id);
+            if (!o || !appState.roles[appState.activeRole].canManageOrders) return;
+            o.status = 'Cancelada';
+            persistState(); renderActiveView(); showToast('Encomenda cancelada', id, 'info');
+        }
+        function showOrderMessage(id) {
+            const o = (appState.purchaseOrders || []).find(x => x.id === id);
+            if (!o) return;
+            const sup = getSupplier(o.supplierId), storeName = appState.stores[RESTAURANT].name;
+            const total = o.lines.reduce((n, l) => n + l.qty * l.price, 0);
+            const text = `Olá ${sup?.name || ''},\n\nSegue a encomenda ${o.id} para ${storeName}:\n` +
+                o.lines.map(l => { const ing = getIngredient(l.ing); return `• ${ing?.name} (${ing?.sku}): ${fmtNum(l.qty, 3)} ${ing?.baseUnit}`; }).join('\n') +
+                `\n\nValor estimado s/ IVA: ${fmtEur(total)}\nPor favor confirmem a disponibilidade e a data de entrega.\n\nObrigado.`;
+            const mail = sup?.email ? `mailto:${encodeURIComponent(sup.email)}?subject=${encodeURIComponent('Encomenda ' + o.id)}&body=${encodeURIComponent(text)}` : '';
+            openModal('Encomenda ' + o.id, `${sup?.name || ''} • ${storeName}`, `<div class="space-y-4">
+                <textarea id="po-preview-text" rows="10" readonly class="w-full p-4 rounded-xl bg-[#050814] border border-[#1E293B] font-mono text-xs text-slate-200">${escHtml(text)}</textarea>
+                <div class="flex flex-wrap justify-end gap-3">
+                    <button onclick="copyOrderText()" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#111827] border border-sky-400/30 text-sky-300">Copiar mensagem</button>
+                    ${mail ? `<a href="${escHtml(mail)}" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#111827] border border-sky-400/30 text-sky-300">Abrir no e-mail</a>` : ''}
+                    <button onclick="closeModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 text-white">Concluir</button></div></div>`);
         }
 
         function copyOrderText() {
             const area = document.getElementById('po-preview-text');
             if (!area) return;
             area.select();
-            document.execCommand('copy');
+            navigator.clipboard?.writeText(area.value).catch(() => document.execCommand('copy')) ?? document.execCommand('copy');
             showToast('Copiado!', 'Texto da encomenda copiado para a área de transferência.', 'info');
         }
 
@@ -2685,6 +2879,12 @@ html.gloss-off .gloss-term::after{content:none}
 
         function selectRecipe(id) {
             appState.selectedRecipeId = id;
+            persistState();
+            renderActiveView();
+        }
+
+        function selectBcgQuadrant(q) {
+            appState.activeBcgQuadrant = q;
             persistState();
             renderActiveView();
         }
@@ -2770,11 +2970,32 @@ html.gloss-off .gloss-term::after{content:none}
                         ${item.note?`<small>${escHtml(item.note)}</small>`:''}</div>`;
                 }).join('')}</div>
                 <p class="work-muted">Outros custos do lote: ${fmtEur(rec.extraFixedCost||0)} · Custo total: ${fmtEur(cost.batchCost)}</p>
+                <p>Alergénios: <strong>${recipeAllergens(rec).map(escHtml).join(', ') || 'nenhum registado nos ingredientes'}</strong></p>
+                ${rec.recipeType==='final_product'?`<p>PVP sugerido para a meta de ${fmtPct(targetFcPct())}: <strong>${fmtEur(suggestedPvpGross(getChannelMetrics(rec)[0].totalCost, targetFcPct(), rec.vatRate))}</strong> com IVA (Sala)</p>`:''}
+                ${rec.recipeType==='sub_recipe'?`<p>Em stock: <strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0,3)} ${escHtml(rec.yieldUnit)}</strong>${role.canCountInventory?` <button class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>`:''}</p>`:''}
                 ${rec.recipeType==='final_product'?`<details class="work-detail"><summary>Preços e margens por canal</summary><div class="work-list">
                     ${getChannelMetrics(rec).map(c=>`<div class="work-row"><strong>${escHtml(c.name)}</strong>PVP: ${fmtEur(c.pvpGross)} · Food cost: ${fmtPct(c.foodCostPct)} · Margem: ${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</div>`).join('')}</div></details>`:''}
                 ${editable?`<details class="work-detail"><summary>Outras ações</summary><button class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar ficha</button></details>`:''}</section>`;
         }
 
+        function targetFcPct() {
+            return appState.storeFinancials[RESTAURANT].targetFc ?? appState.stores[RESTAURANT].targetFc;
+        }
+        function buildRecipeOverview() {
+            const target = targetFcPct();
+            const rows = appState.recipes.filter(r => r.recipeType === 'final_product').map(r => {
+                const sala = getChannelMetrics(r)[0];
+                return { r, sala, suggested: suggestedPvpGross(sala.totalCost, target, r.vatRate) };
+            }).sort((a, b) => b.sala.foodCostPct - a.sala.foodCostPct);
+            return `<section class="work-panel"><h2>Food cost de todas as fichas (Sala)</h2>
+                <p class="work-muted">Meta: ${fmtPct(target)}. Ordenado do food cost mais alto para o mais baixo. Clique num prato para abrir a ficha.</p>
+                <div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
+                <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 pr-3">Prato</th><th class="py-2 px-3 text-right">Custo</th><th class="py-2 px-3 text-right">PVP c/ IVA</th><th class="py-2 px-3 text-right">Food cost</th><th class="py-2 pl-3 text-right">PVP sugerido</th></tr></thead>
+                <tbody class="divide-y divide-[#1E293B]/60">${rows.map(({ r, sala, suggested }) => `<tr class="cursor-pointer hover:bg-[#111827]/70" onclick="selectRecipe('${r.id}')">
+                    <td class="py-2 pr-3 font-sans text-white">${escHtml(r.name)}</td><td class="py-2 px-3 text-right">${fmtEur(sala.totalCost)}</td><td class="py-2 px-3 text-right">${fmtEur(sala.pvpGross)}</td>
+                    <td class="py-2 px-3 text-right ${sala.foodCostPct > target ? 'text-rose-400' : 'text-emerald-400'}">${sala.pvpGross > 0 ? fmtPct(sala.foodCostPct) : '—'}</td>
+                    <td class="py-2 pl-3 text-right">${fmtEur(suggested)}</td></tr>`).join('')}</tbody></table></div></section>`;
+        }
         function buildRecipesView() {
             const sub = appState.recipeSubTab === 'dag' ? 'catalogue' : appState.recipeSubTab;
             const role = appState.roles[appState.activeRole];
@@ -2782,7 +3003,7 @@ html.gloss-off .gloss-term::after{content:none}
 
             let content = '';
             if (sub === 'catalogue') {
-                content = buildRecipeSheet(selectedRec,role);
+                content = buildRecipeSheet(selectedRec,role) + buildRecipeOverview();
             } else if (sub === 'sim') {
                 content = buildCostSimulation(selectedRec);
             } else {
@@ -3380,7 +3601,9 @@ html.gloss-off .gloss-term::after{content:none}
             if (!appState.roles[appState.activeRole].canEditRecipes) return;
             const rec = getRecipe(recipeId);
             if (appState.posMappings.some(m => m.recipeIds.includes(recipeId)) || appState.recipes.some(r => r.items.some(i=>i.type==='sub_recipe' && i.refId===recipeId))) {
-                showToast('Ficha em utilização','Remova primeiro as referências a esta ficha.','warning');return;
+                const refs = [...appState.posMappings.filter(m => m.recipeIds.includes(recipeId)).map(m => 'código POS '+m.posCode),
+                    ...appState.recipes.filter(r => r.items.some(i=>i.type==='sub_recipe' && i.refId===recipeId)).map(r => 'ficha '+r.name)];
+                showToast('Ficha em utilização','Remova primeiro: '+refs.join(', ')+'.','warning');return;
             }
             appState.recipes = appState.recipes.filter(r => r.id !== recipeId);
             if (appState.selectedRecipeId === recipeId) {
@@ -3496,7 +3719,8 @@ html.gloss-off .gloss-term::after{content:none}
                                             </span>
                                         </td>
                                         <td class="py-3.5 px-4 text-xs text-slate-300">${m.targets.map(escHtml).join('  +  ')}</td>
-                                        <td class="py-3.5 px-5 text-right font-mono font-semibold text-white">${fmtEur(m.priceGross)}</td>
+                                        <td class="py-3.5 px-5 text-right font-mono font-semibold text-white">${fmtEur(m.priceGross)}
+                                            ${role.canApproveInvoices ? `<button onclick="removePosMapping(${escHtml(JSON.stringify(m.posCode))})" class="ml-2 text-xs font-sans font-normal text-rose-300 hover:text-white underline">Remover</button>` : ''}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -3553,6 +3777,11 @@ html.gloss-off .gloss-term::after{content:none}
             persistState(); renderActiveView(); showToast('Código associado',code,'success');
         }
 
+        function removePosMapping(code) {
+            if (!appState.roles[appState.activeRole].canApproveInvoices) return;
+            appState.posMappings = appState.posMappings.filter(m => m.posCode !== code);
+            persistState(); renderActiveView(); showToast('Código removido', code + ' deixa de abater stock. O histórico de vendas mantém-se.', 'info');
+        }
         function deductIngredientsForRecipe(rec, multiplierQty, storeKey, txId, visited = new Set()) {
             if (!rec || visited.has(rec.id)) return;
             const nextVisited = new Set(visited);
@@ -3573,12 +3802,45 @@ html.gloss-off .gloss-term::after{content:none}
                 } else if (item.type === 'sub_recipe') {
                     const sub = getRecipe(item.refId);
                     if (!sub) return;
-                    const subQty = convertToBaseQty(item.netQty, item.unit || sub.yieldUnit, sub.yieldUnit);
-                    deductIngredientsForRecipe(sub, subQty * batches, storeKey, txId, nextVisited);
+                    const needed = convertToBaseQty(item.netQty, item.unit || sub.yieldUnit, sub.yieldUnit) * batches;
+                    // Primeiro gasta a preparação já produzida; o que faltar abate-se à matéria-prima.
+                    const fromStock = Math.min(Math.max(0, sub.prepStock?.[storeKey] || 0), needed);
+                    if (fromStock > 0) {
+                        sub.prepStock[storeKey] -= fromStock;
+                        appState.movements.push({store:storeKey,recipe:sub.id,document:txId,qty:-fromStock,date:new Date().toISOString()});
+                    }
+                    if (needed - fromStock > 1e-9) deductIngredientsForRecipe(sub, needed - fromStock, storeKey, txId, nextVisited);
                 }
             });
         }
 
+        function openProductionModal(recId) {
+            const rec = getRecipe(recId);
+            if (!rec || rec.recipeType !== 'sub_recipe') return;
+            const net = rec.yieldQuantity * (1 - (rec.cookingLossPct || 0) / 100);
+            openModal('Produzir preparação', rec.name, `<form onsubmit="executeProduction(event,'${rec.id}')" class="space-y-4">
+                <label class="block text-xs text-slate-300">Quantidade produzida (${escHtml(rec.yieldUnit)})
+                <input id="prod-qty" type="number" step="any" min="0.001" required value="${+net.toFixed(3)}" class="mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white"></label>
+                <p class="text-xs text-slate-400">Abate os ingredientes da ficha ao stock teórico e soma a preparação ao stock. As vendas que usam esta preparação gastam primeiro o que foi produzido.</p>
+                <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Registar produção</button></div></form>`);
+        }
+        function executeProduction(e, recId) {
+            e.preventDefault();
+            if (!appState.roles[appState.activeRole].canCountInventory) return;
+            const rec = getRecipe(recId), qty = Number(document.getElementById('prod-qty').value);
+            if (!rec || !(qty > 0)) return;
+            const issue = validateRecipe(rec, rec.id);
+            if (issue) { showToast('Rever ficha', issue, 'warning'); return; }
+            const id = crypto.randomUUID(), cost = calculateRecipeCost(rec).unitCost * qty;
+            deductIngredientsForRecipe(rec, qty, RESTAURANT, id);
+            rec.prepStock ??= {};
+            rec.prepStock[RESTAURANT] = (rec.prepStock[RESTAURANT] || 0) + qty;
+            appState.movements.push({store:RESTAURANT,recipe:rec.id,document:id,qty,date:new Date().toISOString(),type:'producao'});
+            (appState.productionLogs ??= []).unshift({id,store:RESTAURANT,recipeId:rec.id,name:rec.name,qty,unit:rec.yieldUnit,cost,date:new Date().toISOString()});
+            persistState(); closeModal(); updateChrome(); renderActiveView();
+            showToast('Produção registada', fmtNum(qty,3)+' '+rec.yieldUnit+' de '+rec.name+' · '+fmtEur(cost), 'success');
+        }
         function processSaleTransaction(posCode, qty, sourceLabel) {
             if (!appState.roles[appState.activeRole].canApproveInvoices) throw Error('Perfil sem permissão para lançar vendas.');
             if (!STORE_KEYS.includes(appState.activeStore)) throw Error('Selecione uma loja para lançar vendas.');
@@ -3715,6 +3977,8 @@ html.gloss-off .gloss-term::after{content:none}
                 expected:i.byStore[store].stockTheoretical, cost:i.byStore[store].cmp, yieldFactor:i.yieldFactor
             })), ...appState.subRecipesInventory.map(s=>({
                 id:s.id, name:s.name, zone:s.zone, unit:s.unit, prepared:true, parent:s.parentIngredientId
+            })), ...appState.recipes.filter(r=>r.recipeType==='sub_recipe' && r.prepStock).map(r=>({
+                id:'prep_'+r.id, name:r.name+' (produzida)', zone:'Preparações', unit:r.yieldUnit, produced:true, recipeId:r.id, expected:r.prepStock[store] || 0
             }))].filter(i=>!zone || i.zone===zone).sort((a,b)=>a.zone.localeCompare(b.zone,'pt') || a.name.localeCompare(b.name,'pt'));
         }
 
@@ -3753,7 +4017,7 @@ html.gloss-off .gloss-term::after{content:none}
         }
 
         function countRows(d) {
-            return d.items.filter(i=>!i.prepared).map(i=>{
+            return d.items.filter(i=>!i.prepared && !i.produced).map(i=>{
                 const direct=countQuantity(d.values[i.id]);
                 const prepared=d.items.filter(p=>p.prepared && p.parent===i.id)
                     .reduce((sum,p)=>sum+countQuantity(d.values[p.id])/i.yieldFactor,0);
@@ -3766,7 +4030,7 @@ html.gloss-off .gloss-term::after{content:none}
         function countView(d) {
             const heading='<h1 class="work-title">Inventário físico</h1><p class="work-muted">'+escHtml(appState.stores[d.store].name)+' · '+escHtml(d.zone || 'Todas as zonas')+'</p>';
             if (d.review) return heading+`<section class="work-panel"><h2>Rever contagem</h2><p class="work-muted">As preparações estão incluídas no equivalente em matéria-prima.</p>
-                <div class="work-list">${countRows(d).map(r=>`<div class="work-row"><strong>${escHtml(r.name)}</strong>Contado: ${fmtNum(r.counted,4)} ${escHtml(r.unit)} · Esperado: ${fmtNum(r.expected,4)} ${escHtml(r.unit)}<small>Diferença: ${fmtNum(r.counted-r.expected,4)} ${escHtml(r.unit)} · ${fmtEur(r.variance)}</small></div>`).join('')}</div>
+                <div class="work-list">${countRows(d).map(r=>`<div class="work-row"><strong>${escHtml(r.name)}</strong>Contado: ${fmtNum(r.counted,4)} ${escHtml(r.unit)} · Esperado: ${fmtNum(r.expected,4)} ${escHtml(r.unit)}<small>Diferença: ${fmtNum(r.counted-r.expected,4)} ${escHtml(r.unit)} · ${fmtEur(r.variance)}</small></div>`).join('')}${d.items.filter(i=>i.produced).map(i=>`<div class="work-row"><strong>${escHtml(i.name)}</strong>Contado: ${fmtNum(countQuantity(d.values[i.id]),4)} ${escHtml(i.unit)} · Esperado: ${fmtNum(i.expected,4)} ${escHtml(i.unit)}</div>`).join('')}</div>
                 <label class="work-actions"><input type="checkbox" ${d.adjust?'checked':''} onchange="const d=currentCount();if(d){d.adjust=this.checked;persistState()}"> Acertar o stock teórico para as quantidades contadas</label>
                 <p class="work-muted">O fecho guarda a contagem e os desvios. O acerto também lança um movimento de stock por diferença.</p>
                 <div class="work-actions"><button class="work-btn" onclick="reviewCount(false)">Voltar à contagem</button>
@@ -3814,6 +4078,13 @@ html.gloss-off .gloss-term::after{content:none}
             }
             const before=structuredClone(appState), date=new Date().toISOString(), id=crypto.randomUUID();
             const rows=countRows(d);
+            for (const i of d.items.filter(i=>i.produced)) {
+                const rec=getRecipe(i.recipeId), counted=countQuantity(d.values[i.id]);
+                if (rec && d.adjust && Math.abs(counted-i.expected)>1e-9) {
+                    appState.movements.push({store:d.store,recipe:rec.id,document:id,date,qty:counted-i.expected,type:'acerto_inventario'});
+                    rec.prepStock[d.store]=counted;
+                }
+            }
             for (const i of d.items.filter(i=>i.prepared)) {
                 appState.subRecipesInventory.find(s=>s.id===i.id).countedByStore[d.store]=countQuantity(d.values[i.id]);
             }
@@ -3849,13 +4120,14 @@ html.gloss-off .gloss-term::after{content:none}
                     <div>
                         <label class="block text-xs font-medium text-slate-300 mb-1.5">Ingrediente</label>
                         <select id="waste-ing" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
-                            ${ingOpts}
+                            <optgroup label="Ingredientes">${ingOpts}</optgroup>
+                            <optgroup label="Preparações produzidas">${appState.recipes.filter(r=>r.recipeType==='sub_recipe' && (r.prepStock?.[targetStore] || 0) > 0).map(r=>`<option value="prep:${r.id}">${escHtml(r.name)} (${fmtNum(r.prepStock[targetStore],3)} ${escHtml(r.yieldUnit)} em stock)</option>`).join('')}</optgroup>
                         </select>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">Quantidade Desperdiçada</label>
-                            <input id="waste-qty" type="number" step="0.1" min="0.1" value="0.8" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
+                            <input id="waste-qty" type="number" step="any" min="0.001" value="0.8" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">Motivo Operacional</label>
@@ -3880,9 +4152,21 @@ html.gloss-off .gloss-term::after{content:none}
             if (!appState.roles[appState.activeRole].canLogWaste) return;
 
             const store = RESTAURANT;
-            const ing = getIngredient(document.getElementById('waste-ing').value);
+            const choice = document.getElementById('waste-ing').value;
             const qty = parseFloat(document.getElementById('waste-qty').value);
             const reason = document.getElementById('waste-reason').value;
+            if (choice.startsWith('prep:')) {
+                const rec = getRecipe(choice.slice(5)), available = rec?.prepStock?.[store] || 0;
+                if (!rec || !(qty > 0) || qty > available) {showToast('Rever quebra','Quantidade superior ao stock da preparação ou inválida.','warning');return;}
+                const wasteId = crypto.randomUUID(), cost = qty * calculateRecipeCost(rec).unitCost;
+                rec.prepStock[store] -= qty;
+                appState.movements.push({store,recipe:rec.id,document:wasteId,qty:-qty,date:new Date().toISOString()});
+                appState.wasteLogs.unshift({id:wasteId,date:new Date().toLocaleString('pt-PT'),store,item:rec.name,qty,unit:rec.yieldUnit,reason,cost,period:appState.storeFinancials[store].period});
+                persistState(); closeModal(); renderActiveView();
+                showToast('Quebra registada', `${fmtNum(qty, 3)} ${rec.yieldUnit} de ${rec.name} (${fmtEur(cost)})`, 'warning');
+                return;
+            }
+            const ing = getIngredient(choice);
             const storeMetrics = ing.byStore[store];
             const cost = qty * storeMetrics.cmp;
 
@@ -3900,12 +4184,13 @@ html.gloss-off .gloss-term::after{content:none}
                 qty,
                 unit: ing.baseUnit,
                 reason,
-                cost
+                cost,
+                period: appState.storeFinancials[store].period
             });
 
             persistState();
             closeModal();
-            showToast('Quebra registada', `${fmtNum(qty, 1)} ${ing.baseUnit} de ${ing.name} em ${appState.stores[store].name} (${fmtEur(cost)})`, 'warning');
+            showToast('Quebra registada', `${fmtNum(qty, 3)} ${ing.baseUnit} de ${ing.name} em ${appState.stores[store].name} (${fmtEur(cost)})`, 'warning');
             renderActiveView();
         }
 
@@ -3977,6 +4262,11 @@ html.gloss-off .gloss-term::after{content:none}
                 </div>
 
                 </details>
+                ${(()=>{const preps=appState.recipes.filter(r=>r.recipeType==='sub_recipe');return preps.length?`<section class="work-panel"><h2>Preparações</h2>
+                    <p class="work-muted">Produza lotes de preparações para abater a matéria-prima no momento em que é transformada.</p>
+                    <div class="work-list">${preps.map(r=>`<div class="work-row"><strong>${escHtml(r.name)}</strong>Em stock: ${fmtNum(r.prepStock?.[RESTAURANT] || 0,3)} ${escHtml(r.yieldUnit)} · ${fmtEur((r.prepStock?.[RESTAURANT] || 0)*calculateRecipeCost(r).unitCost)}
+                        ${canEditCount?`<button class="work-btn" onclick="openProductionModal('${r.id}')">Produzir</button>`:''}</div>`).join('')}</div>
+                    ${(appState.productionLogs||[]).length?`<details><summary>Últimas produções</summary>${appState.productionLogs.slice(0,10).map(p=>`<div class="text-xs">${escHtml(new Date(p.date).toLocaleString('pt-PT'))} · ${escHtml(p.name)} · ${fmtNum(p.qty,3)} ${escHtml(p.unit)} · ${fmtEur(p.cost)}</div>`).join('')}</details>`:''}</section>`:''})()}
                 <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] p-5">
                     <h3 class="font-bold text-sm text-white mb-3">Últimas Quebras / Desperdícios Registados</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -3987,7 +4277,7 @@ html.gloss-off .gloss-term::after{content:none}
                                     <div class="text-[11px] text-slate-400">${escHtml(w.reason)} • ${escHtml(w.date)} • ${escHtml(appState.stores[w.store]?.name || '')}</div>
                                 </div>
                                 <div class="text-right font-mono">
-                                    <div class="text-rose-400 font-bold">-${fmtNum(w.qty, 1)} ${escHtml(w.unit)}</div>
+                                    <div class="text-rose-400 font-bold">-${fmtNum(w.qty, 3)} ${escHtml(w.unit)}</div>
                                     <div class="text-[11px] text-slate-400">${fmtEur(w.cost)}</div>
                                 </div>
                             </div>
