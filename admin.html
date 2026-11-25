@@ -2186,6 +2186,37 @@ html.gloss-off .gloss-term::after{content:none}
                 <div class="flex justify-end gap-3"><button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Fechar</button>
                 <button onclick="closeModal(); pickInvoiceFile()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Tentar outra vez</button></div></div>`);
         }
+        const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+        let pdfJsLoading = null;
+        function loadPdfJs() {
+            pdfJsLoading ||= new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = PDFJS_URL + 'pdf.min.js';
+                s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_URL + 'pdf.worker.min.js'; resolve(pdfjsLib); };
+                s.onerror = () => { pdfJsLoading = null; reject(Error('pdf.js não carregou')); };
+                document.head.appendChild(s);
+            });
+            return pdfJsLoading;
+        }
+        // Linhas de texto do PDF (até 5 páginas), agrupando os pedaços pela altura na página e ordenando da esquerda para a direita.
+        async function pdfTextRows(file) {
+            const lib = await loadPdfJs();
+            // isEvalSupported false: só extraímos texto, e assim um PDF malicioso não consegue correr código (CVE-2024-4367).
+            const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+            const rows = [];
+            for (let n = 1; n <= Math.min(pdf.numPages, 5); n++) {
+                const items = (await (await pdf.getPage(n)).getTextContent()).items.filter(i => i.str.trim());
+                const byY = [];
+                for (const i of items) {
+                    const y = i.transform[5];
+                    const row = byY.find(r => Math.abs(r.y - y) < 3);
+                    row ? row.items.push(i) : byY.push({ y, items: [i] });
+                }
+                byY.sort((a, b) => b.y - a.y).forEach(r => rows.push(r.items.sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str.trim()).join(' ')));
+            }
+            pdf.destroy();
+            return rows;
+        }
         async function readInvoiceFile(input) {
             const file = input.files[0];
             input.value = '';
@@ -2200,6 +2231,18 @@ html.gloss-off .gloss-term::after{content:none}
             let stage = 'Preparar o ficheiro';
             const setStage = (label, text) => { stage = label; const el = document.getElementById('ocr-stage'); if (el) el.textContent = text; };
             try {
+                // PDFs com texto: tenta ler localmente; só vai ao Gemini se a leitura não validar (NIF, linhas e total).
+                if (mime === 'application/pdf') {
+                    setStage('Ler o PDF localmente', 'A ler o texto do PDF');
+                    const local = await pdfTextRows(file).then(rows => parseInvoiceText(rows, restaurantNif())).catch(e => ({ ok: false, reason: e.message }));
+                    if (local.ok) {
+                        openOcrReview(local.ex, file.name, 'PDF (leitura local)');
+                        showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem Gemini: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
+                        return;
+                    }
+                    console.info('Leitura local do PDF não serviu, a usar o Gemini:', local.reason);
+                    setStage('Preparar o ficheiro', 'A preparar o ficheiro');
+                }
                 const upload = await prepareInvoiceImage(file, mime);
                 const uploadType = upload === file ? mime : upload.type;
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro: ' + (r.error?.message || 'erro desconhecido'))); r.readAsDataURL(upload); });
@@ -2282,8 +2325,8 @@ html.gloss-off .gloss-term::after{content:none}
                 return blob && blob.size < file.size ? blob : file;
             } catch { return file; }
         }
-        function openOcrReview(ex, fileName) {
-            ocrDraft = { ex, fileName };
+        function openOcrReview(ex, fileName, via = 'Gemini') {
+            ocrDraft = { ex, fileName, via };
             const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
             const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
                 : docNif !== ownNif ? `A fatura foi emitida para o NIF ${docNif}${ex.customer_name ? ' (' + ex.customer_name + ')' : ''}, que não é o do restaurante (${ownNif}).` : '';
@@ -2311,7 +2354,7 @@ html.gloss-off .gloss-term::after{content:none}
             }).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal('Rever fatura lida pelo Gemini', fileName, `<div class="space-y-4 text-sm">
+            openModal(via === 'Gemini' ? 'Rever fatura lida pelo Gemini' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -2360,7 +2403,7 @@ html.gloss-off .gloss-term::after{content:none}
             }
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
             const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
-                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: 'Gemini · ' + ocrDraft.fileName, itemsSummary: summary, lines };
+                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: (ocrDraft.via || 'Gemini') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
             try { postReceipt(inv); } catch (error) { appState = before; showToast('Compra pendente', error.message, 'warning'); return; }
             ocrDraft = null;
             persistState(); closeModal(); updateChrome(); renderActiveView();

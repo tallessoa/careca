@@ -327,3 +327,91 @@ function contrastLimits(histogram, clip = 0.01) {
     while (hi > 0 && (acc += histogram[hi]) <= total * clip) hi--;
     return hi > lo ? [lo, hi] : [0, 255];
 }
+
+// NIF português válido (9 dígitos, dígito de controlo módulo 11).
+function validNif(nif) {
+    const d = normalizeNif(nif);
+    if (!/^[1-9]\d{8}$/.test(d)) return false;
+    const r = 11 - [...d.slice(0, 8)].reduce((s, c, i) => s + c * (9 - i), 0) % 11;
+    return (r >= 10 ? 0 : r) === Number(d[8]);
+}
+
+// Número escrito à portuguesa ("1.234,56", "12,5") ou com ponto decimal ("12.80"). NaN se não for número.
+function parsePtNumber(token) {
+    let t = String(token).replace(/[€%]/g, '').trim();
+    if (!/^-?\d[\d.,]*$/.test(t)) return NaN;
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+    return Number(t);
+}
+
+const PT_VAT_RATES = [0, 4, 5, 6, 9, 12, 13, 16, 18, 22, 23];
+const INVOICE_UNITS = /^(kg|kgs|g|gr|grs|l|lt|lts|ml|cl|un|uni|und|unid|u|uds|cx|emb|dz|pc|pç|pack|kit)\.?$/i;
+
+// Uma linha de artigo: "descrição … qtd [un] preço [desc%] [iva%] total". null se os números não fizerem qtd × preço = total.
+function parseInvoiceTextLine(row) {
+    const tokens = row.trim().split(/\s+/);
+    const tail = [];
+    let unit = '';
+    while (tokens.length) {
+        const t = tokens[tokens.length - 1];
+        if (t === '€' || t === 'EUR') { tokens.pop(); continue; }
+        if (INVOICE_UNITS.test(t)) { unit ||= t.replace('.', '').toLowerCase(); tokens.pop(); continue; }
+        const n = parsePtNumber(t);
+        if (Number.isNaN(n)) break;
+        tail.unshift({ n, pct: t.includes('%') });
+        tokens.pop();
+    }
+    const description = tokens.join(' ');
+    if (tail.length < 3 || !/[a-zà-ú]{2}/i.test(description) || /^(sub)?total|^iva\b|^taxa|^incid|^base|^desconto|^saldo|^valor/i.test(description)) return null;
+    const near = (a, b) => Math.abs(a - b) <= 0.011;
+    for (let k = tail.length - 1; k >= 2; k--) {
+        const total = tail[k].n;
+        for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+            if (tail[i].pct || tail[j].pct) continue;
+            const qty = tail[i].n, price = tail[j].n;
+            let discount = null;
+            if (!near(qty * price, total)) {
+                discount = tail.findIndex((d, x) => x > j && x < k && d.n > 0 && d.n < 100 && near(qty * price * (1 - d.n / 100), total));
+                if (discount < 0) continue;
+            }
+            const rest = tail.filter((_, x) => x !== i && x !== j && x !== k && x !== discount);
+            const vat = rest.find(v => v.pct && PT_VAT_RATES.includes(v.n)) || [...rest].reverse().find(v => PT_VAT_RATES.includes(v.n));
+            if (!vat || qty <= 0) continue;
+            return { description, qty, unit: unit || 'un', unit_price_net: total / qty, line_total_net: total, vat_rate: vat.n };
+        }
+    }
+    return null;
+}
+
+// Lê uma fatura a partir das linhas de texto de um PDF. Só devolve ok quando o NIF do fornecedor é válido,
+// há pelo menos uma linha e a soma das linhas + IVA coincide (ao cêntimo) com um total impresso no documento.
+function parseInvoiceText(rows, ownNif = '') {
+    const text = rows.join('\n');
+    const nifsIn = list => [...new Set(list.flatMap(r => [...r.matchAll(/(?:PT\s?)?(\d{3}\s?\d{3}\s?\d{3})(?!\d)/g)].map(m => normalizeNif(m[1]))))].filter(validNif);
+    const labelled = nifsIn(rows.filter(r => /NIF|NIPC|contrib|VAT|N\.?\s?I\.?\s?F/i.test(r)));
+    const nifs = labelled.length ? labelled : nifsIn(rows);
+    const own = normalizeNif(ownNif);
+    const supplierNif = nifs.find(n => n !== own) || '';
+    const customerNif = own && nifs.includes(own) ? own : nifs.find(n => n !== supplierNif) || '';
+    const num = text.match(/\b(FT|FR|FS|FA|NC|ND|GR|GT)\s*([A-Z0-9][\w.-]*)\s*\/\s*(\d+)\b/);
+    const docType = !num ? 'Fatura' : num[1] === 'NC' ? 'Nota de Crédito' : /^G/.test(num[1]) ? 'Guia de Remessa' : 'Fatura';
+    const dateOf = r => { const m = r.match(/\b(\d{4})-(\d{2})-(\d{2})\b/) || r.match(/\b(\d{2})[-/.](\d{2})[-/.](\d{4})\b/); return !m ? '' : m[1].length === 4 ? `${m[1]}-${m[2]}-${m[3]}` : `${m[3]}-${m[2]}-${m[1]}`; };
+    const date = rows.filter(r => /data/i.test(r)).map(dateOf).find(Boolean) || rows.map(dateOf).find(Boolean) || '';
+    const lines = rows.map(parseInvoiceTextLine).filter(Boolean);
+    const round2 = v => Math.round(v * 100) / 100;
+    const net = round2(lines.reduce((s, l) => s + l.line_total_net, 0));
+    const byRate = {};
+    lines.forEach(l => { byRate[l.vat_rate] = (byRate[l.vat_rate] || 0) + l.line_total_net; });
+    const vat = round2(Object.entries(byRate).reduce((s, [rate, base]) => s + round2(base * rate / 100), 0));
+    const gross = round2(net + vat);
+    const printedTotals = rows.filter(r => /total|pagar/i.test(r)).flatMap(r => r.split(/\s+/).map(parsePtNumber)).filter(n => !Number.isNaN(n));
+    const ex = {
+        doc_type: docType, invoice_number: num ? `${num[1]} ${num[2]}/${num[3]}` : '', atcud: (text.match(/ATCUD\s*:?\s*([A-Z0-9]+-\d+)/i) || [])[1] || '',
+        date, supplier_name: rows.map(r => r.trim()).find(r => /[a-zà-ú]{3}/i.test(r) && !/fatura|factura|original|duplicado|p[aá]gina|guia|nota de/i.test(r)) || '',
+        supplier_nif: supplierNif, customer_nif: customerNif, lines, totals: { net, vat, gross }
+    };
+    const reason = !validNif(supplierNif) ? 'sem NIF de fornecedor válido' : !lines.length ? 'sem linhas de artigos reconhecidas'
+        : !printedTotals.some(n => Math.abs(n - gross) <= 0.01) ? `a soma das linhas com IVA (${gross.toFixed(2)}) não aparece como total no documento` : '';
+    return { ok: !reason, reason, ex };
+}
