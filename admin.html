@@ -2182,7 +2182,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 ${lines.length ? `<div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
                     <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Qtd.</th><th class="py-2 px-3 text-right">Preço s/ IVA</th><th class="py-2 px-3 text-right">IVA</th><th class="py-2 px-3 text-right">Total s/ IVA</th></tr></thead>
                     <tbody class="divide-y divide-[#1E293B]/60">${lines.map(l => { const ing = !l.service && getIngredient(l.ing); return `<tr>
-                        <td class="py-2 px-3 font-sans text-white">${escHtml(l.service ? l.label || 'Despesa' : ing?.name || 'Artigo removido')}${l.service ? ' <span class="text-[11px] text-slate-500">(sem stock)</span>' : ''}${l.lot || l.expiry ? `<div class="text-[11px] font-mono text-slate-400">${l.lot ? 'Lote ' + escHtml(l.lot) : ''}${l.lot && l.expiry ? ' · ' : ''}${l.expiry ? 'Val. ' + escHtml(l.expiry) : ''}</div>` : ''}</td>
+                        <td class="py-2 px-3 font-sans text-white">${escHtml(l.service ? l.label || 'Despesa' : ing?.name || 'Artigo removido')}${l.service ? ' <span class="text-[11px] text-slate-500">(sem stock)</span>' : ''}${l.offer ? ' <span class="text-[11px] text-emerald-300">Oferta</span>' : ''}${l.lot || l.expiry ? `<div class="text-[11px] font-mono text-slate-400">${l.lot ? 'Lote ' + escHtml(l.lot) : ''}${l.lot && l.expiry ? ' · ' : ''}${l.expiry ? 'Val. ' + escHtml(l.expiry) : ''}</div>` : ''}</td>
                         <td class="py-2 px-3 text-right">${fmtNum(l.qty, 3)} ${escHtml(l.service ? '' : ing?.baseUnit || '')}</td>
                         <td class="py-2 px-3 text-right">${fmtEur(l.price, 4)}</td>
                         <td class="py-2 px-3 text-right">${fmtNum(l.vat, 0)}%</td>
@@ -2429,10 +2429,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const oldQty = m.stockTheoretical;
                 if (sign > 0) {
                     m.cmp = weightedAverageCost(oldQty, m.cmp, l.qty, l.price);
-                    m.prevCost = previous;
-                    m.lastCost = l.price;
-                    ing.priceHistory.push(l.price);
-                    (ing.supplierPrices ??= {})[inv.supplierId] = { price: l.price, date: inv.date };
+                    if (!l.offer) { // a oferta entra no CMP a 0 €, mas não passa a ser o preço do fornecedor
+                        m.prevCost = previous;
+                        m.lastCost = l.price;
+                        ing.priceHistory.push(l.price);
+                        (ing.supplierPrices ??= {})[inv.supplierId] = { price: l.price, date: inv.date };
+                    }
                     // Validade: mantém a do lote anterior se ainda estava dentro do prazo e termina antes (sai primeiro).
                     // A validade impressa na fatura ganha à calculada pelos dias de validade do artigo.
                     const lot = l.expiry || (ing.shelfLifeDays > 0 ? addDaysIso(inv.date, ing.shelfLifeDays) : '');
@@ -2441,7 +2443,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 }
                 m.stockTheoretical += sign*l.qty;
                 appState.movements.push({store:inv.store, ingredient:l.ing, document:inv.id, qty:sign*l.qty, date:inv.date, ...(l.lot && { lot: l.lot }), ...(sign > 0 && l.expiry && { expiry: l.expiry })});
-                if (sign > 0 && previous > 0 && l.price > previous*1.05) appState.alerts.unshift({
+                if (sign > 0 && !l.offer && previous > 0 && l.price > previous*1.05) appState.alerts.unshift({
                     id:crypto.randomUUID(),type:'price_inflation',severity:'warning',store:inv.store,unread:true,time:'Agora',
                     title:ing.name+' · aumento '+fmtPct((l.price/previous-1)*100),message:'Última compra da loja: '+fmtEur(previous)+' → '+fmtEur(l.price)
                 });
@@ -2455,8 +2457,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
         function finishReceipt(inv) {
             try { postReceipt(inv); } catch (error) { showToast('Compra pendente', error.message,'warning'); return; }
-            const order = (appState.purchaseOrders || []).find(o => o.id === inv.orderId);
-            if (order) Object.assign(order, { status: 'Recebida', receivedBy: inv.id });
+            closeOrder(inv);
             refreshStockCheckAlerts();
             persistState(); closeModal(); updateChrome(); renderActiveView();
             showToast('Documento aprovado',inv.id,'success');
@@ -2526,12 +2527,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                 </form>
             `;
-            openModal('Registar Compra Manual', 'Entrada em stock e CMP. Na nota de crédito, registe apenas devoluções físicas.', html);
+            openModal('Registar Compra Manual', 'Entrada em stock e CMP. Na nota de crédito, registe apenas devoluções físicas.', html, orderId ? 'lg' : 'md');
             document.getElementById('mp-lines').dataset.options = ingOpts;
             prefillManualPrice(document.querySelector('#mp-lines .mp-row'));
-            const order = (appState.purchaseOrders || []).find(o => o.id === orderId && o.status === 'Enviada');
+            const order = openOrders().find(o => o.id === orderId);
             if (order) {
-                document.getElementById('modal-subtitle').textContent = 'Receção da encomenda ' + order.id + '. Ajuste as quantidades ao que chegou.';
+                document.getElementById('modal-title').textContent = 'Fatura da encomenda ' + order.id;
+                document.getElementById('modal-subtitle').textContent = 'Preencha o que veio na fatura: quantidades, preços cobrados e ofertas. A conferência com o pedido atualiza-se em baixo.';
+                document.getElementById('mp-line').insertAdjacentHTML('afterend', '<div id="mp-check"></div>');
                 document.getElementById('mp-order').value = order.id;
                 document.getElementById('mp-supplier').value = order.supplierId;
                 document.getElementById('mp-lines').innerHTML = '';
@@ -2541,6 +2544,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     row.querySelector('.mp-ingredient').value = l.ing;
                     row.querySelector('.mp-qty').value = l.qty;
                     row.querySelector('.mp-price').value = l.price;
+                    row.querySelector('.mp-factor').value = 1; // a encomenda está em unidades base
                 }
                 updateManualPurchaseTotal();
             }
@@ -2574,7 +2578,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <label class="block text-xs text-slate-300">Quantidade (emb.)<input class="mp-qty mt-1 ${field}" type="number" step="any" min="0.0001" value="1" required></label>
                     <label class="block text-xs text-slate-300">Unid. base por emb.<input class="mp-factor mt-1 ${field}" onchange="prefillManualPrice(this.closest('.mp-row'), 'factor')" type="number" step="any" min="0.0001" value="1" required></label>
-                    <label class="block text-xs text-slate-300">Preço/emb. s/ IVA (€)<input class="mp-price mt-1 ${field}" type="number" step="any" min="0" required></label>
+                    <label class="block text-xs text-slate-300">Preço/emb. s/ IVA (€)<input class="mp-price mt-1 ${field}" type="number" step="any" min="0" required>
+                        <span class="mt-1 flex items-center gap-1.5 text-emerald-300"><input type="checkbox" class="mp-offer" onchange="toggleOffer(this, '.mp-price')"> Oferta (0 €)</span></label>
                     <label class="block text-xs text-slate-300">IVA<select class="mp-vat mt-1 ${field}"><option value="6">6%</option><option value="13">13%</option><option value="23">23%</option></select></label>
                     <label class="block text-xs text-slate-300 col-span-1 sm:col-span-2">Lote (opcional)<input class="mp-lot mt-1 ${field}"></label>
                     <label class="block text-xs text-slate-300 col-span-1 sm:col-span-2">Validade (opcional)<input class="mp-exp mt-1 ${field}" type="date"></label>
@@ -2596,7 +2601,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const v = cls => row.querySelector('.mp-'+cls).value;
                 const factor = Number(v('factor'));
                 const lot = v('lot').trim(), expiry = v('exp');
-                return { ing: v('ingredient'), qty: Number(v('qty'))*factor, price: Number(v('price'))/factor, vat: Number(v('vat')), ...(lot && { lot }), ...(expiry && { expiry }) };
+                const offer = row.querySelector('.mp-offer').checked;
+                return { ing: v('ingredient'), qty: Number(v('qty'))*factor, price: offer ? 0 : Number(v('price'))/factor, vat: Number(v('vat')), ...(offer && { offer }), ...(lot && { lot }), ...(expiry && { expiry }) };
             });
         }
         function updateManualPurchaseTotal() {
@@ -2606,6 +2612,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const net = lines.reduce((n,l) => n + l.qty*l.price, 0);
             const vat = lines.reduce((n,l) => n + l.qty*l.price*l.vat/100, 0);
             el.textContent = `${lines.length} linha(s) · Líquido ${fmtEur(net)} · IVA ${fmtEur(vat)} · Total ${fmtEur(net+vat)}`;
+            const order = openOrders().find(o => o.id === document.getElementById('mp-order')?.value), box = document.getElementById('mp-check');
+            if (order && box) box.innerHTML = orderCheckHtml(orderCheck(order.lines, lines.filter(l => getIngredient(l.ing))));
+        }
+        // Oferta: o valor fica a 0 € e não se edita; desmarcar devolve o campo para inserir o valor cobrado.
+        function toggleOffer(box, priceSel) {
+            const price = priceSel && box.closest('.mp-row').querySelector(priceSel);
+            if (price) { if (box.checked) price.value = 0; price.readOnly = box.checked; }
+            box.dispatchEvent(new Event('input', { bubbles: true }));
         }
         function prefillManualPrice(row, ev) {
             const ing = row && getIngredient(row.querySelector('.mp-ingredient').value);
@@ -2658,7 +2672,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             ],
             totals: { net: 298.00, vat: 17.88, gross: 315.88 }
         };
-        let ocrDraft = null;
+        let ocrDraft = null, pendingOrderId = ''; // encomenda cuja fatura está a ser lida
         function restaurantNif() {
             return appState.settings?.restaurantNif || '';
         }
@@ -2682,6 +2696,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         function pickInvoiceFile() {
             if (!appState.roles[appState.activeRole].canApproveInvoices) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não tem permissão para importar faturas.', 'warning'); return; }
             if (!restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante.', 'info'); openSettingsModal(); return; }
+            pendingOrderId = '';
             document.getElementById('invoice-file')?.click();
         }
         const INVOICE_MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
@@ -2922,7 +2937,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
                         <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option><option value="__new">+ Criar artigo novo no catálogo</option>${ingOptions(ing?.id)}</select></label>
                         <label class="text-xs text-slate-300">Total recebido (unid. base)<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
-                        <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
+                        <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}">
+                            <span class="mt-1 flex items-center gap-1.5 text-emerald-300"><input type="checkbox" class="ocr-offer" ${total ? '' : 'checked'} onchange="toggleOffer(this)"> Oferta (0 €)</span></label>
                     </div>
                     <div class="ocr-ask hidden p-2 rounded-lg border border-amber-500/40 bg-amber-500/5 text-xs text-amber-200 space-y-1.5">
                         <div>Não consegui perceber quanto vem em cada «${escHtml(l.unit || 'un')}». Quanto veio ao todo nesta linha?</div>
@@ -2942,7 +2958,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 </div>`;
         }
         function openOcrReview(ex, fileName, via = 'OCR') {
-            ocrDraft = { ex, fileName, via };
+            ocrDraft = { ex, fileName, via, orderId: pendingOrderId };
+            pendingOrderId = '';
+            const order = openOrders().find(o => o.id === ocrDraft.orderId);
             const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
             const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
                 : docNif !== ownNif ? `A fatura foi emitida para o NIF ${docNif}${ex.customer_name ? ' (' + ex.customer_name + ')' : ''}, que não é o do restaurante (${ownNif}).` : '';
@@ -2956,7 +2974,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const rows = ex.lines.map((l, idx) => ocrRowHtml(l, idx)).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal(via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
+            openModal((via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF') + (order ? ' · encomenda ' + order.id : ''), fileName, `<div id="ocr-review" class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -2970,11 +2988,26 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
                 ${supplier ? '' : `<label class="block text-xs text-slate-300">Nome comercial do fornecedor novo (marca, opcional)<input id="ocr-sup-trade" class="${field} font-sans" placeholder="Ex: o nome que está na fachada ou no camião"></label>`}
                 <div class="space-y-2">${rows}</div>
+                ${order ? '<div id="ocr-check"></div>' : ''}
                 <div class="text-xs font-mono text-slate-300">Total lido: líquido ${fmtEur(ex.totals?.net)} · IVA ${fmtEur(ex.totals?.vat)} · total ${fmtEur(ex.totals?.gross)}${diff > 0.05 ? ` <span class="text-amber-300">· a soma das linhas (${fmtEur(net)}) não bate com o total: confira o documento.</span>` : ''}</div>
                 ${nifIssue ? '<label class="flex items-center gap-2 text-xs text-rose-200"><input type="checkbox" id="ocr-nif-ok"> Confirmo que a mercadoria foi recebida e quero lançar este documento mesmo assim.</label>' : ''}
                 <div class="flex justify-end gap-3"><button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
                 <button onclick="approveOcrInvoice()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Aprovar e atualizar stock</button></div></div>`, 'xl');
             document.querySelectorAll('.ocr-row .ocr-ing').forEach(s => ocrRowChanged(s, true));
+            if (order) {
+                const review = document.getElementById('ocr-review'), refresh = () => document.getElementById('ocr-check').innerHTML = orderCheckHtml(orderCheck(order.lines, ocrReviewLines().lines.filter(l => l.ing !== '__new')));
+                review.addEventListener('input', refresh); review.addEventListener('change', refresh); refresh();
+            }
+        }
+        // Linhas da revisão OCR como linhas do documento (quantidade em unidades base, preço por unidade base).
+        function ocrReviewLines() {
+            const rows = [...document.querySelectorAll('.ocr-row:not(.ocr-split-parent)')];
+            const lines = rows.map(row => {
+                const ing = row.querySelector('.ocr-ing').value, qty = Number(row.querySelector('.ocr-qty').value), offer = row.querySelector('.ocr-offer').checked, total = offer ? 0 : Number(row.dataset.total);
+                const vat = Number(row.querySelector('.ocr-vat').value), lot = row.querySelector('.ocr-lot').value.trim(), expiry = row.querySelector('.ocr-exp').value;
+                return ing ? { ing, qty, price: total / qty, vat, ...(offer && { offer }), ...(lot && { lot }), ...(expiry && { expiry }) } : { service: true, label: ocrLine(row).description, qty: 1, price: total, vat };
+            });
+            return { rows, lines };
         }
         // A linha lida de uma linha da revisão: a da fatura, ou a parte em que foi dividida.
         function ocrLine(row) { return row._part || ocrDraft.ex.lines[row.dataset.idx]; }
@@ -3151,12 +3184,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (!number) { showToast('Falta o número', 'Indique o número do documento.', 'warning'); return; }
             const badSplit = [...document.querySelectorAll('.ocr-split')].find(box => updateSplitStatus(box) !== 0 || [...box.querySelectorAll('.ocr-part-desc')].some(i => !i.value.trim()));
             if (badSplit) { badSplit.scrollIntoView({ block: 'center' }); showToast('Linha dividida por acertar', 'Cada parte precisa de descrição e os valores das partes têm de somar o valor da linha.', 'warning'); return; }
-            const rows = [...document.querySelectorAll('.ocr-row:not(.ocr-split-parent)')];
-            const lines = rows.map((row, idx) => {
-                const ing = row.querySelector('.ocr-ing').value, qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
-                const vat = Number(row.querySelector('.ocr-vat').value), lot = row.querySelector('.ocr-lot').value.trim(), expiry = row.querySelector('.ocr-exp').value;
-                return ing ? { ing, qty, price: total / qty, vat, ...(lot && { lot }), ...(expiry && { expiry }) } : { service: true, label: ocrLine(row).description, qty: 1, price: total, vat };
-            });
+            const { rows, lines } = ocrReviewLines();
             const ask = rows.find((r, i) => !lines[i].service && !r.querySelector('.ocr-ask').classList.contains('hidden') && !(lines[i].qty > 0));
             if (ask) { ask.scrollIntoView({ block: 'center' }); ask.querySelector('.ocr-ask-qty').focus(); showToast('Quanto veio?', 'Indique a quantidade que veio nesta linha para calcular o preço por unidade.', 'warning'); return; }
             if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
@@ -3192,9 +3220,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 if (per !== 1) ing.packLabel = `Embalagem → ${String(per).replace('.', ',')} ${ing.baseUnit}`;
             });
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
-            const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
+            const inv = { orderId: ocrDraft.orderId || undefined, id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
                 atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: (ocrDraft.via || 'OCR') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
             try { postReceipt(inv); } catch (error) { appState = before; showToast('Compra pendente', error.message, 'warning'); return; }
+            closeOrder(inv);
             ocrDraft = null;
             persistState(); closeModal(); updateChrome(); renderActiveView();
             refreshStockCheckAlerts();
@@ -3758,8 +3787,55 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             renderActiveView();
         }
 
+        // Estados manuais da encomenda: começa em «Efetuada»; «Entregue» só depois de registar a fatura (conferência).
+        const ORDER_STATES = ['Efetuada', 'Aceite', 'Recusada', 'Devolvida', 'Entregue'];
+        const orderStatus = o => ({ Enviada: 'Efetuada', Recebida: 'Entregue' })[o.status] || o.status; // nomes antigos
         function openOrders() {
-            return (appState.purchaseOrders || []).filter(o => o.store === RESTAURANT && o.status === 'Enviada');
+            return (appState.purchaseOrders || []).filter(o => o.store === RESTAURANT && ['Efetuada', 'Aceite'].includes(orderStatus(o)));
+        }
+        function setOrderStatus(id, status) {
+            const o = openOrders().find(x => x.id === id);
+            if (!o || !appState.roles[appState.activeRole].canManageOrders || !ORDER_STATES.includes(status)) return;
+            if (status === 'Entregue') { renderActiveView(); openDeliveryModal(id); return; }
+            Object.assign(o, { status, statusDate: new Date().toLocaleDateString('sv-SE') });
+            persistState(); renderActiveView(); showToast('Encomenda ' + status.toLowerCase(), id, 'info');
+        }
+        function openDeliveryModal(id) {
+            if (!appState.roles[appState.activeRole].canApproveInvoices) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não pode registar faturas.', 'warning'); return; }
+            const btn = 'flex-1 p-4 rounded-xl text-left text-sm border';
+            openModal('Encomenda ' + id + ' entregue', 'Registe a fatura do fornecedor para conferir o que foi pedido com o que veio.', `<div class="flex flex-col sm:flex-row gap-3">
+                <button onclick="openManualPurchaseModal('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>Preencher à mão</strong><br><span class="text-xs text-slate-400">As linhas vêm da encomenda: ajuste o que veio, o preço cobrado e as ofertas.</span></button>
+                <button onclick="readOrderInvoice('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>✨ Ler fatura com OCR</strong><br><span class="text-xs text-slate-400">PDF ou foto; a revisão mostra a conferência com a encomenda.</span></button></div>
+                <p class="mt-3 text-xs text-slate-400">A encomenda só passa a «Entregue» quando aprovar a fatura.</p>`);
+        }
+        function readOrderInvoice(id) {
+            closeModal();
+            pickInvoiceFile();
+            pendingOrderId = id;
+        }
+        function closeOrder(inv) {
+            const order = (appState.purchaseOrders || []).find(o => o.id === inv.orderId);
+            if (order) Object.assign(order, { status: 'Entregue', statusDate: new Date().toLocaleDateString('sv-SE'), receivedBy: inv.id, check: orderCheck(order.lines, inv.lines) });
+        }
+        // Tabela da conferência: pedido vs. fatura por artigo, com faltas, artigos a mais, ofertas e diferenças de preço.
+        function orderCheckHtml(check) {
+            const issues = check.filter(r => r.status !== 'Conforme' || r.offer || Math.abs(r.priceDiff) > 0.005).length;
+            const tag = (text, color) => `<span class="inline-block mr-2 px-1.5 py-0.5 rounded text-[11px] font-sans border ${color}">${text}</span>`;
+            const red = 'text-rose-300 border-rose-500/40', amber = 'text-amber-300 border-amber-500/45', green = 'text-emerald-300 border-emerald-500/40';
+            return `<div class="space-y-2"><div class="text-xs font-mono uppercase text-sky-400">Conferência com a encomenda · ${issues ? `<span class="text-amber-300">${issues} diferença(s)</span>` : '<span class="text-emerald-300">tudo conforme</span>'}</div>
+                <div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs font-mono tabular-nums">
+                <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Pedido</th><th class="py-2 px-3 text-right">Veio</th><th class="py-2 px-3 text-right">Preço pedido</th><th class="py-2 px-3 text-right">Preço faturado</th><th class="py-2 px-3">Situação</th></tr></thead>
+                <tbody class="divide-y divide-[#1E293B]/60">${check.map(r => { const ing = getIngredient(r.ing), u = escHtml(ing?.baseUnit || ''); return `<tr>
+                    <td class="py-2 px-3 font-sans text-white">${escHtml(ing?.name || 'Artigo novo')}</td>
+                    <td class="py-2 px-3 text-right">${r.ordered ? fmtNum(r.ordered, 3) + ' ' + u : '—'}</td>
+                    <td class="py-2 px-3 text-right">${r.received ? fmtNum(r.received, 3) + ' ' + u : '—'}</td>
+                    <td class="py-2 px-3 text-right">${r.ordered ? fmtEur(r.orderedPrice, 4) : '—'}</td>
+                    <td class="py-2 px-3 text-right">${r.offerOnly ? '0,00 €' : r.received ? fmtEur(r.price, 4) : '—'}</td>
+                    <td class="py-2 px-3">${r.status === 'Conforme' ? tag('Conforme', green) : r.status === 'Falta' ? tag('Falta ' + fmtNum(-r.diff, 3) + ' ' + u, red) : r.status === 'A mais' ? tag('A mais ' + fmtNum(r.diff, 3) + ' ' + u, amber) : tag(r.status, r.status === 'Não veio' ? red : amber)}${r.offer ? tag('Oferta', green) : ''}${Math.abs(r.priceDiff) > 0.005 ? tag('Preço ' + (r.priceDiff > 0 ? '+' : '') + fmtPct(r.priceDiff * 100), r.priceDiff > 0 ? red : green) : ''}</td></tr>`; }).join('')}</tbody></table></div></div>`;
+        }
+        function showOrderCheck(id) {
+            const o = (appState.purchaseOrders || []).find(x => x.id === id);
+            if (o?.check) openModal('Conferência ' + o.id, `${getSupplier(o.supplierId)?.name || ''} · fatura ${o.receivedBy || ''}`, orderCheckHtml(o.check), 'lg');
         }
         function buildOrdersTab(suggestedItems, role, storeName) {
             const ordered = new Set(openOrders().flatMap(o => o.lines.map(l => l.ing)));
@@ -3768,7 +3844,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const card = 'p-5 rounded-2xl bg-[#0B1120] border border-[#1E293B] space-y-3';
             const btn = 'px-3 py-2 rounded-xl text-xs font-semibold';
             const field = 'w-24 px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] font-mono text-white text-right';
-            const history = (appState.purchaseOrders || []).filter(o => o.store === RESTAURANT && o.status !== 'Enviada');
+            const history = (appState.purchaseOrders || []).filter(o => o.store === RESTAURANT && !openOrders().includes(o));
             return `<div class="space-y-6">
                 <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200">Em <strong>${escHtml(storeName)}</strong> há <strong>${suggestedItems.length} insumo(s)</strong> abaixo do stock mínimo${ordered.size ? `, ${suggestedItems.length - pending.length} já em encomenda` : ''}. A sugestão repõe 160% do mínimo.</div>
                 <div class="flex flex-wrap items-center justify-between gap-2"><div><h2 class="font-bold text-base text-white">Encomendar a um fornecedor</h2><p class="text-xs text-slate-400">Escolha os artigos, quantidades e data de entrega; o pedido segue por e-mail com os dados do negócio.</p></div>
@@ -3788,13 +3864,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <section class="space-y-3"><h2 class="font-bold text-base text-white">Encomendas em curso (${openOrders().length})</h2>
                 ${openOrders().length === 0 ? `<div class="${card} text-sm text-slate-400">Sem encomendas por receber.</div>` : openOrders().map(o => `<div class="${card}">
                     <div class="flex flex-wrap justify-between gap-2"><h3 class="font-bold text-white">${escHtml(o.id)} · ${escHtml(getSupplier(o.supplierId)?.name || '')}</h3><span class="text-xs font-mono text-slate-400">${escHtml(o.date)} · ${fmtEur(o.lines.reduce((n, l) => n + l.qty * l.price, 0))} s/ IVA</span></div>
+                    <label class="flex items-center gap-2 text-xs text-slate-300">Estado${role.canManageOrders ? `<select aria-label="Estado da encomenda" onchange="setOrderStatus('${o.id}', this.value)" class="po-status px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] text-xs text-white">${ORDER_STATES.map(st => `<option ${st === orderStatus(o) ? 'selected' : ''}>${st}</option>`).join('')}</select>` : ` <strong class="text-white">${escHtml(orderStatus(o))}</strong>`}</label>
                     <div class="text-xs text-slate-300">${o.lines.map(l => `${escHtml(getIngredient(l.ing)?.name || '?')}: ${fmtNum(l.qty, 3)} ${escHtml(getIngredient(l.ing)?.baseUnit || '')}`).join(' · ')}</div>
                     ${o.deliveryDate ? `<div class="text-xs text-sky-300">Entrega pretendida: ${escHtml(fmtDeliveryDate(o.deliveryDate))}</div>` : ''}
                     ${o.notes ? `<div class="text-xs text-slate-400">Obs.: ${escHtml(o.notes)}</div>` : ''}
                     <div class="flex flex-wrap gap-2"><button onclick="showOrderMessage('${o.id}')" class="${btn} bg-[#111827] border border-sky-400/30 text-sky-300">Ver mensagem</button>
-                    ${role.canApproveInvoices ? `<button onclick="openManualPurchaseModal('${o.id}')" class="${btn} bg-blue-600 hover:bg-blue-500 text-white">Receber mercadoria</button>` : ''}
-                    ${role.canManageOrders ? `<button onclick="cancelPurchaseOrder('${o.id}')" class="${btn} bg-[#111827] border border-[#1E293B] text-rose-300">Cancelar</button>` : ''}</div></div>`).join('')}</section>
-                ${history.length ? `<details class="${card}"><summary class="text-sm text-white cursor-pointer">Histórico de encomendas (${history.length})</summary>${history.map(o => `<div class="text-xs text-slate-300 py-1">${escHtml(o.id)} · ${escHtml(getSupplier(o.supplierId)?.name || '')} · ${escHtml(o.date)} · ${escHtml(o.status)}${o.receivedBy ? ' · ' + escHtml(o.receivedBy) : ''}</div>`).join('')}</details>` : ''}
+                    </div></div>`).join('')}</section>
+                ${history.length ? `<details class="${card}"><summary class="text-sm text-white cursor-pointer">Histórico de encomendas (${history.length})</summary>${history.map(o => `<div class="text-xs text-slate-300 py-1">${escHtml(o.id)} · ${escHtml(getSupplier(o.supplierId)?.name || '')} · ${escHtml(o.date)} · <strong class="text-white">${escHtml(orderStatus(o))}</strong>${o.statusDate ? ' em ' + escHtml(o.statusDate) : ''}${o.receivedBy ? ' · ' + escHtml(o.receivedBy) : ''}${o.check ? ` · <button onclick="showOrderCheck('${o.id}')" class="underline text-sky-300">Ver conferência</button>` : ''}</div>`).join('')}</details>` : ''}
             </div>`;
         }
         function createPurchaseOrder(supId) {
@@ -3871,15 +3947,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const deliveryDate = document.getElementById('po-date').value, notes = document.getElementById('po-notes').value.trim();
             appState.purchaseOrders ??= [];
             const id = 'EC ' + new Date().getFullYear() + '/' + String(appState.purchaseOrders.length + 1).padStart(4, '0');
-            appState.purchaseOrders.unshift({ id, store: RESTAURANT, supplierId: supId, date: new Date().toLocaleDateString('sv-SE'), status: 'Enviada', deliveryDate, notes, lines });
+            appState.purchaseOrders.unshift({ id, store: RESTAURANT, supplierId: supId, date: new Date().toLocaleDateString('sv-SE'), status: 'Efetuada', deliveryDate, notes, lines });
             persistState(); updateChrome(); renderActiveView();
             showOrderMessage(id);
-        }
-        function cancelPurchaseOrder(id) {
-            const o = (appState.purchaseOrders || []).find(x => x.id === id);
-            if (!o || !appState.roles[appState.activeRole].canManageOrders) return;
-            o.status = 'Cancelada';
-            persistState(); renderActiveView(); showToast('Encomenda cancelada', id, 'info');
         }
         function showOrderMessage(id) {
             const o = (appState.purchaseOrders || []).find(x => x.id === id);

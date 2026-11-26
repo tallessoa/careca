@@ -514,3 +514,17 @@ test('canais configuráveis: preço por canal, taxa como comissão, preços anti
     near(glovo.pvpGross, 21);
     near(glovo.commEur, 21 / 1.13 * 0.2);
 });
+
+test('orderCheck: falta, a mais, não veio, não encomendado, oferta e preço', () => {
+    const { orderCheck } = load({});
+    const out = orderCheck(
+        [{ ing: 'a', qty: 10, price: 2 }, { ing: 'b', qty: 5, price: 1 }, { ing: 'c', qty: 3, price: 4 }, { ing: 'd', qty: 2, price: 1 }],
+        [{ ing: 'a', qty: 8, price: 2.2 }, { ing: 'b', qty: 5, price: 1 }, { ing: 'b', qty: 1, price: 0, offer: true }, { ing: 'd', qty: 2, price: 1 }, { ing: 'e', qty: 1, price: 0, offer: true }, { service: true, qty: 1, price: 9 }]);
+    const by = Object.fromEntries(out.map(r => [r.ing, r]));
+    assert.equal(by.a.status, 'Falta'); near(by.a.diff, -2); near(by.a.priceDiff, 0.1);
+    assert.equal(by.b.status, 'A mais'); assert.equal(by.b.offer, true); near(by.b.price, 1); near(by.b.priceDiff, 0);
+    assert.equal(by.c.status, 'Não veio');
+    assert.equal(by.d.status, 'Conforme');
+    assert.equal(by.e.status, 'Não encomendado'); assert.equal(by.e.offerOnly, true);
+    assert.equal(out.length, 5);
+});

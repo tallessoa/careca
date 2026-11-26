@@ -610,3 +610,24 @@ function lotExpiryRisks(ingredients, movements, store, today) {
     }
     return out;
 }
+
+// Conferência da encomenda com o que veio na fatura: por artigo, pedido vs. recebido, preço e oferta.
+// orderLines/received: [{ ing, qty, price, offer? }] em unidades base. Devolve uma linha por artigo com o estado.
+function orderCheck(orderLines, received) {
+    const rows = new Map();
+    const row = ing => rows.get(ing) || rows.set(ing, { ing, ordered: 0, orderedValue: 0, received: 0, value: 0, offer: false, charged: false }).get(ing);
+    for (const l of orderLines) { const r = row(l.ing); r.ordered += l.qty; r.orderedValue += l.qty * l.price; }
+    for (const l of received) {
+        if (l.service) continue;
+        const r = row(l.ing);
+        r.received += l.qty; r.value += l.qty * l.price;
+        if (l.offer) r.offer = true; else r.charged = true;
+    }
+    return [...rows.values()].map(r => {
+        const orderedPrice = r.ordered ? r.orderedValue / r.ordered : 0, chargedQty = received.filter(l => l.ing === r.ing && !l.offer && !l.service).reduce((n, l) => n + l.qty, 0);
+        const price = chargedQty ? r.value / chargedQty : 0, diff = r.received - r.ordered, eps = 1e-9;
+        const status = !r.ordered ? 'Não encomendado' : !r.received ? 'Não veio' : diff < -eps ? 'Falta' : diff > eps ? 'A mais' : 'Conforme';
+        return { ing: r.ing, ordered: r.ordered, received: r.received, orderedPrice, price, offer: r.offer, offerOnly: r.offer && !r.charged, diff, status,
+            priceDiff: r.charged && r.ordered && orderedPrice > 0 ? price / orderedPrice - 1 : 0 };
+    });
+}
