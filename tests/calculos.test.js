@@ -467,3 +467,11 @@ test('lotExpiryRisks: lote que não sai a tempo da validade', () => {
     ovos.byStore.chiado.stockTheoretical = 160;
     assert.equal(ctx.lotExpiryRisks([ovos], mv3, 'chiado', '2026-11-26').length, 0);
 });
+
+test('invoiceLineToBase: «OVOS 15 DZ CLASSE L» 2 × 31,80 € = 360 ovos a 0,1767 €', () => {
+    const ctx = load({ ingredients: [] });
+    for (const unit of ['', 'un', 'cx']) {
+        const r = ctx.invoiceLineToBase({ description: 'OVOS 15 DZ CLASSE L', qty: 2, unit, unit_price_net: 31.8, line_total_net: 63.6 }, { baseUnit: 'un', packLabel: '' });
+        near(r.qty, 360, unit); near(r.price, 63.6 / 360, unit);
+    }
+});

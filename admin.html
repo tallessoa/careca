@@ -2550,7 +2550,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <button type="button" onclick="splitOcrRow(this.closest('.ocr-row'))" class="px-2.5 py-1 rounded-lg text-xs text-sky-300 border border-sky-400/30" title="Para uma linha com vários produtos, como um kit">Dividir linha</button></div>`}
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
                         <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option><option value="__new">+ Criar artigo novo no catálogo</option>${ingOptions(ing?.id)}</select></label>
-                        <label class="text-xs text-slate-300">Qtd. total em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
+                        <label class="text-xs text-slate-300">Total recebido (unid. base)<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
                         <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
                     </div>
                     <div class="ocr-ask hidden p-2 rounded-lg border border-amber-500/40 bg-amber-500/5 text-xs text-amber-200 space-y-1.5">
@@ -2672,7 +2672,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
             const l = ocrLine(row), lineBase = invoiceLineBase(l);
             // Mostra a conta da embalagem (3 Saco × 20 kg = 60 kg) para se perceber de onde vem a quantidade.
-            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || ''} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
+            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || 'emb.'} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
             row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
             if (el.classList.contains('ocr-ing')) {
                 if (choice === '__new') {
