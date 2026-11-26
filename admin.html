@@ -2799,6 +2799,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             ov.className = 'fixed inset-0 flex items-center justify-center p-4 bg-black/70';
             ov.style.zIndex = '60';
             ov.style.background = 'rgba(0,0,0,.65)';
+            // No topo do ecrã, para os botões não ficarem por baixo do assistente no canto inferior.
+            Object.assign(ov.style, { alignItems: 'flex-start', paddingTop: '8vh', overflowY: 'auto' });
             ov.innerHTML = `<form role="dialog" aria-modal="true" aria-labelledby="nd-title" class="w-full max-w-md rounded-2xl bg-[#0B1120] border border-sky-400/40 p-5 space-y-4 shadow-2xl">
                 <div><h3 id="nd-title" class="text-base font-bold text-white">Artigo novo no catálogo</h3><p class="text-xs text-slate-400 mt-1">Linha da fatura: «${escHtml(l.description || '')}»</p></div>
                 <label class="block text-xs text-slate-300">Nome do artigo<input id="nd-name" required class="${field}" value="${escHtml(v('name'))}"></label>
