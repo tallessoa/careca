@@ -164,7 +164,7 @@ function renderConfig(c) {
   if (!el || !c) return;
   const dis = c.pode_editar ? '' : 'disabled';
   el.innerHTML = `<form class="card" id="cfg-form"><h2>Configuração do Gemini</h2>
-    <p class="small ${c.chave_fim ? '' : 'mut'}" style="margin-bottom:10px">${c.chave_fim ? `Chave configurada: ••••${esc(c.chave_fim)} · atualizada a ${data(c.atualizado_em)}` : '<b style="color:var(--warn)">Sem chave:</b> a leitura de faturas com OCR não funciona até configurar uma.'}</p>
+    <p class="small ${c.chave_fim ? '' : 'mut'}" style="margin-bottom:10px">${c.chave_fim ? `Chave configurada: ••••${esc(c.chave_fim)} · atualizada a ${data(c.atualizado_em)}` : '<b style="color:var(--warn)">Sem chave:</b> a ✨ Leitura com IA não funciona até configurar uma.'}</p>
     <div class="grid k4">
       <label class="small">Nova chave da API (Google AI Studio)<input id="cfg-chave" type="password" autocomplete="off" placeholder="${c.chave_fim ? 'deixe vazio para manter' : 'AIza…'}" ${dis}></label>
       <label class="small">Modelo<select id="cfg-modelo" ${dis} style="width:100%;margin-top:4px;background:#030712;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:inherit">${(c.modelos || []).map(m => `<option ${m === c.modelo ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></label>

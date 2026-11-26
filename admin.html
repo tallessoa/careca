@@ -847,7 +847,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         <span>Apagar Todos os Dados</span>
                     </button>
-                    <button onclick="openSettingsModal()" class="w-full py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Definições (NIF e OCR)</button>
+                    <button onclick="openSettingsModal()" class="w-full py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Definições (NIF e IA)</button>
                     <div class="grid grid-cols-2 gap-2">
                         <button onclick="exportBackup()" class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Exportar cópia</button>
                         <label class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white text-center cursor-pointer">Importar cópia<input type="file" accept=".json,application/json" class="hidden" onchange="importBackup(this)"></label>
@@ -2083,7 +2083,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canApproveInvoices ? `
-                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Ler fatura com OCR (PDF ou foto)</button>
+                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Leitura com IA (PDF ou foto)</button>
                             <input id="invoice-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" class="hidden" onchange="readInvoiceFile(this)">
                             <button onclick="openManualPurchaseModal()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow-lg shadow-blue-600/25 transition-all">
                                 + Registar Compra Manual
@@ -2106,7 +2106,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <div class="mt-1.5 font-mono font-bold text-2xl text-amber-400 tabular-nums">${pendingCount}</div>
                     </div>
                     <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
-                        <div class="text-xs text-slate-400">Leitura de faturas (OCR)</div>
+                        <div class="text-xs text-slate-400">✨ Leitura com IA<//div>
                         <div class="mt-1.5 font-mono font-semibold text-sm ${restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full ${restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
                             ${restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
@@ -2706,7 +2706,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             openModal('Definições', 'Restaurante e leitura de faturas', `<form onsubmit="saveSettings(event)" class="space-y-4">
                 <label class="block text-xs text-slate-300">NIF do restaurante (adquirente nas faturas)<input id="set-nif" required value="${escHtml(s.restaurantNif || '')}" class="${field}" placeholder="500 000 000"></label>
                 <label class="block text-xs text-slate-300">Alertar artigos sem saídas há (dias)<input id="set-idle" type="number" min="1" step="1" required value="${s.idleDays || 14}" class="${field}"></label>
-                <p class="text-xs text-slate-400 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30">A chave e o modelo do OCR são configurados pela Kareca no painel da plataforma. As faturas que não se leem localmente seguem para a Google através do servidor da Kareca.</p>
+                <p class="text-xs text-slate-400 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30">A chave e o modelo da IA são configurados pela Kareca no painel da plataforma. As faturas que não se leem localmente seguem para a Google através do servidor da Kareca.</p>
                 <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
                 <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar</button></div></form>`);
         }
@@ -2794,7 +2794,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         } })
                     });
                 } catch (e) {
-                    throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear inqgarcghwidlljgxsle.supabase.co.');
+                    throw Error(e.name === 'AbortError' ? 'A IA não respondeu em 120 s.' : 'Sem ligação ao serviço de IA (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear inqgarcghwidlljgxsle.supabase.co.');
                 } finally { clearTimeout(timer); }
             };
             const base = { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 32768 };
@@ -2807,17 +2807,17 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 // Gemini sobrecarregado: espera 2, 4 e 8 s; se continuar, passa uma vez para o modelo mais leve.
                 if (attempt < 4) {
                     const wait = 2 ** attempt;
-                    setStage('Enviar ao OCR', `Serviço OCR ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
+                    setStage('Enviar à IA', `Serviço de IA ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
                     await new Promise(r => setTimeout(r, wait * 1000));
                 } else if (!fellBack && model !== FALLBACK_MODEL) {
                     fellBack = true; attempt = 0; model = FALLBACK_MODEL; config = { ...base, thinkingConfig: { thinkingLevel: 'low' } };
-                    setStage('Enviar ao OCR', 'Modelo principal ocupado, a tentar com o modelo de reserva');
+                    setStage('Enviar à IA', 'Modelo principal ocupado, a tentar com o modelo de reserva');
                 } else break;
             }
-            if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? '\n\nTentado 4 vezes com o modelo principal e com o de reserva. O serviço OCR está sobrecarregado: tente daqui a uns minutos.' : ''));
+            if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? '\n\nTentado 4 vezes com o modelo principal e com o de reserva. O serviço de IA está sobrecarregado: tente daqui a uns minutos.' : ''));
             const cand = body.candidates?.[0], finish = cand?.finishReason;
             const text = cand?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
-            if (!text) throw Error('O OCR não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
+            if (!text) throw Error('A IA não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
             let ex;
             try { ex = JSON.parse(text); } catch (e) {
                 throw Error((finish === 'MAX_TOKENS' ? 'A resposta foi cortada a meio (MAX_TOKENS).' : 'A resposta não é JSON válido (' + e.message + ', fim: ' + (finish || '?') + ').') + '\n\nInício da resposta:\n' + text.slice(0, 400));
@@ -2847,7 +2847,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     const local = await pdfTextRows(file).then(rows => parseInvoiceText(rows, restaurantNif())).catch(e => ({ ok: false, reason: e.message }));
                     if (local.ok) {
                         openOcrReview(local.ex, file.name, 'PDF (leitura local)');
-                        showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem OCR: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
+                        showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem IA: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
                         return;
                     }
                     console.info('Leitura local do PDF não serviu, a usar o Gemini:', local.reason);
@@ -2857,14 +2857,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const uploadType = upload === file ? mime : upload.type;
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro: ' + (r.error?.message || 'erro desconhecido'))); r.readAsDataURL(upload); });
                 const prepared = performance.now();
-                setStage('Enviar ao OCR', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao OCR`);
+                setStage('Enviar à IA', `A enviar ${fmtNum(upload.size / 1024, 0)} KB à IA`);
                 const { ex, fellBack, usage: ocrUsage } = await geminiOcr(data, uploadType, 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Se a linha tiver lote ou validade, preenche lot e expiry. Na descrição mantém a embalagem impressa (ex.: Cx 15 dz, Garrafa 2 L). Não inventes campos: deixa vazio o que não estiver no documento.', OCR_SCHEMA, setStage);
-                stage = 'Ler a resposta do OCR';
+                stage = 'Ler a resposta da IA';
                 if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos. O documento está legível e é uma fatura?');
                 const done = performance.now(), usage = ocrUsage;
                 console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
-                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com o modelo de reserva porque o principal estava ocupado. Confira bem as linhas. · ' : '') + 'OCR ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
+                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com o modelo de reserva porque o principal estava ocupado. Confira bem as linhas. · ' : '') + 'IA ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
             } catch (error) {
                 ocrFailure(file.name, stage, error.message);
             } finally { clearInterval(ticker); }
@@ -2998,7 +2998,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const rows = ex.lines.map((l, idx) => ocrRowHtml(l, idx)).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal((via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF') + (order ? ' · encomenda ' + order.id : ''), fileName, `<div id="ocr-review" class="space-y-4 text-sm">
+            openModal((via === 'OCR' ? 'Rever fatura lida com IA' : 'Rever fatura lida do PDF') + (order ? ' · encomenda ' + order.id : ''), fileName, `<div id="ocr-review" class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -3829,7 +3829,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const btn = 'flex-1 p-4 rounded-xl text-left text-sm border';
             openModal('Encomenda ' + id + ' entregue', 'Registe a fatura do fornecedor para conferir o que foi pedido com o que veio.', `<div class="flex flex-col sm:flex-row gap-3">
                 <button onclick="openManualPurchaseModal('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>Preencher à mão</strong><br><span class="text-xs text-slate-400">As linhas vêm da encomenda: ajuste o que veio, o preço cobrado e as ofertas.</span></button>
-                <button onclick="readOrderInvoice('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>✨ Ler fatura com OCR</strong><br><span class="text-xs text-slate-400">PDF ou foto; a revisão mostra a conferência com a encomenda.</span></button></div>
+                <button onclick="readOrderInvoice('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>✨ Leitura com IA</strong><br><span class="text-xs text-slate-400">PDF ou foto; a revisão mostra a conferência com a encomenda.</span></button></div>
                 <p class="mt-3 text-xs text-slate-400">A encomenda só passa a «Entregue» quando aprovar a fatura.</p>`);
         }
         function readOrderInvoice(id) {
@@ -4398,7 +4398,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canEditRecipes ? `
                             <button onclick="openRecipeModal(null, true)" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300 transition-all">
-                                Ler ficha por OCR
+                                ✨ Leitura com IA
                             </button>
                             <button onclick="openRecipeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
                                 + Nova Ficha Técnica
@@ -4437,12 +4437,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div class="space-y-4">
                     ${isEdit ? '' : `<div class="ft-mode" role="group" aria-label="Como preencher a ficha">
                         <button type="button" id="ft-mode-manual" aria-pressed="${!startInOcrMode}" onclick="setRecipeFillMode(false)">✍️ Preencher manualmente</button>
-                        <button type="button" id="ft-mode-ocr" aria-pressed="${startInOcrMode}" onclick="setRecipeFillMode(true)">📄 Ler documento por OCR</button>
+                        <button type="button" id="ft-mode-ocr" aria-pressed="${startInOcrMode}" onclick="setRecipeFillMode(true)">✨ Leitura com IA</button>
                     </div>
                     <div id="recipe-ocr-panel" class="ft-box ft-ocr" ${startInOcrMode ? '' : 'hidden'}>
                         <label>Foto ou PDF de uma ficha técnica (PDF, JPG, PNG, WEBP ou HEIC, até 14 MB)
                             <input type="file" accept="application/pdf,image/*" onchange="readRecipeFile(this)"></label>
-                        <p id="recipe-ocr-status" role="status" class="ft-hint">O OCR preenche o cabeçalho, os ingredientes, o método e as notas. Os ingredientes são ligados aos artigos pelo código ou pelo nome; os que não encontrar ficam por escolher na pesquisa.</p>
+                        <p id="recipe-ocr-status" role="status" class="ft-hint">A IA preenche o cabeçalho, os ingredientes, o método e as notas. Os ingredientes são ligados aos artigos pelo código ou pelo nome; os que não encontrar ficam por escolher na pesquisa.</p>
                     </div>`}
                     <form onsubmit="saveRecipeForm(event, '${rec ? rec.id : ''}')" class="ft-sheet" data-id="${rec ? rec.id : ''}">
                         <div class="ft-head">
@@ -4535,7 +4535,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 </div>
             `;
 
-            openModal(isEdit ? 'Editar Ficha Técnica' : 'Nova Ficha Técnica (Manual ou IA / OCR)', isEdit ? `${rec.name} (${rec.code})` : 'Configure insumos, sub-receitas, perdas e PVPs', html, 'xl');
+            openModal(isEdit ? 'Editar Ficha Técnica' : 'Nova Ficha Técnica (Manual ou ✨ Leitura com IA)', isEdit ? `${rec.name} (${rec.code})` : 'Configure insumos, sub-receitas, perdas e PVPs', html, 'xl');
             renderRecipeChannels(rec ? Object.fromEntries(getChannelMetrics(rec).map(c => [c.key, c.pvpGross])) : {});
             renderRecipeFormRows();
             recalcRecipeModalPreview();
@@ -4810,7 +4810,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 say('A preparar o ficheiro…');
                 const upload = await prepareInvoiceImage(file, mime);
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro.')); r.readAsDataURL(upload); });
-                say('A ler a ficha com o OCR… pode demorar até um minuto.');
+                say('A ler a ficha com a IA… pode demorar até um minuto.');
                 const { ex } = await geminiOcr(data, upload === file ? mime : upload.type,
                     'Extrai os dados desta ficha técnica de restaurante portuguesa: cabeçalho, ingredientes (código, nome, quantidade líquida, unidade, observações), método de confeção e notas. Quantidades com vírgula decimal (0,08 = 0.08). Não inventes campos: deixa vazio o que não estiver no documento.',
                     RECIPE_OCR_SCHEMA, (_, text) => say(text + '…'));
