@@ -22,7 +22,8 @@ function ing(id, baseUnit, yieldFactor, cmp, extra = {}) {
 
 function recipe(id, items, extra = {}) {
     return {
-        id, name: id, recipeType: 'final_product', yieldQuantity: 1, yieldUnit: 'un', cookingLossPct: 0, extraFixedCost: 0,
+        // Fichas de teste com preços escritos à mão; o modo global tem testes próprios.
+        id, name: id, recipeType: 'final_product', priceMode: 'manual', yieldQuantity: 1, yieldUnit: 'un', cookingLossPct: 0, extraFixedCost: 0,
         vatRate: 13, pvpSalaGross: 0, pvpTakeawayGross: 0, pvpUberGross: 0, soldByStore: { chiado: 0 }, items, ...extra
     };
 }
@@ -496,11 +497,24 @@ test('nome do fornecedor: artigo curto e reconhecimento pela descrição da fatu
     assert.equal(ctx.matchIngredient('Ovos Classe M').id, 'ovosm');
 });
 
-test('channelPriceFromSala: taxa do canal sobre o PVP Sala', () => {
+test('channelSuggestedPvp: (custo + custos fixos) ÷ food cost, depois comissão, custos variáveis e margem extra', () => {
     const ctx = load({});
-    near(ctx.channelPriceFromSala(11.3, 10), 12.43);
-    near(ctx.channelPriceFromSala(11.3, 30), 14.69);
-    assert.equal(ctx.channelPriceFromSala(0, 15), 0);
+    near(ctx.channelSuggestedPvp(3, 30, 13, {}), 11.3); // Sala: 3 / 0,30 = 10 € s/ IVA
+    near(ctx.channelSuggestedPvp(3, 30, 13, { feePct: 30, packaging: 0.6 }), 19.37); // 3,6 / 0,3 / 0,7 × 1,13
+    near(ctx.channelSuggestedPvp(3, 30, 13, { feePct: 15, varPct: 5, packaging: 1, marginPct: 10 }), 20.72); // 4 / 0,3 / 0,8 × 1,1 × 1,13
+    assert.equal(ctx.channelSuggestedPvp(0, 30, 13, {}), 0);
+    assert.equal(ctx.channelSuggestedPvp(3, 30, 13, { feePct: 60, varPct: 40 }), 0);
+});
+
+test('preços por canal em modo global seguem o custo e a configuração; os escritos à mão são ignorados', () => {
+    const c = load({ ...bowlState(), salesChannels: [{ id: 'uber', name: 'Uber', feePct: 30, varPct: 2, packaging: 0.65 }] });
+    const rec = { ...c.getRecipe('rec_bowl'), priceMode: 'global', targetFcPct: 25, channelPrices: { uber: 99 } };
+    const unit = c.calculateRecipeCost(rec).unitCost;
+    const [sala, uber] = c.getChannelMetrics(rec);
+    near(sala.pvpGross, c.channelSuggestedPvp(unit, 25, rec.vatRate, {}));
+    assert.ok(Math.abs(sala.foodCostPct - 25) < 0.2);
+    near(uber.pvpGross, c.channelSuggestedPvp(unit, 25, rec.vatRate, { feePct: 30, varPct: 2, packaging: 0.65 }));
+    near(uber.commEur, uber.pvpNet * 0.32);
 });
 
 test('canais configuráveis: preço por canal, taxa como comissão, preços antigos de Uber mantêm-se', () => {

@@ -591,6 +591,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .ft-ro .ft-meta>div span{color:#94a3b8;font-size:.75rem}.ft-ro .ft-meta>div strong{color:#f1f5f9;font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
 @media(min-width:720px){.ft-ro .ft-meta>div:nth-child(4),.ft-ro .ft-meta>div:nth-child(6),.ft-ro .ft-meta>div:nth-child(7){grid-column:span 2}}
 .ft-ro .ft-table td{padding:7px 8px}
+.ft-ro .ft-ingredients .ft-table td:nth-child(2){min-width:140px}
+.ft-sheet .ft-mode{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;border:0;padding:0;margin-bottom:10px}
+.ft-sheet .ft-mode legend{float:left;margin-right:6px;color:#b9c9de;font-size:.8rem}
+.ft-sheet .ft-mode label{display:inline-flex;align-items:center;gap:6px;color:#e2e8f0;font-size:.85rem}
+.ft-sheet .ft-mode input[type=radio]{width:auto;margin:0;padding:0;accent-color:#38bdf8}
+.ft-channels input[readonly]{border-color:transparent;background:transparent}
+.ft-chconf td:first-child{min-width:140px}.ft-chconf td.ft-num input{width:6rem;margin-left:auto;display:block}
+.ft-table th.ft-num,.ft-table td.ft-num{text-align:right}
 .ft-text{white-space:pre-line;font-size:.875rem;color:#e2e8f0;margin-bottom:12px!important}
 .pl-tools{margin:10px 12px}.pl-search input{box-sizing:border-box;width:100%;max-width:420px;padding:9px 12px;border:1px solid #354862;border-radius:8px;background:#080f1e;color:#f1f5f9;font:inherit;font-size:.875rem}.pl-search input:focus{outline:2px solid #38bdf8;outline-offset:1px}
 .pl-table td{padding:8px}.pl-link{color:#7dd3fc;font-weight:600;text-align:left}.pl-link:hover{text-decoration:underline}
@@ -4245,8 +4253,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ...(rec.extraFixedCost ? [['Temperos e guarnições menores (€)', money(rec.extraFixedCost)]] : []),
                     ['Custo total da receita (€)', money(cost.batchCost)], [`Custo por ${unitLabel} (€)`, money(cost.unitCost)]
                 ],
-                channels: isFinal ? [['Canal', 'Taxa (%)', 'PVP c/ IVA (€)', 'Food cost (%)', 'Margem (€)'],
-                    ...getChannelMetrics(rec).map(c => [c.name, c.key === 'sala' ? '' : c.commissionPct, money(c.pvpGross), c.pvpGross > 0 ? Math.round(c.foodCostPct * 10) / 10 : '', money(c.marginEur)])] : null,
+                channels: isFinal ? [['Canal', 'Comissão e custos variáveis (%)', 'PVP c/ IVA (€)', 'Food cost (%)', 'Margem (€)'],
+                    ...getChannelMetrics(rec).map(c => [c.name, c.key === 'sala' ? '' : c.commissionPct + c.varPct, money(c.pvpGross), c.pvpGross > 0 ? Math.round(c.foodCostPct * 10) / 10 : '', money(c.marginEur)])] : null,
                 allergens: ALLERGENS.map(a => [found.includes(a) ? 'Sim' : '—', a]),
                 method: rec.method || '',
                 notes: rec.notes || ''
@@ -4335,7 +4343,6 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         ${meta('Food cost pretendido', isFinal ? fmtPct(target) : '—')}${meta('Quebra na confeção', fmtPct(rec.cookingLossPct || 0, 0))}
                     </div>
                 </div>
-                <div class="ft-grid">
                     <section class="ft-box ft-ingredients"><h3 class="ft-bar">Ingredientes</h3>
                         <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Código</th><th>Ingrediente</th><th class="ft-num">Qtd.</th><th>Unid.</th><th>Observações</th><th class="ft-num">Custo</th></tr></thead>
                         <tbody>${lines || '<tr><td colspan="6" class="ft-empty">Sem ingredientes.</td></tr>'}</tbody></table></div>
@@ -4345,19 +4352,18 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             <div><span>Custo por ${escHtml(unitLabel)}</span><strong>${fmtEur(cost.unitCost)}</strong></div>
                             ${isFinal ? '' : `<div><span>Em stock</span><strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0, 3)} ${escHtml(rec.yieldUnit)}</strong></div>`}
                         </div></section>
-                    <section class="ft-box"><h3 class="ft-bar">Método de confeção</h3><p class="ft-text">${escHtml(rec.method || '—')}</p></section>
-                </div>
                 ${isFinal ? `<section class="ft-box"><h3 class="ft-bar">Preços por canal</h3>
-                    <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Canal</th><th class="ft-num">Taxa</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead><tbody>
-                    ${getChannelMetrics(rec).map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${c.key === 'sala' ? '—' : fmtPct(c.commissionPct, 0)}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td>
-                        <td class="ft-num ${c.foodCostPct <= target ? 'text-emerald-400' : 'text-rose-400'}">${c.pvpGross > 0 ? fmtPct(c.foodCostPct) : '—'}</td><td class="ft-num">${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</td></tr>`).join('')}
+                    <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Canal</th><th class="ft-num">Comissão e custos variáveis</th><th class="ft-num">Custos fixos</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead><tbody>
+                    ${getChannelMetrics(rec).map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${c.key === 'sala' ? '—' : fmtPct(c.commissionPct + c.varPct, 1)}</td><td class="ft-num">${c.packaging ? fmtEur(c.packaging) : '—'}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td>
+                        <td class="ft-num ${c.foodCostPct <= target + 0.05 ? 'text-emerald-400' : 'text-rose-400'}">${c.pvpGross > 0 ? fmtPct(c.foodCostPct) : '—'}</td><td class="ft-num">${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</td></tr>`).join('')}
                     </tbody></table></div>
-                    <p class="ft-hint">PVP Sala sugerido para ${fmtPct(target)} de food cost: ${fmtEur(suggestedPvpGross(cost.unitCost, target, rec.vatRate))} (IVA ${fmtPct(rec.vatRate, 0)}).</p></section>` : ''}
+                    <p class="ft-hint">${rec.priceMode === 'manual' ? 'Preços escritos à mão nesta ficha.' : `Preços calculados com ${fmtPct(target)} de food cost pretendido e a configuração dos canais de venda.`} IVA ${fmtPct(rec.vatRate, 0)}. Food cost sobre o PVP sem IVA, incluindo os custos fixos do canal.</p></section>` : ''}
                 <div class="ft-grid">
                     <section class="ft-box"><h3 class="ft-bar">Alergénios (incluindo derivados)</h3>
                         <ul class="ft-allergens">${ALLERGENS.map(a => `<li class="${found.includes(a) ? 'on' : ''}"><span aria-hidden="true">${found.includes(a) ? '✓' : '—'}</span>${escHtml(a)}${found.includes(a) ? '<span class="sr-only"> (contém)</span>' : ''}</li>`).join('')}</ul></section>
-                    <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
+                    <section class="ft-box"><h3 class="ft-bar">Método de confeção</h3><p class="ft-text">${escHtml(rec.method || '—')}</p></section>
                 </div>
+                <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
                 <div class="flex flex-wrap justify-end gap-3">
                     ${role.canEditRecipes ? `<button type="button" class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar</button>` : ''}
                     ${!isFinal && role.canCountInventory ? `<button type="button" class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>` : ''}
@@ -4396,6 +4402,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 content = buildRecipeList() + buildRecipeOverview();
             } else if (sub === 'sim') {
                 content = buildCostSimulation(selectedRec);
+            } else if (sub === 'channels') {
+                content = buildChannelsConfig(role);
             } else {
                 // MATRIZ BCG 100% DINÂMICA (RECLASSIFICA AO VIVO COM INFLAÇÃO E VENDAS POS)
                 const bcgCalc = computeDynamicBcg(appState.activeStore);
@@ -4535,6 +4543,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <div class="flex flex-wrap gap-2 p-1 rounded-xl bg-[#0B1120] border border-[#1E293B]">
                             <button onclick="setRecipeSubTab('catalogue')" class="work-btn ${sub==='catalogue'?'primary':''}">Fichas</button>
                             <button onclick="setRecipeSubTab('sim')" class="work-btn ${sub==='sim'?'primary':''}">Simular custos</button>
+                            <button onclick="setRecipeSubTab('channels')" class="work-btn ${sub==='channels'?'primary':''}">Canais de venda</button>
                             <button onclick="setRecipeSubTab('bcg')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${sub === 'bcg' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}">Análise da carta</button>
                         </div>
                     </div>
@@ -4593,7 +4602,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 <label>Categoria<select id="rec-cat">
                                     ${categories.map(c => `<option value="${c}" ${rec && rec.category === c ? 'selected' : ''}>${c}</option>`).join('')}
                                 </select></label>
-                                <label>Food cost pretendido (%)<input id="rec-target-fc" type="number" step="0.5" min="1" max="100" value="${rec?.targetFcPct ?? 30}" oninput="recalcRecipeModalPreview()"></label>
+                                <label>Food cost pretendido (%)<input id="rec-target-fc" type="number" step="0.5" min="1" max="100" value="${rec?.targetFcPct ?? targetFcPct()}" oninput="recalcRecipeModalPreview()"></label>
                                 <label>Quebra na confeção (%)<input id="rec-cooking-loss" type="number" step="1" min="0" max="70" value="${rec ? (rec.cookingLossPct || 0) : 0}" oninput="recalcRecipeModalPreview()"></label>
                             </div>
                         </div>
@@ -4618,7 +4627,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
                         <section class="ft-box" id="recipe-pvp-section">
                             <h3 class="ft-bar">Preços por canal</h3>
-                            <p class="ft-hint">Sala é o preço base, sem taxa, sugerido para o food cost pretendido. Cada canal = PVP Sala + a taxa do canal. Os preços vêm pré-preenchidos com a sugestão e acompanham o custo até os alterar. Os canais e as taxas valem para todas as fichas.</p>
+                            <p class="ft-hint">Global: os preços são calculados com o food cost pretendido desta ficha e a configuração de cada canal (comissão, custos variáveis, custos fixos e margem extra), e acompanham o custo. Manual: escreve os preços; vêm pré-preenchidos com o valor calculado. Os canais configuram-se em Fichas técnicas › Canais de venda.</p>
+                            <fieldset class="ft-mode"><legend>Cálculo dos preços</legend>
+                                <label><input type="radio" name="rec-price-mode" value="global" ${rec?.priceMode !== 'manual' ? 'checked' : ''} onchange="setRecipePriceMode()"> Global (food cost pretendido)</label>
+                                <label><input type="radio" name="rec-price-mode" value="manual" ${rec?.priceMode === 'manual' ? 'checked' : ''} onchange="setRecipePriceMode()"> Manual</label>
+                            </fieldset>
                             <div class="ft-prices">
                                 <label>Taxa IVA<select id="rec-vat" onchange="recalcRecipeModalPreview()">
                                     <option value="13" ${!rec || rec.vatRate === 13 ? 'selected' : ''}>13% (Restauração)</option>
@@ -4627,14 +4640,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 </select></label>
                             </div>
                             <div class="ft-scroll"><table class="ft-table ft-channels">
-                                <thead><tr><th>Canal</th><th class="ft-num">Taxa (%)</th><th class="ft-num">PVP c/ IVA (€)</th><th class="ft-num">Sugerido</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th><th><span class="sr-only">Remover</span></th></tr></thead>
+                                <thead><tr><th>Canal</th><th class="ft-num">Comissão e custos variáveis</th><th class="ft-num">Custos fixos</th><th class="ft-num">PVP c/ IVA (€)</th><th class="ft-num">Calculado</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead>
                                 <tbody id="recipe-channels"></tbody>
                             </table></div>
-                            <div class="ft-addch">
-                                <label>Novo canal<input id="new-ch-name" maxlength="40" placeholder="Ex: Uber Eats, Glovo, Bolt Food"></label>
-                                <label>Taxa (%)<input id="new-ch-fee" type="number" step="0.5" min="0" max="100" placeholder="15"></label>
-                                <button type="button" class="ft-add" onclick="addSalesChannel()">+ Adicionar canal</button>
-                            </div>
                         </section>
 
                         <div class="ft-grid">
@@ -4660,52 +4668,91 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             `;
 
             openModal(isEdit ? 'Editar Ficha Técnica' : 'Nova Ficha Técnica (Manual ou IA / OCR)', isEdit ? `${rec.name} (${rec.code})` : 'Configure insumos, sub-receitas, perdas e PVPs', html, 'xl');
-            renderRecipeChannels(rec ? Object.fromEntries(getChannelMetrics(rec).map(c => [c.key, c.pvpGross])) : {});
+            renderRecipeChannels(rec?.priceMode === 'manual' ? Object.fromEntries(getChannelMetrics(rec).map(c => [c.key, c.pvpGross])) : {});
             renderRecipeFormRows();
             recalcRecipeModalPreview();
         }
 
-        // Linhas de preço por canal. prices: {canal: PVP}; um preço já existente conta como escrito à mão e não é substituído pela sugestão.
+        // Linhas de preço por canal. prices: {canal: PVP}; um preço já existente conta como escrito à mão (modo manual).
         function renderRecipeChannels(prices) {
             const body = document.getElementById('recipe-channels');
             if (!body) return;
-            const row = (id, name, fee) => `<tr>
+            const row = (id, name, ch) => `<tr>
                 <td>${escHtml(name)}</td>
-                <td class="ft-num">${id === 'sala' ? '—' : `<input type="number" step="0.5" min="0" max="100" class="ft-num" aria-label="Taxa ${escHtml(name)} (%)" value="${fee}" onchange="setSalesChannelFee('${id}', this.value)">`}</td>
+                <td class="ft-num">${id === 'sala' ? '—' : fmtPct((Number(ch.feePct) || 0) + (Number(ch.varPct) || 0), 1)}</td>
+                <td class="ft-num">${ch.packaging ? fmtEur(ch.packaging) : '—'}</td>
                 <td><input id="rec-pvp-${id}" type="number" step="0.01" min="0" class="ft-num" aria-label="PVP ${escHtml(name)} com IVA" value="${prices[id] > 0 ? Number(prices[id]).toFixed(2) : ''}" ${prices[id] > 0 ? 'data-edited="1"' : ''} oninput="markPvpEdited(this)"></td>
-                <td class="ft-num" id="ch-sug-${id}"></td><td class="ft-num" id="ch-fc-${id}"></td><td class="ft-num" id="ch-mg-${id}"></td>
-                <td>${id === 'sala' ? '' : `<button type="button" class="ft-del" onclick="removeSalesChannel('${id}')" aria-label="Remover canal ${escHtml(name)}" title="Remover canal">✕</button>`}</td></tr>`;
-            body.innerHTML = row('sala', 'Sala (padrão)', 0) + salesChannels().map(ch => row(ch.id, ch.name, ch.feePct)).join('');
+                <td class="ft-num" id="ch-sug-${id}"></td><td class="ft-num" id="ch-fc-${id}"></td><td class="ft-num" id="ch-mg-${id}"></td></tr>`;
+            body.innerHTML = row('sala', 'Sala (padrão)', {}) + salesChannels().map(ch => row(ch.id, ch.name, ch)).join('');
+            setRecipePriceMode();
         }
-        function currentChannelPrices() {
-            return Object.fromEntries(['sala', ...salesChannels().map(c => c.id)].map(id => {
-                const input = document.getElementById('rec-pvp-' + id);
-                return [id, input?.dataset.edited ? parseFloat(input.value) || 0 : 0];
-            }));
+        function recipePriceMode() {
+            return document.querySelector('input[name=rec-price-mode]:checked')?.value || 'global';
+        }
+        function setRecipePriceMode() {
+            const manual = recipePriceMode() === 'manual';
+            document.querySelectorAll('#recipe-channels input').forEach(input => {
+                input.readOnly = !manual;
+                if (!manual) delete input.dataset.edited;
+            });
+            recalcRecipeModalPreview();
+        }
+
+        // --- CONFIGURAÇÃO DOS CANAIS DE VENDA (vale para todas as fichas) ---
+        const CHANNEL_FIELDS = [
+            ['feePct', 'Comissão (%)', 'Taxa da plataforma sobre o PVP, por exemplo Uber Eats 30%.', 100],
+            ['varPct', 'Custos variáveis (%)', 'Outros custos sobre o PVP: pagamento com cartão, promoções, etc.', 100],
+            ['packaging', 'Custos fixos (€/dose)', 'Embalagem, saco, talheres.', 1000],
+            ['marginPct', 'Margem extra (%)', 'Acréscimo ao preço calculado.', 500]
+        ];
+        function buildChannelsConfig(role) {
+            const edit = role.canEditRecipes;
+            const num = (ch, [field, label, , max]) => edit
+                ? `<input type="number" step="0.01" min="0" max="${max}" class="ft-num" aria-label="${escHtml(label)} ${escHtml(ch.name)}" value="${Number(ch[field]) || 0}" onchange="updateSalesChannel('${ch.id}', '${field}', this.value)">`
+                : (field === 'packaging' ? fmtEur(ch[field] || 0) : fmtPct(ch[field] || 0, 1));
+            const rows = salesChannels().map(ch => `<tr>
+                <td>${edit ? `<input maxlength="40" aria-label="Nome do canal" value="${escHtml(ch.name)}" onchange="updateSalesChannel('${ch.id}', 'name', this.value)">` : escHtml(ch.name)}</td>
+                ${CHANNEL_FIELDS.map(f => `<td class="ft-num">${num(ch, f)}</td>`).join('')}
+                <td>${edit ? `<button type="button" class="ft-del" onclick="removeSalesChannel('${ch.id}')" aria-label="Remover canal ${escHtml(ch.name)}" title="Remover canal">✕</button>` : ''}</td></tr>`).join('');
+            return `<section class="work-panel"><h2>Canais de venda</h2>
+                <p class="work-muted">Valem para todas as fichas técnicas em modo global. Preço de cada canal, com IVA = (custo por dose + custos fixos) ÷ food cost pretendido ÷ (1 − comissão − outros custos variáveis) × (1 + margem extra). Sala é o canal base, sem custos extra. O food cost pretendido vem de cada ficha (por omissão ${fmtPct(targetFcPct())}, o valor global).</p>
+                <p class="work-muted">${CHANNEL_FIELDS.map(([, label, help]) => `<strong>${escHtml(label)}</strong>: ${escHtml(help)}`).join(' ')}</p>
+                <div class="ft-sheet"><div class="ft-scroll"><table class="ft-table ft-chconf"><thead><tr><th>Canal</th>${CHANNEL_FIELDS.map(([, label, help]) => `<th class="ft-num" title="${escHtml(help)}">${escHtml(label)}</th>`).join('')}<th><span class="sr-only">Remover</span></th></tr></thead>
+                <tbody><tr><td>Sala (padrão)</td><td class="ft-num">—</td><td class="ft-num">—</td><td class="ft-num">—</td><td class="ft-num">—</td><td></td></tr>${rows}</tbody></table></div>
+                ${edit ? `<div class="ft-addch">
+                    <label>Novo canal<input id="new-ch-name" maxlength="40" placeholder="Ex: Glovo, Bolt Food"></label>
+                    <label>Comissão (%)<input id="new-ch-fee" type="number" step="0.5" min="0" max="100" placeholder="15"></label>
+                    <button type="button" class="ft-add" onclick="addSalesChannel()">+ Adicionar canal</button>
+                </div>` : ''}</div></section>`;
         }
         function addSalesChannel() {
             const name = document.getElementById('new-ch-name'), fee = document.getElementById('new-ch-fee');
             const feePct = parseFloat(fee.value);
-            if (!name.value.trim()) { showToast('Falta o nome', 'Escreva o nome do canal, por exemplo Uber Eats.', 'warning'); name.focus(); return; }
-            if (!(feePct >= 0 && feePct <= 100)) { showToast('Falta a taxa', 'Indique a taxa do canal em %, entre 0 e 100.', 'warning'); fee.focus(); return; }
-            const prices = currentChannelPrices();
-            appState.salesChannels = [...salesChannels(), { id: 'ch_' + Date.now().toString(36), name: name.value.trim(), feePct, packaging: 0 }];
+            if (!name.value.trim()) { showToast('Falta o nome', 'Escreva o nome do canal, por exemplo Glovo.', 'warning'); name.focus(); return; }
+            if (!(feePct >= 0 && feePct < 100)) { showToast('Falta a comissão', 'Indique a comissão do canal em %, de 0 a 99.', 'warning'); fee.focus(); return; }
+            appState.salesChannels = [...salesChannels(), { id: 'ch_' + Date.now().toString(36), name: name.value.trim(), feePct, varPct: 0, packaging: 0, marginPct: 0 }];
             persistState();
-            name.value = ''; fee.value = '';
-            renderRecipeChannels(prices);
-            recalcRecipeModalPreview();
+            renderActiveView();
         }
-        function setSalesChannelFee(id, value) {
-            appState.salesChannels = salesChannels().map(c => c.id === id ? { ...c, feePct: Math.max(0, Math.min(100, parseFloat(value) || 0)) } : c);
+        function updateSalesChannel(id, field, value) {
+            const max = CHANNEL_FIELDS.find(f => f[0] === field)?.[3];
+            const v = field === 'name' ? String(value).trim() : Math.max(0, Math.min(max, parseFloat(value) || 0));
+            if (field === 'name' && !v) { renderActiveView(); return; }
+            const next = salesChannels().map(c => c.id === id ? { ...c, [field]: v } : c);
+            const ch = next.find(c => c.id === id);
+            if ((Number(ch.feePct) || 0) + (Number(ch.varPct) || 0) >= 100) {
+                showToast('Valores impossíveis', 'A comissão e os outros custos variáveis juntos têm de ficar abaixo de 100%.', 'warning');
+                renderActiveView();
+                return;
+            }
+            appState.salesChannels = next;
             persistState();
-            recalcRecipeModalPreview();
+            renderActiveView();
         }
         function removeSalesChannel(id) {
-            const prices = currentChannelPrices();
             appState.salesChannels = salesChannels().filter(c => c.id !== id);
             persistState();
-            renderRecipeChannels(prices);
-            recalcRecipeModalPreview();
+            renderActiveView();
         }
 
         const RECIPE_UNIT_GROUPS = [['g', 'kg'], ['ml', 'cl', 'L'], ['un']];
@@ -4880,22 +4927,19 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const field = id => document.getElementById(id);
             const follow = (input, v) => { if (input && !input.dataset.edited) input.value = v > 0 ? v.toFixed(2) : ''; };
             const targetFc = parseFloat(val('rec-target-fc')) || 30;
-            const salaSug = Math.round(suggestedPvpGross(cost.unitCost, targetFc, tempRecipe.vatRate) * 100) / 100;
-            follow(field('rec-pvp-sala'), salaSug);
-            const sala = parseFloat(field('rec-pvp-sala')?.value) || 0;
             const channelPrices = {};
-            for (const ch of salesChannels()) {
-                const sug = channelPriceFromSala(sala, ch.feePct);
+            for (const ch of [{ id: 'sala' }, ...salesChannels()]) {
+                const sug = channelSuggestedPvp(cost.unitCost, targetFc, tempRecipe.vatRate, ch.id === 'sala' ? {} : ch);
                 follow(field('rec-pvp-' + ch.id), sug);
                 channelPrices[ch.id] = parseFloat(field('rec-pvp-' + ch.id)?.value) || 0;
                 if (field('ch-sug-' + ch.id)) field('ch-sug-' + ch.id).textContent = fmtEur(sug);
             }
-            if (field('ch-sug-sala')) field('ch-sug-sala').textContent = fmtEur(salaSug);
-            for (const c of getChannelMetrics({ ...tempRecipe, pvpSalaGross: sala, channelPrices }, null, appState.activeStore)) {
+            const sala = channelPrices.sala;
+            for (const c of getChannelMetrics({ ...tempRecipe, priceMode: 'manual', pvpSalaGross: sala, channelPrices }, null, appState.activeStore)) {
                 const fc = field('ch-fc-' + c.key), mg = field('ch-mg-' + c.key);
                 if (!fc) continue;
                 fc.textContent = fmtPct(c.foodCostPct);
-                fc.className = 'ft-num ' + (c.foodCostPct <= targetFc ? 'text-emerald-400' : 'text-rose-400');
+                fc.className = 'ft-num ' + (c.foodCostPct <= targetFc + 0.05 ? 'text-emerald-400' : 'text-rose-400');
                 mg.textContent = fmtEur(c.marginEur) + ' (' + fmtPct(c.marginPct) + ')';
             }
         }
@@ -4998,6 +5042,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 pvpSalaGross: parseFloat(document.getElementById('rec-pvp-sala').value) || 0,
                 channelPrices: Object.fromEntries(salesChannels().map(c => [c.id, parseFloat(document.getElementById('rec-pvp-' + c.id).value) || 0])),
                 vatRate: parseFloat(document.getElementById('rec-vat').value) || 13,
+                priceMode: recipePriceMode(),
                 targetFcPct: parseFloat(document.getElementById('rec-target-fc').value) || 30,
                 version: document.getElementById('rec-version').value.trim(),
                 sheetDate: document.getElementById('rec-date').value,
@@ -5781,7 +5826,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
     const escapePattern = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const names = [...aliases.keys()].sort((a,b)=>b.length-a.length).map(escapePattern);
     const pattern = new RegExp('(?<![\\p{L}\\p{N}_])(?:'+names.join('|')+')(?![\\p{L}\\p{N}_])','giu');
-    const excluded = 'script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
+    const excluded = '#modal-subtitle,.ft-title,.ft-mode,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
     function help(term) {
         const button = document.createElement('button');
         button.type = 'button';

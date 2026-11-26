@@ -136,15 +136,22 @@ function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore
 
     // Sala é o canal base, sem taxa. Os restantes vêm da configuração (appState.salesChannels); os preços antigos de Takeaway/Uber continuam a valer.
     const legacy = { takeaway: recipe.pvpTakeawayGross, uber: recipe.pvpUberGross };
+    // Modo global (o padrão): os preços saem do custo atual, do food cost pretendido da ficha e da configuração de cada canal.
+    // Modo manual: valem os preços escritos na ficha. Numa simulação de preços, o PVP global segue o custo atual, não o simulado.
+    const manual = recipe.priceMode === 'manual';
+    const unitCost = prices ? calculateRecipeCost(recipe, null, new Set(), storeId).unitCost : costObj.unitCost;
+    const target = Number(recipe.targetFcPct) || (typeof targetFcPct === 'function' ? targetFcPct() : 30);
+    const auto = ch => channelSuggestedPvp(unitCost, target, recipe.vatRate, ch);
     const channels = [
-        { key: 'sala', name: 'Sala (Dine-in)', pvpGross: Number(recipe.pvpSalaGross) || 0, commissionPct: 0, packaging: 0.00 },
-        ...salesChannels().map(ch => ({ key: ch.id, name: ch.name, pvpGross: Number(recipe.channelPrices?.[ch.id] ?? legacy[ch.id]) || 0, commissionPct: Number(ch.feePct) || 0, packaging: Number(ch.packaging) || 0 }))
+        { key: 'sala', name: 'Sala (Dine-in)', pvpGross: manual ? Number(recipe.pvpSalaGross) || 0 : auto({}), commissionPct: 0, varPct: 0, packaging: 0.00 },
+        ...salesChannels().map(ch => ({ key: ch.id, name: ch.name, pvpGross: manual ? Number(recipe.channelPrices?.[ch.id] ?? legacy[ch.id]) || 0 : auto(ch),
+            commissionPct: Number(ch.feePct) || 0, varPct: Number(ch.varPct) || 0, packaging: Number(ch.packaging) || 0 }))
     ];
 
     return channels.map(ch => {
         const pvpNet = ch.pvpGross / vatDiv;
         const totalCost = baseCost + ch.packaging;
-        const commEur = pvpNet * (ch.commissionPct / 100);
+        const commEur = pvpNet * ((ch.commissionPct + ch.varPct) / 100);
         const marginEur = pvpNet - totalCost - commEur;
         const foodCostPct = pvpNet > 0 ? (totalCost / pvpNet) * 100 : 0;
         const marginPct = pvpNet > 0 ? (marginEur / pvpNet) * 100 : 0;
@@ -293,9 +300,15 @@ function salesChannels() {
     return appState.salesChannels ?? DEFAULT_SALES_CHANNELS;
 }
 
-// PVP sugerido de um canal: PVP Sala + a taxa (%) do canal calculada sobre o PVP Sala. Arredonda ao cêntimo.
-function channelPriceFromSala(salaGross, feePct) {
-    return Math.round((Number(salaGross) || 0) * (1 + (Number(feePct) || 0) / 100) * 100) / 100;
+// PVP com IVA de um canal, arredondado ao cêntimo:
+// (custo da dose + custos fixos por dose) ÷ food cost pretendido ÷ (1 − comissão − outros custos variáveis) × (1 + margem extra).
+// Assim o food cost do canal (custos fixos incluídos) nunca passa a meta.
+// Sala é o canal sem configuração ({}): fica custo ÷ food cost pretendido. Devolve 0 se faltar custo ou meta, ou se as % somarem 100 ou mais.
+function channelSuggestedPvp(unitCost, targetFcPct, vatRate, ch = {}) {
+    const varPct = (Number(ch.feePct) || 0) + (Number(ch.varPct) || 0);
+    if (!(unitCost > 0) || !(targetFcPct > 0) || varPct >= 100) return 0;
+    const net = (unitCost + (Number(ch.packaging) || 0)) / (targetFcPct / 100) / (1 - varPct / 100) * (1 + (Number(ch.marginPct) || 0) / 100);
+    return Math.round(net * (1 + Number(vatRate ?? 13) / 100) * 100) / 100;
 }
 
 // Valor do stock do restaurante. counted=true usa a última contagem física (matéria-prima + preparações contadas);
