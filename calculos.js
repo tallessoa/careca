@@ -72,8 +72,7 @@ function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId
             if (!ing) return;
             const ingMetrics = getIngMetricsForStore(ing, storeId);
             const baseNetQty = convertToBaseQty(item.netQty, item.unit || ing.baseUnit, ing.baseUnit);
-            const yieldFactor = Math.max(0.05, Math.min(1, Number(ing.yieldFactor) || 1));
-            const grossQty = baseNetQty / yieldFactor;
+            const grossQty = baseNetQty / ingYieldFactor(ing);
             const unitPrice = prices?.get(ing.id) ?? ingMetrics.cmp;
             itemsCost += grossQty * unitPrice;
         } else if (item.type === 'sub_recipe') {
@@ -87,12 +86,47 @@ function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId
     });
 
     const batchCost = itemsCost + (Number(recipe.extraFixedCost) || 0);
-    const yieldQty = Math.max(0.001, Number(recipe.yieldQuantity) || 1);
-    const cookingLoss = Math.max(0, Math.min(0.95, (Number(recipe.cookingLossPct) || 0) / 100));
-    const netYield = Math.max(0.001, yieldQty * (1 - cookingLoss));
-    const unitCost = batchCost / netYield;
+    const unitCost = batchCost / recipeNetYield(recipe);
 
     return {batchCost,unitCost,totalRecipeCost:unitCost};
+}
+
+function ingYieldFactor(ing) {
+    return Math.max(0.05, Math.min(1, Number(ing.yieldFactor) || 1));
+}
+
+// Rendimento líquido do lote, depois da quebra de cocção.
+function recipeNetYield(recipe) {
+    const yieldQty = Math.max(0.001, Number(recipe.yieldQuantity) || 1);
+    const cookingLoss = Math.max(0, Math.min(0.95, (Number(recipe.cookingLossPct) || 0) / 100));
+    return Math.max(0.001, yieldQty * (1 - cookingLoss));
+}
+
+// Quanto de um insumo entra numa unidade (dose) da receita, seguindo as sub-receitas.
+// netQty e grossQty na unidade base do insumo; subRecipes = ids das sub-receitas por onde passa.
+function ingredientUsage(recipe, ingId, visited = new Set()) {
+    const out = { netQty: 0, grossQty: 0, subRecipes: [] };
+    if (!recipe || visited.has(recipe.id)) return out;
+    const next = new Set(visited).add(recipe.id);
+    const perUnit = 1 / recipeNetYield(recipe);
+    (recipe.items || []).forEach(item => {
+        if (item.type === 'ingredient' && item.refId === ingId) {
+            const ing = getIngredient(ingId);
+            const qty = ing ? convertToBaseQty(item.netQty, item.unit || ing.baseUnit, ing.baseUnit) * perUnit : NaN;
+            if (!Number.isFinite(qty)) return;
+            out.netQty += qty;
+            out.grossQty += qty / ingYieldFactor(ing);
+        } else if (item.type === 'sub_recipe') {
+            const sub = getRecipe(item.refId);
+            const used = ingredientUsage(sub, ingId, next);
+            const k = sub ? convertToBaseQty(item.netQty, item.unit || sub.yieldUnit, sub.yieldUnit) * perUnit : NaN;
+            if (!(used.netQty > 0) || !Number.isFinite(k)) return;
+            out.netQty += used.netQty * k;
+            out.grossQty += used.grossQty * k;
+            for (const id of [sub.id, ...used.subRecipes]) if (!out.subRecipes.includes(id)) out.subRecipes.push(id);
+        }
+    });
+    return out;
 }
 
 function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore) {
@@ -100,16 +134,24 @@ function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore
     const baseCost = costObj.totalRecipeCost;
     const vatDiv = 1 + Number(recipe.vatRate ?? 13) / 100;
 
+    // Sala é o canal base, sem taxa. Os restantes vêm da configuração (appState.salesChannels); os preços antigos de Takeaway/Uber continuam a valer.
+    const legacy = { takeaway: recipe.pvpTakeawayGross, uber: recipe.pvpUberGross };
+    // Modo global (o padrão): os preços saem do custo atual, do food cost pretendido da ficha e da configuração de cada canal.
+    // Modo manual: valem os preços escritos na ficha. Numa simulação de preços, o PVP global segue o custo atual, não o simulado.
+    const manual = recipe.priceMode === 'manual';
+    const unitCost = prices ? calculateRecipeCost(recipe, null, new Set(), storeId).unitCost : costObj.unitCost;
+    const target = Number(recipe.targetFcPct) || (typeof targetFcPct === 'function' ? targetFcPct() : 30);
+    const auto = ch => channelSuggestedPvp(unitCost, target, recipe.vatRate, ch);
     const channels = [
-        { key: 'sala', name: 'Sala (Dine-in)', pvpGross: Number(recipe.pvpSalaGross) || 0, commissionPct: 0, packaging: 0.00 },
-        { key: 'takeaway', name: 'Takeaway', pvpGross: Number(recipe.pvpTakeawayGross) || 0, commissionPct: 0, packaging: 0.45 },
-        { key: 'uber', name: 'Uber Eats (Delivery)', pvpGross: Number(recipe.pvpUberGross) || 0, commissionPct: 30, packaging: 0.65 }
+        { key: 'sala', name: 'Sala (Dine-in)', pvpGross: manual ? Number(recipe.pvpSalaGross) || 0 : auto({}), commissionPct: 0, varPct: 0, packaging: 0.00 },
+        ...salesChannels().map(ch => ({ key: ch.id, name: ch.name, pvpGross: manual ? Number(recipe.channelPrices?.[ch.id] ?? legacy[ch.id]) || 0 : auto(ch),
+            commissionPct: Number(ch.feePct) || 0, varPct: Number(ch.varPct) || 0, packaging: Number(ch.packaging) || 0 }))
     ];
 
     return channels.map(ch => {
         const pvpNet = ch.pvpGross / vatDiv;
         const totalCost = baseCost + ch.packaging;
-        const commEur = pvpNet * (ch.commissionPct / 100);
+        const commEur = pvpNet * ((ch.commissionPct + ch.varPct) / 100);
         const marginEur = pvpNet - totalCost - commEur;
         const foodCostPct = pvpNet > 0 ? (totalCost / pvpNet) * 100 : 0;
         const marginPct = pvpNet > 0 ? (marginEur / pvpNet) * 100 : 0;
@@ -248,6 +290,25 @@ function supplierPriceTrend(supplierId) {
 function suggestedPvpGross(unitCost, targetFcPct, vatRate) {
     if (!(targetFcPct > 0) || !(unitCost > 0)) return 0;
     return unitCost / (targetFcPct / 100) * (1 + Number(vatRate ?? 13) / 100);
+}
+
+const DEFAULT_SALES_CHANNELS = [
+    { id: 'takeaway', name: 'Takeaway', feePct: 0, packaging: 0.45 },
+    { id: 'uber', name: 'Uber Eats (Delivery)', feePct: 30, packaging: 0.65 }
+];
+function salesChannels() {
+    return appState.salesChannels ?? DEFAULT_SALES_CHANNELS;
+}
+
+// PVP com IVA de um canal, arredondado ao cêntimo:
+// (custo da dose + custos fixos por dose) ÷ food cost pretendido ÷ (1 − comissão − outros custos variáveis) × (1 + margem extra).
+// Assim o food cost do canal (custos fixos incluídos) nunca passa a meta.
+// Sala é o canal sem configuração ({}): fica custo ÷ food cost pretendido. Devolve 0 se faltar custo ou meta, ou se as % somarem 100 ou mais.
+function channelSuggestedPvp(unitCost, targetFcPct, vatRate, ch = {}) {
+    const varPct = (Number(ch.feePct) || 0) + (Number(ch.varPct) || 0);
+    if (!(unitCost > 0) || !(targetFcPct > 0) || varPct >= 100) return 0;
+    const net = (unitCost + (Number(ch.packaging) || 0)) / (targetFcPct / 100) / (1 - varPct / 100) * (1 + (Number(ch.marginPct) || 0) / 100);
+    return Math.round(net * (1 + Number(vatRate ?? 13) / 100) * 100) / 100;
 }
 
 // Valor do stock do restaurante. counted=true usa a última contagem física (matéria-prima + preparações contadas);
@@ -595,4 +656,25 @@ function lotExpiryRisks(ingredients, movements, store, today) {
         }
     }
     return out;
+}
+
+// Conferência da encomenda com o que veio na fatura: por artigo, pedido vs. recebido, preço e oferta.
+// orderLines/received: [{ ing, qty, price, offer? }] em unidades base. Devolve uma linha por artigo com o estado.
+function orderCheck(orderLines, received) {
+    const rows = new Map();
+    const row = ing => rows.get(ing) || rows.set(ing, { ing, ordered: 0, orderedValue: 0, received: 0, value: 0, offer: false, charged: false }).get(ing);
+    for (const l of orderLines) { const r = row(l.ing); r.ordered += l.qty; r.orderedValue += l.qty * l.price; }
+    for (const l of received) {
+        if (l.service) continue;
+        const r = row(l.ing);
+        r.received += l.qty; r.value += l.qty * l.price;
+        if (l.offer) r.offer = true; else r.charged = true;
+    }
+    return [...rows.values()].map(r => {
+        const orderedPrice = r.ordered ? r.orderedValue / r.ordered : 0, chargedQty = received.filter(l => l.ing === r.ing && !l.offer && !l.service).reduce((n, l) => n + l.qty, 0);
+        const price = chargedQty ? r.value / chargedQty : 0, diff = r.received - r.ordered, eps = 1e-9;
+        const status = !r.ordered ? 'Não encomendado' : !r.received ? 'Não veio' : diff < -eps ? 'Falta' : diff > eps ? 'A mais' : 'Conforme';
+        return { ing: r.ing, ordered: r.ordered, received: r.received, orderedPrice, price, offer: r.offer, offerOnly: r.offer && !r.charged, diff, status,
+            priceDiff: r.charged && r.ordered && orderedPrice > 0 ? price / orderedPrice - 1 : 0 };
+    });
 }
