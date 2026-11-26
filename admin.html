@@ -558,6 +558,16 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .ft-allergens{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 12px;margin-bottom:12px!important;font-size:.82rem;color:#94a3b8}
 .ft-allergens li{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #1e293b}.ft-allergens li span[aria-hidden]{width:14px;text-align:center}
 .ft-allergens li.on{color:#fcd34d;font-weight:600}
+.ft-ro .ft-title h3{margin:4px 0 0;color:#fff;font-size:1.3rem;font-weight:700}
+.ft-ro .ft-meta>div{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid #26354b;border-radius:8px;background:#080f1e;min-width:0}
+.ft-ro .ft-meta>div span{color:#94a3b8;font-size:.75rem}.ft-ro .ft-meta>div strong{color:#f1f5f9;font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
+@media(min-width:720px){.ft-ro .ft-meta>div:nth-child(4),.ft-ro .ft-meta>div:nth-child(6),.ft-ro .ft-meta>div:nth-child(7){grid-column:span 2}}
+.ft-ro .ft-table td{padding:7px 8px}
+.ft-text{white-space:pre-line;font-size:.875rem;color:#e2e8f0;margin-bottom:12px!important}
+.pl-tools{margin:8px 0 10px}.pl-search input{width:100%;max-width:420px}
+.pl-table td{padding:8px}.pl-link{color:#7dd3fc;font-weight:600;text-align:left}.pl-link:hover{text-decoration:underline}
+.pl-pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;margin-top:10px;font-size:.8rem;color:#94a3b8}
+.pl-pager span:first-child{margin-right:auto}
 .ft-addch{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin:10px 12px 12px!important}.ft-addch label:first-child{flex:1 1 200px}.ft-addch label:nth-child(2){flex:0 1 100px}.ft-addch .ft-add{margin:0}
 .ft-channels td input{min-width:80px}
 .ft-mode{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -3742,53 +3752,141 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div id="simulation-results" aria-live="polite">${simulationResults(dish,new Map())}</div></section>`;
         }
 
-        function buildRecipeSheet(rec,role) {
-            if (!rec) return '<p class="work-panel">Crie a primeira ficha técnica para começar.</p>';
-            const list = appState.recipes;
-            const editable = role.canEditRecipes;
+        // Listas com pesquisa e paginação. Cada lista regista: items() → array, text(item) → texto pesquisável,
+        // head → <tr> do cabeçalho, row(item) → <tr>. O estado (pesquisa, página) fica só nesta sessão do browser.
+        const PAGED_LISTS = {};
+        const pagedState = {};
+        function pagedListShell(key, label) {
+            const st = pagedState[key] ||= { q: '', page: 0 };
+            return `<div class="pl-tools"><label class="pl-search"><span class="sr-only">${escHtml(label)}</span>
+                <input type="search" placeholder="${escHtml(label)}…" value="${escHtml(st.q)}" oninput="searchPagedList('${key}', this.value)"></label></div>
+                <div id="pl-${key}">${pagedListBody(key)}</div>`;
+        }
+        function pagedListBody(key) {
+            const def = PAGED_LISTS[key], st = pagedState[key] ||= { q: '', page: 0 }, size = def.pageSize || 10;
+            const norm = t => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+            const q = norm(st.q.trim());
+            const all = def.items(), items = q ? all.filter(it => norm(def.text(it)).includes(q)) : all;
+            const pages = Math.max(1, Math.ceil(items.length / size));
+            st.page = Math.min(st.page, pages - 1);
+            const slice = items.slice(st.page * size, st.page * size + size);
+            const from = items.length ? st.page * size + 1 : 0, to = st.page * size + slice.length;
+            return `<div class="ft-scroll"><table class="ft-table pl-table"><thead>${def.head}</thead><tbody>
+                ${slice.map(def.row).join('') || `<tr><td colspan="20" class="ft-empty">${all.length ? 'Nenhum resultado para esta pesquisa.' : escHtml(def.empty || 'Sem registos.')}</td></tr>`}
+                </tbody></table></div>
+                <nav class="pl-pager" aria-label="Paginação"><span>${from}–${to} de ${items.length}</span>
+                <button type="button" class="work-btn" onclick="setPagedListPage('${key}', ${st.page - 1})" ${st.page === 0 ? 'disabled' : ''}>‹ Anterior</button>
+                <span>Página ${st.page + 1} de ${pages}</span>
+                <button type="button" class="work-btn" onclick="setPagedListPage('${key}', ${st.page + 1})" ${st.page >= pages - 1 ? 'disabled' : ''}>Seguinte ›</button></nav>`;
+        }
+        function searchPagedList(key, q) {
+            pagedState[key] = { q, page: 0 };
+            document.getElementById('pl-' + key).innerHTML = pagedListBody(key);
+        }
+        function setPagedListPage(key, page) {
+            pagedState[key].page = Math.max(0, page);
+            document.getElementById('pl-' + key).innerHTML = pagedListBody(key);
+        }
+
+        PAGED_LISTS.recipes = {
+            items: () => [...appState.recipes].sort((a, b) => a.name.localeCompare(b.name, 'pt', { numeric: true })),
+            text: r => [r.name, r.code, r.category, r.responsible, r.version].join(' '),
+            head: '<tr><th>Prato / preparação</th><th>Código</th><th>Versão</th><th>Tipo</th><th>Categoria</th><th>Data</th><th>Responsável</th></tr>',
+            row: r => `<tr><td><button type="button" class="pl-link" onclick="openRecipeView('${escHtml(r.id)}')">${escHtml(r.name)}</button></td>
+                <td><code class="ft-code">${escHtml(r.code || '—')}</code></td><td>${escHtml(r.version || '—')}</td>
+                <td>${r.recipeType === 'sub_recipe' ? 'Preparação' : 'Prato final'}</td><td>${escHtml(r.category || '—')}</td>
+                <td class="ft-num">${r.sheetDate ? escHtml(r.sheetDate.split('-').reverse().join('-')) : '—'}</td><td>${escHtml(r.responsible || '—')}</td></tr>`,
+            empty: 'Ainda não há fichas técnicas. Use «+ Nova Ficha Técnica».'
+        };
+        function buildRecipeList() {
+            return `<section class="work-panel"><h2>Fichas técnicas</h2>
+                <p class="work-muted">Clique no nome para abrir a ficha completa.</p>${pagedListShell('recipes', 'Pesquisar por nome, código, categoria ou responsável')}</section>`;
+        }
+
+        // Ficha técnica só de leitura, no layout do modelo em papel.
+        function openRecipeView(id) {
+            const rec = getRecipe(id);
+            if (!rec) return;
+            appState.selectedRecipeId = id;
+            const role = appState.roles[appState.activeRole];
             const cost = calculateRecipeCost(rec);
-            return `<section class="work-panel"><label class="work-field">Escolher ficha técnica
-                <select onchange="selectRecipe(this.value)">${list.map(r=>`<option value="${escHtml(r.id)}" ${r.id===rec.id?'selected':''}>${escHtml(r.name)}</option>`).join('')}</select></label>
-                <div class="work-actions"><h2>${escHtml(rec.name)}</h2>${editable?`<button class="work-btn" onclick="openRecipeModal('${rec.id}')">Editar ficha</button>`:''}</div>
-                <p class="work-muted">${escHtml(rec.code)} · ${escHtml(rec.category)} · ${rec.recipeType==='sub_recipe'?'Preparação intermédia':'Produto final'}</p>
-                ${rec.version||rec.responsible||rec.sheetDate?`<p class="work-muted">Versão ${escHtml(rec.version||'—')} · ${escHtml(rec.sheetDate||'—')} · Responsável: ${escHtml(rec.responsible||'—')}</p>`:''}
-                <p>Rendimento líquido: <strong>${fmtNum(rec.yieldQuantity*(1-(rec.cookingLossPct||0)/100),3)} ${escHtml(rec.yieldUnit)}</strong>
-                · Custo por ${escHtml(rec.yieldUnit)}: <strong>${fmtEur(cost.unitCost)}</strong></p>
-                <h3>Ingredientes do lote</h3><div class="work-list">${rec.items.map(item=>{
-                    const isPrep=item.type==='sub_recipe';
-                    const ref=isPrep?getRecipe(item.refId):getIngredient(item.refId);
-                    return `<div class="work-row"><strong>${escHtml(ref?.name || 'Artigo indisponível')}</strong>
-                        <span>${fmtNum(item.netQty,3)} ${escHtml(item.unit)} · ${isPrep?'Preparação':'Quantidade líquida'}</span>
-                        ${item.note?`<small>${escHtml(item.note)}</small>`:''}</div>`;
-                }).join('')}</div>
-                <p class="work-muted">Outros custos do lote: ${fmtEur(rec.extraFixedCost||0)} · Custo total: ${fmtEur(cost.batchCost)}</p>
-                ${rec.method?`<h3>Método de confeção</h3><p style="white-space:pre-line">${escHtml(rec.method)}</p>`:''}
-                ${rec.notes?`<h3>Notas</h3><p style="white-space:pre-line">${escHtml(rec.notes)}</p>`:''}
-                <p>Alergénios: <strong>${recipeAllergens(rec).map(escHtml).join(', ') || 'nenhum registado nos ingredientes'}</strong></p>
-                ${rec.recipeType==='final_product'?`<p>PVP sugerido para a meta de ${fmtPct(rec.targetFcPct ?? targetFcPct())}: <strong>${fmtEur(suggestedPvpGross(getChannelMetrics(rec)[0].totalCost, rec.targetFcPct ?? targetFcPct(), rec.vatRate))}</strong> com IVA (Sala)</p>`:''}
-                ${rec.recipeType==='sub_recipe'?`<p>Em stock: <strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0,3)} ${escHtml(rec.yieldUnit)}</strong>${role.canCountInventory?` <button class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>`:''}</p>`:''}
-                ${rec.recipeType==='final_product'?`<details class="work-detail"><summary>Preços e margens por canal</summary><div class="work-list">
-                    ${getChannelMetrics(rec).map(c=>`<div class="work-row"><strong>${escHtml(c.name)}</strong>PVP: ${fmtEur(c.pvpGross)} · Food cost: ${fmtPct(c.foodCostPct)} · Margem: ${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</div>`).join('')}</div></details>`:''}
-                ${editable?`<details class="work-detail"><summary>Outras ações</summary><button class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar ficha</button></details>`:''}</section>`;
+            const isFinal = rec.recipeType === 'final_product';
+            const unitLabel = rec.yieldUnit === 'un' ? 'dose' : rec.yieldUnit;
+            const target = rec.targetFcPct ?? targetFcPct();
+            const found = recipeAllergens(rec);
+            const meta = (label, value) => `<div><span>${label}</span><strong>${value}</strong></div>`;
+            const lines = rec.items.map(item => {
+                const isPrep = item.type === 'sub_recipe';
+                const ref = isPrep ? getRecipe(item.refId) : getIngredient(item.refId);
+                const lineCost = calculateRecipeCost({ ...rec, extraFixedCost: 0, yieldQuantity: 1, cookingLossPct: 0, items: [item] }).batchCost;
+                return `<tr><td><code class="ft-code">${escHtml((isPrep ? ref?.code : ref?.sku) || '—')}</code></td>
+                    <td>${isPrep ? '<span class="ft-tag">Prep.</span> ' : ''}${escHtml(ref?.name || 'Artigo indisponível')}</td>
+                    <td class="ft-num">${fmtNum(item.netQty, 3)}</td><td>${escHtml(item.unit)}</td><td>${escHtml(item.note || '')}</td><td class="ft-num">${fmtEur(lineCost)}</td></tr>`;
+            }).join('');
+            const html = `<div class="ft-sheet ft-ro">
+                <div class="ft-head">
+                    <div class="ft-title"><span>Ficha técnica de restaurante</span><h3>${escHtml(rec.name)}</h3></div>
+                    <div class="ft-meta">
+                        ${meta('Código', `<code>${escHtml(rec.code || '—')}</code>`)}${meta('Versão', escHtml(rec.version || '—'))}
+                        ${meta('Data', rec.sheetDate ? escHtml(rec.sheetDate.split('-').reverse().join('-')) : '—')}${meta('Responsável', escHtml(rec.responsible || '—'))}
+                        ${meta('Dose (n.º de porções)', fmtNum(rec.yieldQuantity, rec.yieldQuantity % 1 ? 2 : 0) + ' ' + escHtml(rec.yieldUnit))}
+                        ${meta('Tipo', isFinal ? 'Prato final' : 'Preparação (sub-receita)')}${meta('Categoria', escHtml(rec.category || '—'))}
+                        ${meta('Food cost pretendido', isFinal ? fmtPct(target) : '—')}${meta('Quebra na confeção', fmtPct(rec.cookingLossPct || 0, 0))}
+                    </div>
+                </div>
+                <div class="ft-grid">
+                    <section class="ft-box ft-ingredients"><h3 class="ft-bar">Ingredientes</h3>
+                        <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Código</th><th>Ingrediente</th><th class="ft-num">Qtd.</th><th>Unid.</th><th>Observações</th><th class="ft-num">Custo</th></tr></thead>
+                        <tbody>${lines || '<tr><td colspan="6" class="ft-empty">Sem ingredientes.</td></tr>'}</tbody></table></div>
+                        <div class="ft-costs">
+                            ${rec.extraFixedCost ? `<div><span>Temperos e guarnições menores</span><strong>${fmtEur(rec.extraFixedCost)}</strong></div>` : ''}
+                            <div><span>Custo total da receita</span><strong>${fmtEur(cost.batchCost)}</strong></div>
+                            <div><span>Custo por ${escHtml(unitLabel)}</span><strong>${fmtEur(cost.unitCost)}</strong></div>
+                            ${isFinal ? '' : `<div><span>Em stock</span><strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0, 3)} ${escHtml(rec.yieldUnit)}</strong></div>`}
+                        </div></section>
+                    <section class="ft-box"><h3 class="ft-bar">Método de confeção</h3><p class="ft-text">${escHtml(rec.method || '—')}</p></section>
+                </div>
+                ${isFinal ? `<section class="ft-box"><h3 class="ft-bar">Preços por canal</h3>
+                    <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Canal</th><th class="ft-num">Taxa</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead><tbody>
+                    ${getChannelMetrics(rec).map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${c.key === 'sala' ? '—' : fmtPct(c.commissionPct, 0)}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td>
+                        <td class="ft-num ${c.foodCostPct <= target ? 'text-emerald-400' : 'text-rose-400'}">${c.pvpGross > 0 ? fmtPct(c.foodCostPct) : '—'}</td><td class="ft-num">${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</td></tr>`).join('')}
+                    </tbody></table></div>
+                    <p class="ft-hint">PVP Sala sugerido para ${fmtPct(target)} de food cost: ${fmtEur(suggestedPvpGross(cost.unitCost, target, rec.vatRate))} (IVA ${fmtPct(rec.vatRate, 0)}).</p></section>` : ''}
+                <div class="ft-grid">
+                    <section class="ft-box"><h3 class="ft-bar">Alergénios (incluindo derivados)</h3>
+                        <ul class="ft-allergens">${ALLERGENS.map(a => `<li class="${found.includes(a) ? 'on' : ''}"><span aria-hidden="true">${found.includes(a) ? '✓' : '—'}</span>${escHtml(a)}${found.includes(a) ? '<span class="sr-only"> (contém)</span>' : ''}</li>`).join('')}</ul></section>
+                    <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
+                </div>
+                <div class="flex flex-wrap justify-end gap-3">
+                    ${role.canEditRecipes ? `<button type="button" class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar</button>` : ''}
+                    ${!isFinal && role.canCountInventory ? `<button type="button" class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>` : ''}
+                    ${role.canEditRecipes ? `<button type="button" class="work-btn primary" onclick="openRecipeModal('${rec.id}')">Editar ficha</button>` : ''}
+                    <button type="button" class="work-btn" onclick="closeModal()">Fechar</button>
+                </div></div>`;
+            openModal('Ficha técnica', `${rec.name} (${rec.code})`, html, 'xl');
         }
 
         function targetFcPct() {
             return appState.storeFinancials[RESTAURANT].targetFc ?? appState.stores[RESTAURANT].targetFc;
         }
-        function buildRecipeOverview() {
-            const target = targetFcPct();
-            const rows = appState.recipes.filter(r => r.recipeType === 'final_product').map(r => {
+        // Food cost de todas as fichas (Sala), do mais alto para o mais baixo, com a meta da loja.
+        PAGED_LISTS.overview = {
+            items: () => appState.recipes.filter(r => r.recipeType === 'final_product').map(r => {
                 const sala = getChannelMetrics(r)[0];
-                return { r, sala, suggested: suggestedPvpGross(sala.totalCost, target, r.vatRate) };
-            }).sort((a, b) => b.sala.foodCostPct - a.sala.foodCostPct);
+                return { r, sala, suggested: suggestedPvpGross(sala.totalCost, targetFcPct(), r.vatRate) };
+            }).sort((a, b) => b.sala.foodCostPct - a.sala.foodCostPct),
+            text: ({ r }) => [r.name, r.code, r.category].join(' '),
+            head: '<tr><th>Prato</th><th class="ft-num">Custo</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">PVP sugerido</th></tr>',
+            row: ({ r, sala, suggested }) => `<tr><td><button type="button" class="pl-link" onclick="openRecipeView('${escHtml(r.id)}')">${escHtml(r.name)}</button></td>
+                <td class="ft-num">${fmtEur(sala.totalCost)}</td><td class="ft-num">${fmtEur(sala.pvpGross)}</td>
+                <td class="ft-num ${sala.foodCostPct > targetFcPct() ? 'text-rose-400' : 'text-emerald-400'}">${sala.pvpGross > 0 ? fmtPct(sala.foodCostPct) : '—'}</td>
+                <td class="ft-num">${fmtEur(suggested)}</td></tr>`,
+            empty: 'Ainda não há pratos finais.'
+        };
+        function buildRecipeOverview() {
             return `<section class="work-panel"><h2>Food cost de todas as fichas (Sala)</h2>
-                <p class="work-muted">Meta: ${fmtPct(target)}. Ordenado do food cost mais alto para o mais baixo. Clique num prato para abrir a ficha.</p>
-                <div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
-                <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 pr-3">Prato</th><th class="py-2 px-3 text-right">Custo</th><th class="py-2 px-3 text-right">PVP c/ IVA</th><th class="py-2 px-3 text-right">Food cost</th><th class="py-2 pl-3 text-right">PVP sugerido</th></tr></thead>
-                <tbody class="divide-y divide-[#1E293B]/60">${rows.map(({ r, sala, suggested }) => `<tr class="cursor-pointer hover:bg-[#111827]/70" onclick="selectRecipe('${r.id}')">
-                    <td class="py-2 pr-3 font-sans text-white">${escHtml(r.name)}</td><td class="py-2 px-3 text-right">${fmtEur(sala.totalCost)}</td><td class="py-2 px-3 text-right">${fmtEur(sala.pvpGross)}</td>
-                    <td class="py-2 px-3 text-right ${sala.foodCostPct > target ? 'text-rose-400' : 'text-emerald-400'}">${sala.pvpGross > 0 ? fmtPct(sala.foodCostPct) : '—'}</td>
-                    <td class="py-2 pl-3 text-right">${fmtEur(suggested)}</td></tr>`).join('')}</tbody></table></div></section>`;
+                <p class="work-muted">Meta: ${fmtPct(targetFcPct())}. Ordenado do food cost mais alto para o mais baixo. Clique num prato para abrir a ficha.</p>
+                ${pagedListShell('overview', 'Pesquisar prato')}</section>`;
         }
         function buildRecipesView() {
             const sub = appState.recipeSubTab === 'dag' ? 'catalogue' : appState.recipeSubTab;
@@ -3797,7 +3895,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
             let content = '';
             if (sub === 'catalogue') {
-                content = buildRecipeSheet(selectedRec,role) + buildRecipeOverview();
+                content = buildRecipeList() + buildRecipeOverview();
             } else if (sub === 'sim') {
                 content = buildCostSimulation(selectedRec);
             } else {
