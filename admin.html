@@ -591,7 +591,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .ft-ro .ft-meta>div span{color:#94a3b8;font-size:.75rem}.ft-ro .ft-meta>div strong{color:#f1f5f9;font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
 @media(min-width:720px){.ft-ro .ft-meta>div:nth-child(4),.ft-ro .ft-meta>div:nth-child(6),.ft-ro .ft-meta>div:nth-child(7){grid-column:span 2}}
 .ft-ro .ft-table td{padding:7px 8px}
-.ft-ro .ft-ingredients .ft-table td:nth-child(2){min-width:140px}
+.ft-ro .ft-top{grid-template-columns:minmax(0,1fr)}
+@media(min-width:900px){.ft-ro .ft-top{grid-template-columns:minmax(0,4fr) minmax(0,1fr)}}
+.ft-ro .ft-ingredients .ft-table td,.ft-ro .ft-ingredients .ft-table th{padding-left:6px;padding-right:6px}
+.ft-ro .ft-ingredients .ft-table th,.ft-ro .ft-ingredients .ft-table td{white-space:normal}
+.ft-ro .ft-ingredients .ft-table th:nth-child(1),.ft-ro .ft-ingredients .ft-table td:nth-child(1){width:4.5rem}
 .ft-sheet .ft-mode{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;border:0;padding:0;margin-bottom:10px}
 .ft-sheet .ft-mode legend{float:left;margin-right:6px;color:#b9c9de;font-size:.8rem}
 .ft-sheet .ft-mode label{display:inline-flex;align-items:center;gap:6px;color:#e2e8f0;font-size:.85rem}
@@ -4343,6 +4347,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         ${meta('Food cost pretendido', isFinal ? fmtPct(target) : '—')}${meta('Quebra na confeção', fmtPct(rec.cookingLossPct || 0, 0))}
                     </div>
                 </div>
+                <div class="ft-grid ft-top">
                     <section class="ft-box ft-ingredients"><h3 class="ft-bar">Ingredientes</h3>
                         <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Código</th><th>Ingrediente</th><th class="ft-num">Qtd.</th><th>Unid.</th><th>Observações</th><th class="ft-num">Custo</th></tr></thead>
                         <tbody>${lines || '<tr><td colspan="6" class="ft-empty">Sem ingredientes.</td></tr>'}</tbody></table></div>
@@ -4352,6 +4357,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             <div><span>Custo por ${escHtml(unitLabel)}</span><strong>${fmtEur(cost.unitCost)}</strong></div>
                             ${isFinal ? '' : `<div><span>Em stock</span><strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0, 3)} ${escHtml(rec.yieldUnit)}</strong></div>`}
                         </div></section>
+                    <section class="ft-box"><h3 class="ft-bar">Método de confeção</h3><p class="ft-text">${escHtml(rec.method || '—')}</p></section>
+                </div>
                 ${isFinal ? `<section class="ft-box"><h3 class="ft-bar">Preços por canal</h3>
                     <div class="ft-scroll"><table class="ft-table"><thead><tr><th>Canal</th><th class="ft-num">Comissão e custos variáveis</th><th class="ft-num">Custos fixos</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead><tbody>
                     ${getChannelMetrics(rec).map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${c.key === 'sala' ? '—' : fmtPct(c.commissionPct + c.varPct, 1)}</td><td class="ft-num">${c.packaging ? fmtEur(c.packaging) : '—'}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td>
@@ -4359,11 +4366,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </tbody></table></div>
                     <p class="ft-hint">${rec.priceMode === 'manual' ? 'Preços escritos à mão nesta ficha.' : `Preços calculados com ${fmtPct(target)} de food cost pretendido e a configuração dos canais de venda.`} IVA ${fmtPct(rec.vatRate, 0)}. Food cost sobre o PVP sem IVA, incluindo os custos fixos do canal.</p></section>` : ''}
                 <div class="ft-grid">
+                <div class="ft-grid">
                     <section class="ft-box"><h3 class="ft-bar">Alergénios (incluindo derivados)</h3>
                         <ul class="ft-allergens">${ALLERGENS.map(a => `<li class="${found.includes(a) ? 'on' : ''}"><span aria-hidden="true">${found.includes(a) ? '✓' : '—'}</span>${escHtml(a)}${found.includes(a) ? '<span class="sr-only"> (contém)</span>' : ''}</li>`).join('')}</ul></section>
-                    <section class="ft-box"><h3 class="ft-bar">Método de confeção</h3><p class="ft-text">${escHtml(rec.method || '—')}</p></section>
+                    <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
                 </div>
-                <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
                 <div class="flex flex-wrap justify-end gap-3">
                     ${role.canEditRecipes ? `<button type="button" class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar</button>` : ''}
                     ${!isFinal && role.canCountInventory ? `<button type="button" class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>` : ''}
