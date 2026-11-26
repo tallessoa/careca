@@ -591,6 +591,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .ft-ro .ft-meta>div span{color:#94a3b8;font-size:.75rem}.ft-ro .ft-meta>div strong{color:#f1f5f9;font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
 @media(min-width:720px){.ft-ro .ft-meta>div:nth-child(4),.ft-ro .ft-meta>div:nth-child(6),.ft-ro .ft-meta>div:nth-child(7){grid-column:span 2}}
 .ft-ro .ft-table td{padding:7px 8px}
+.ft-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}
+.ft-actions .work-btn{height:40px;padding:0 16px;border-radius:10px;font-size:.85rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+.ft-export{display:inline-flex;align-items:center;gap:8px;color:#94a3b8;font-size:.8rem;white-space:nowrap}
+.ft-export .work-btn{background:#1e293b;color:#7dd3fc;border:1px solid #354862}
+.ft-export .work-btn:hover{background:#27364f}
 .ft-ro .ft-top{grid-template-columns:minmax(0,1fr)}
 @media(min-width:900px){.ft-ro .ft-top{grid-template-columns:minmax(0,4fr) minmax(0,1fr)}}
 .ft-ro .ft-ingredients .ft-table td,.ft-ro .ft-ingredients .ft-table th{padding-left:6px;padding-right:6px}
@@ -4366,15 +4371,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </tbody></table></div>
                     <p class="ft-hint">${rec.priceMode === 'manual' ? 'Preços escritos à mão nesta ficha.' : `Preços calculados com ${fmtPct(target)} de food cost pretendido e a configuração dos canais de venda.`} IVA ${fmtPct(rec.vatRate, 0)}. Food cost sobre o PVP sem IVA, incluindo os custos fixos do canal.</p></section>` : ''}
                 <div class="ft-grid">
-                <div class="ft-grid">
                     <section class="ft-box"><h3 class="ft-bar">Alergénios (incluindo derivados)</h3>
                         <ul class="ft-allergens">${ALLERGENS.map(a => `<li class="${found.includes(a) ? 'on' : ''}"><span aria-hidden="true">${found.includes(a) ? '✓' : '—'}</span>${escHtml(a)}${found.includes(a) ? '<span class="sr-only"> (contém)</span>' : ''}</li>`).join('')}</ul></section>
                     <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
                 </div>
-                <div class="flex flex-wrap justify-end gap-3">
+                <div class="ft-actions" role="group" aria-label="Ações da ficha">
                     ${role.canEditRecipes ? `<button type="button" class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar</button>` : ''}
                     ${!isFinal && role.canCountInventory ? `<button type="button" class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>` : ''}
-                    <span class="pl-export" aria-label="Exportar ficha">Exportar: ${exportButtons(rec.id)}</span>
+                    <div class="ft-export" aria-label="Exportar ficha"><span>Exportar</span>${exportButtons(rec.id)}</div>
                     ${role.canEditRecipes ? `<button type="button" class="work-btn primary" onclick="openRecipeModal('${rec.id}')">Editar ficha</button>` : ''}
                     <button type="button" class="work-btn" onclick="closeModal()">Fechar</button>
                 </div></div>`;
@@ -5852,7 +5856,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
     const escapePattern = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const names = [...aliases.keys()].sort((a,b)=>b.length-a.length).map(escapePattern);
     const pattern = new RegExp('(?<![\\p{L}\\p{N}_])(?:'+names.join('|')+')(?![\\p{L}\\p{N}_])','giu');
-    const excluded = '#modal-subtitle,.ft-head,.ft-title,.ft-mode,button,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
+    const excluded = '#modal-subtitle,.ft-head,.ft-title,.ft-mode,.ft-meta,.ft-bar,.ft-table th,.ft-hint,.ft-text,.ft-actions,.ft-export,button,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
     function help(term) {
         const button = document.createElement('button');
         button.type = 'button';
