@@ -310,6 +310,9 @@ function matchIngredient(description, sku = '') {
     const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ');
     const bySku = sku && appState.ingredients.find(i => norm(i.sku).trim() === norm(sku).trim());
     if (bySku) return bySku;
+    // Nome que o fornecedor já usou numa fatura aprovada («Ovos 15dz Classe L» → Ovos).
+    const byName = norm(description).trim() && appState.ingredients.find(i => Object.values(i.supplierNames || {}).some(n => norm(n).trim() === norm(description).trim()));
+    if (byName) return byName;
     const words = new Set(norm(description).split(/\s+/).filter(w => w.length > 2));
     let best = null, score = 0;
     for (const ing of appState.ingredients) {
@@ -340,10 +343,12 @@ function packSize(text) {
 // «Molho de Soja Tradicional Fermentado (Bidão 5 L) Fermentação natural…» → «Molho de Soja Tradicional Fermentado».
 function cleanItemName(text) {
     const full = String(text ?? '').replace(/\s+/g, ' ').trim();
-    let name = full.split(/\s*(?:[(\[;,|]|\s[-–—]\s|\d+(?:[.,]\d+)?\s*[x×]?\s*\d*(?:[.,]\d+)?\s*(?:kgs?|grs?|g|lts?|litros?|l|ml|cl|un|uds?)(?![a-zà-ú]))/i)[0];
+    let name = full.split(/\s*(?:[(\[;,|]|\s[-–—]\s|\d+(?:[.,]\d+)?\s*[x×]?\s*\d*(?:[.,]\d+)?\s*(?:kgs?|grs?|g|lts?|litros?|l|ml|cl|un|uds?|dz|dúzias?|duzias?)(?![a-zà-ú]))/i)[0];
     name = name.replace(/(\s+(?:saco|sacos|caixa|cx|pack|bidão|garrafa|lata|frasco|emb\.?|embalagem|de|com))+$/i, '').trim();
     if (!name) name = full;
     if (name.length > 60) name = name.slice(0, 60).replace(/\s+\S*$/, '');
+    // Faturas em maiúsculas («OVOS») ficam «Ovos» no catálogo.
+    if (name === name.toUpperCase() && /[A-ZÀ-Ú]/.test(name)) name = name.charAt(0) + name.slice(1).toLowerCase();
     return name;
 }
 

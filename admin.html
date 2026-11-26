@@ -2800,6 +2800,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 lines[idx].ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
                     category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' }).id;
             });
+            // Guarda o nome que o fornecedor usa na fatura («Ovos 15dz Classe L»): o artigo fica com o nome curto, a fatura seguinte reconhece-o.
+            rows.forEach((row, idx) => {
+                const ing = !lines[idx].service && getIngredient(lines[idx].ing), desc = String(ocrLine(row).description || '').trim();
+                if (ing && desc) (ing.supplierNames ??= {})[supplierId] = desc;
+            });
             // Aprende a embalagem: se a linha vem em «un»/«cx» sem tamanho e a quantidade foi corrigida (2 caixas → 360 ovos), guarda 180 un por embalagem.
             rows.forEach((row, idx) => {
                 const ing = !lines[idx].service && getIngredient(lines[idx].ing), l = ocrLine(row), q = Number(l.qty);
@@ -2957,6 +2962,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                                 <td class="py-3.5 px-5">
                                                     <div class="font-semibold text-white">${escHtml(i.name)}</div>
                                                     <div class="text-[11px] font-mono text-slate-400">${escHtml(i.sku)} • ${escHtml(i.category)} • ${escHtml(i.zone)}</div>
+                                                    ${Object.entries(i.supplierNames || {}).map(([sid, n]) => `<div class="text-[11px] text-slate-400">${escHtml(getSupplier(sid)?.name || 'Fornecedor removido')} = <span class="text-slate-300">${escHtml(n)}</span></div>`).join('')}
                                                 </td>
                                                 <td class="py-3.5 px-4 text-xs font-mono text-sky-300">${escHtml(i.packLabel)}</td>
                                                 <td class="py-3.5 px-4 text-center">
@@ -3239,7 +3245,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <legend class="text-xs font-mono uppercase text-sky-400 px-1">Preço por fornecedor (€/${escHtml(ing?.baseUnit || 'unid. base')} s/ IVA)</legend>
                         <p class="text-[11px] text-slate-400">As compras aprovadas atualizam estes preços. Deixe em branco os fornecedores que não vendem este artigo.</p>
                         ${appState.suppliers.map(sp => { const q = ing?.supplierPrices?.[sp.id]; return `<label class="flex items-center justify-between gap-3 text-xs text-slate-300">${escHtml(sp.name)}${q ? ` <span class="text-slate-500">(${escHtml(q.date)})</span>` : ''}
-                            <input class="ing-quote w-28 px-2 py-1.5 rounded-lg bg-[#0B1120] border border-[#1E293B] font-mono text-white" data-sup="${sp.id}" type="number" step="any" min="0" value="${q ? q.price : ''}"></label>`; }).join('')}
+                            <input class="ing-quote w-28 px-2 py-1.5 rounded-lg bg-[#0B1120] border border-[#1E293B] font-mono text-white" data-sup="${sp.id}" type="number" step="any" min="0" value="${q ? q.price : ''}"></label>
+                            <label class="block text-[11px] text-slate-400 -mt-1">Nome na fatura de ${escHtml(sp.name)}<input class="ing-supname mt-1 w-full px-2 py-1.5 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs text-white" data-sup="${sp.id}" value="${escHtml(ing?.supplierNames?.[sp.id] || '')}" placeholder="Ex.: Ovos 15dz Classe L"></label>`; }).join('')}
                     </fieldset>
                     <div class="flex justify-end gap-3 pt-2">
                         <button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Cancelar</button>
@@ -3283,6 +3290,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 shelfLifeDays: Math.max(0, Math.round(Number(document.getElementById('ing-shelf').value) || 0)) || null
             };
             const previousQuotes = getIngredient(ingId)?.supplierPrices || {};
+            baseMeta.supplierNames = Object.fromEntries([...document.querySelectorAll('.ing-supname')].filter(i => i.value.trim()).map(i => [i.dataset.sup, i.value.trim()]));
             baseMeta.supplierPrices = Object.fromEntries([...document.querySelectorAll('.ing-quote')].filter(q => Number(q.value) > 0).map(q => {
                 const old = previousQuotes[q.dataset.sup], price = Number(q.value);
                 return [q.dataset.sup, old && old.price === price ? old : { price, date: new Date().toLocaleDateString('sv-SE') }];
