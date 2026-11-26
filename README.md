@@ -36,3 +36,20 @@ Cada artigo do catálogo pode ter «Validade após receção (dias)». Ao recebe
 Os dados vivem no Supabase, no esquema `careca` (ver `supabase/migrations/`). Esse esquema não está exposto na API: o painel só lê através da função `public.careca_painel()`, que recusa quem não estiver em `careca.admins`. Para dar acesso a outra conta: `insert into careca.admins (user_id) select id from auth.users where email = '...';`
 
 Por enquanto as tabelas têm dados de demonstração (`supabase/demo_metricas.sql`, linhas com `demo = true` e nomes «[DEMO]»), porque a app ainda não envia dados. O custo do Gemini é uma estimativa: cada pedido grava os tokens de `usageMetadata` e um trigger calcula o custo com `careca.gemini_precos`. O valor faturado exato só se vê no Google Cloud Billing; os limites de pedidos por minuto/dia, no AI Studio. Quando a Google mudar preços, acrescente uma linha a `careca.gemini_precos` com a nova data.
+
+## Publicar online
+
+O site é estático (HTML + JS, sem build). O Netlify (site `kareca`) publica o branch `main` em https://kareca.netlify.app a cada merge e cria uma pré-visualização para cada pull request. Não são precisas variáveis de ambiente no Netlify.
+
+**Chaves**
+- O URL do Supabase e a chave `sb_publishable_…` podem estar no código: são públicas por natureza. A proteção está nas funções `public.careca_*`, que verificam quem pede.
+- A chave secreta (`sb_secret_…` / `service_role`) e a palavra-passe da base de dados nunca entram no repositório nem no browser.
+- A chave do Gemini fica em `careca.config` e só a Edge Function `careca-ocr` a usa.
+
+**Integração GitHub do Supabase** (Project Settings → Integrations)
+- Working directory: `.` · Production branch: `main`. Cada migração nova em `supabase/migrations/` corre na base de dados de produção ao fazer merge.
+- O nome de cada ficheiro de migração tem de coincidir com a versão já aplicada (`list_migrations`), senão a migração corre duas vezes.
+- «Automatic branching» cria bases de dados de pré-visualização pagas; deixar desligado.
+
+**Login**
+O `admin/admin` do backoffice é verificado no Supabase, mas é uma palavra-passe conhecida e partilhada. Antes de haver dados reais, mude-a (ver «Dados») ou passe o login para o Supabase Auth, como já faz o `metricas.html`.
