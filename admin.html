@@ -2848,6 +2848,20 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             return pdfJsLoading;
         }
         // QR fiscal (A:NIF*B:...) lido no browser com o jsQR (Apache-2.0, vendor/). Devolve '' se não houver QR fiscal legível.
+        // Cinzento com contraste esticado (1% mais escuro → preto, 1% mais claro → branco), para fotos baças ou com papel amarelado.
+        function qrContrast(data) {
+            const n = data.length / 4, hist = new Uint32Array(256), out = new Uint8ClampedArray(data.length);
+            for (let i = 0; i < data.length; i += 4) hist[(data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8]++;
+            let lo = 0, hi = 255;
+            for (let acc = 0; lo < 255 && (acc += hist[lo]) < n * 0.01; lo++);
+            for (let acc = 0; hi > 0 && (acc += hist[hi]) < n * 0.01; hi--);
+            const k = 255 / Math.max(1, hi - lo);
+            for (let i = 0; i < data.length; i += 4) {
+                const v = ((data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8) - lo;
+                out[i] = out[i + 1] = out[i + 2] = v * k; out[i + 3] = 255;
+            }
+            return out;
+        }
         // Se o leitor não carregar, lança o erro (o botão «Ler QR» mostra-o); quem lê a fatura toda ignora-o.
         async function readFiscalQr(file) {
             await loadScript('vendor/jsQR.js');
@@ -2878,7 +2892,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         const c = document.createElement('canvas');
                         c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
                         const ctx = c.getContext('2d'); ctx.drawImage(src, 0, 0, c.width, c.height);
-                        const hit = fiscal(jsQR(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height)?.data);
+                        const img = ctx.getImageData(0, 0, c.width, c.height);
+                        const hit = fiscal(jsQR(img.data, c.width, c.height)?.data) || fiscal(jsQR(qrContrast(img.data), c.width, c.height)?.data);
                         if (hit) return hit;
                     }
                 }
