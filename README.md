@@ -26,3 +26,20 @@ Uma linha com vários produtos (por exemplo, um kit) pode ser dividida na revis�
 ## Validades e artigos parados
 
 Cada artigo do catálogo pode ter «Validade após receção (dias)». Ao receber mercadoria, a validade do stock passa a ser a data do documento mais esses dias, exceto se o lote anterior ainda estava dentro do prazo e termina antes: nesse caso mantém-se a data mais próxima. Pode corrigir a data em Inventário → Validades e artigos parados. Há alertas para validade passada, validade a terminar (2 dias) e artigos sem saídas há mais dias do que o definido em Definições (14 por omissão).
+
+## Publicar online
+
+O site é estático (HTML + JS, sem build). O Netlify (site `kareca`) publica o branch `main` em https://kareca.netlify.app a cada merge, e cria uma pré-visualização para cada pull request. Não são precisas variáveis de ambiente no Netlify enquanto não houver funções no servidor.
+
+**Chaves**
+- O URL do Supabase e a chave `sb_publishable_…` podem estar no código: são públicas por natureza. A proteção está no servidor (RLS e a verificação em `careca.admins` dentro de `public.careca_painel()`).
+- A chave secreta (`sb_secret_…` / `service_role`) e a palavra-passe da base de dados nunca entram no repositório nem no browser. Se forem precisas, vão para os segredos das Edge Functions do Supabase ou para as variáveis de ambiente do Netlify.
+- A chave do Gemini fica no `localStorage` de cada browser. Para a esconder, a chamada ao Gemini tem de passar para uma Edge Function com a chave em segredo.
+
+**Integração GitHub do Supabase** (Project Settings → Integrations)
+- Working directory: `.` · Production branch: `main`.
+- O projeto Supabase é partilhado com o sistema de reservas. Com «Deploy to production» ligado, cada migração nova em `supabase/migrations/` corre na base de dados de produção ao fazer merge. O nome de cada ficheiro tem de coincidir com a versão já aplicada (`list_migrations`), senão a migração corre duas vezes.
+- «Automatic branching» cria bases de dados de pré-visualização pagas; deixar desligado.
+
+**Login**
+O `admin/admin` do backoffice é verificado no browser, por isso não protege nada: só serve enquanto os dados vivem no `localStorage` de cada visitante (cada pessoa vê apenas os seus). Antes de guardar dados de restaurantes no Supabase, o login tem de passar para o Supabase Auth, como já faz o `metricas.html`.
