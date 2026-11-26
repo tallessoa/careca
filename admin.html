@@ -740,8 +740,17 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     for (const k of remove) delete synced[k];
                 } catch (err) {
                     if (err.code === '40001') {
-                        window.alert('Os dados foram alterados noutro browser. A página vai carregar a versão guardada no Supabase.');
-                        return location.reload();
+                        // Outro browser/separador gravou entretanto: as áreas alteradas aqui ganham, as restantes passam a ser as do Supabase.
+                        // shortcut: junta por área (faturas, artigos…), não por registo; se os dois lados mexerem na mesma área ganha este.
+                        try {
+                            const remote = await rpc('careca_backoffice_ler', auth());
+                            version = remote.versao;
+                            synced = Object.fromEntries(Object.entries(remote.partes).map(([k, v]) => [k, JSON.stringify(v)]));
+                            for (const [k, v] of Object.entries(remote.partes)) if (!(k in parts) && !['roles', 'stores', 'activeStore'].includes(k)) appState[k] = v;
+                            again = true;
+                            persistState(); renderActiveView(); updateChrome();
+                        } catch (e2) { showToast('Não foi possível guardar no Supabase', 'As alterações ficaram neste browser. ' + e2.message, 'warning'); }
+                        return;
                     }
                     // Fica no localStorage e volta a tentar na próxima alteração ou ao recarregar.
                     showToast('Não foi possível guardar no Supabase', 'As alterações ficaram neste browser. ' + err.message, 'warning');
@@ -1156,8 +1165,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         function setup(table) {
             if (table.dataset.pagedReady || !table.tBodies[0]) return;
             table.dataset.pagedReady = '1';
-            const key = table.dataset.paged, size = Number(table.dataset.pageSize) || 10;
-            const st = state[key] ||= { q: '', page: 0 };
+            const key = table.dataset.paged;
+            const st = state[key] ||= { q: '', page: 0, size: Number(table.dataset.pageSize) || 10 };
             const box = table.closest('.overflow-x-auto, .ft-scroll') || table;
             const tools = document.createElement('div');
             tools.className = 'pl-tools';
@@ -1178,18 +1187,20 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             function update() {
                 const q = norm(st.q.trim());
                 const hits = q ? rows.filter(r => norm(r.textContent).includes(q)) : rows;
-                const pages = Math.max(1, Math.ceil(hits.length / size));
+                const size = st.size, pages = Math.max(1, Math.ceil(hits.length / size));
                 st.page = Math.min(Math.max(0, st.page), pages - 1);
                 const shown = new Set(hits.slice(st.page * size, st.page * size + size));
                 rows.forEach(r => { r.hidden = !shown.has(r); });
                 empty.hidden = !(rows.length && !hits.length);
                 const from = hits.length ? st.page * size + 1 : 0, to = st.page * size + shown.size;
-                pager.innerHTML = `<span>${from}–${to} de ${hits.length}</span>
+                pager.innerHTML = `<label>Por página <select data-size>${[10, 25, 50, 100].map(n => `<option ${n === size ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+                    <span>${from}–${to} de ${hits.length}</span>
                     <button type="button" class="work-btn" data-go="-1" ${st.page === 0 ? 'disabled' : ''}>‹ Anterior</button>
                     <span>Página ${st.page + 1} de ${pages}</span>
                     <button type="button" class="work-btn" data-go="1" ${st.page >= pages - 1 ? 'disabled' : ''}>Seguinte ›</button>`;
             }
             input.addEventListener('input', () => { st.q = input.value; st.page = 0; update(); });
+            pager.addEventListener('change', e => { if (e.target.matches('[data-size]')) { st.size = Number(e.target.value); st.page = 0; update(); } });
             pager.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { st.page += Number(b.dataset.go); update(); } });
             update();
         }
@@ -2057,7 +2068,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
         function openFinancialsModal() {
             const sf = appState.storeFinancials[RESTAURANT];
-            const field = (id, label, value) => `<label class="block text-xs text-slate-300">${label}<input id="${id}" type="number" step="0.01" min="0" required value="${value}" class="mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white"></label>`;
+            const field = (id, label, value) => `<label class="block text-xs text-slate-300">${label}<input id="${id}" type="text" inputmode="decimal" required value="${String(value).replace('.', ',')}" class="mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white"></label>`;
             openModal('Custos do mês', periodLabel(sf.period), `<form onsubmit="saveFinancials(event)" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     ${field('fin-payroll', 'Pessoal (salários e encargos) €', sf.payroll)}
@@ -2072,7 +2083,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             e.preventDefault();
             const role = appState.roles[appState.activeRole];
             if (!role.canApproveInvoices || !role.canViewDre) return;
-            const num = id => Number(document.getElementById(id).value);
+            // Aceita «1.250,50» e «1250.50».
+            const num = id => { const v = document.getElementById(id).value.trim().replace(/\s|€|%/g, ''); return Number(v.includes(',') ? v.replace(/\./g, '').replace(',', '.') : v); };
             const values = { payroll: num('fin-payroll'), fixedCosts: num('fin-fixed'), targetFc: num('fin-target') };
             if (Object.values(values).some(v => !(v >= 0)) || values.targetFc <= 0 || values.targetFc >= 100) { showToast('Rever valores', 'Use valores positivos e uma meta entre 0 e 100%.', 'warning'); return; }
             Object.assign(appState.storeFinancials[RESTAURANT], values);
@@ -2111,11 +2123,24 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         // --------------------------------------------------------------------
         // PAINEL 2: COMPRAS & FATURAS (MANUAL + PREVIEW GEMINI OCR)
         // --------------------------------------------------------------------
+        // Período da lista de faturas: um mês ou De/Até. Fica em memória enquanto a página está aberta.
+        const invPeriod = { month: '', from: '', to: '' };
+        function setInvoicePeriod(field, value = '') {
+            if (field === 'clear') Object.assign(invPeriod, { month: '', from: '', to: '' });
+            else if (field === 'month') {
+                const [y, m] = value.split('-').map(Number);
+                Object.assign(invPeriod, { month: value, from: value && value + '-01', to: value && value + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0') });
+            } else Object.assign(invPeriod, { [field]: value, month: '' });
+            renderActiveView();
+        }
         function buildPurchasesView() {
             const role = appState.roles[appState.activeRole];
-            const list = appState.invoices.filter(inv => inv.store === appState.activeStore);
-            const totalApproved = list.filter(i => i.status === 'Aprovada').reduce((acc, i) => acc + i.net, 0);
-            const pendingCount = list.filter(i => i.status !== 'Aprovada').length;
+            const all = appState.invoices.filter(inv => inv.store === appState.activeStore);
+            const totalApproved = all.filter(i => i.status === 'Aprovada').reduce((acc, i) => acc + i.net, 0);
+            const pendingCount = all.filter(i => i.status !== 'Aprovada').length;
+            const { from, to } = invPeriod;
+            const list = all.filter(inv => (!from || inv.date >= from) && (!to || inv.date <= to)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+            const dateField = 'mt-1 block w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white';
 
             return `
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2138,7 +2163,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
                         <div class="text-xs text-slate-400">Total Compras Aprovadas (Líquido)</div>
                         <div class="mt-1.5 font-mono font-bold text-2xl text-white tabular-nums">${fmtEur(totalApproved)}</div>
@@ -2147,32 +2172,28 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <div class="text-xs text-slate-400">Documentos Pendentes de Revisão</div>
                         <div class="mt-1.5 font-mono font-bold text-2xl text-amber-400 tabular-nums">${pendingCount}</div>
                     </div>
-                    <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
-                        <div class="text-xs text-slate-400">Leitura de faturas (OCR)</div>
-                        <div class="mt-1.5 font-mono font-semibold text-sm ${restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full ${restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
-                            ${restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
-                        </div>
-                        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono">
-                            <button onclick="openSettingsModal()" class="text-sky-400 underline">Definições</button>
-                            ${role.canApproveInvoices ? `<button onclick="openOcrReview({...OCR_SAMPLE, customer_nif: restaurantNif()}, 'exemplo-fatura.pdf')" class="text-sky-400 underline">Ver exemplo</button>
-                            <button onclick="openOcrReview({...OCR_SAMPLE, invoice_number: 'FT 2026/9944', customer_nif: '501234567', customer_name: 'Outro Restaurante, Lda.'}, 'exemplo-nif-errado.pdf')" class="text-sky-400 underline">Exemplo com NIF errado</button>` : ''}
-                        </div>
-                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-end gap-3">
+                    <label class="text-xs text-slate-400" style="flex:1 1 9rem;max-width:14rem">Mês<input type="month" value="${invPeriod.month}" onchange="setInvoicePeriod('month', this.value)" class="${dateField}"></label>
+                    <label class="text-xs text-slate-400" style="flex:1 1 9rem;max-width:14rem">De<input type="date" value="${from}" onchange="setInvoicePeriod('from', this.value)" class="${dateField}"></label>
+                    <label class="text-xs text-slate-400" style="flex:1 1 9rem;max-width:14rem">Até<input type="date" value="${to}" onchange="setInvoicePeriod('to', this.value)" class="${dateField}"></label>
+                    ${from || to ? `<button type="button" onclick="setInvoicePeriod('clear')" class="px-3 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:text-white">Todas as datas</button>` : ''}
                 </div>
 
                 <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] overflow-hidden">
                     <div class="overflow-x-auto">
                         <table data-paged="invoices" class="w-full text-left border-collapse">
                             <thead>
-                                <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
-                                    <th class="py-3.5 px-5">Fatura</th>
-                                    <th class="py-3.5 px-4">Fornecedor &amp; NIF</th>
+                                <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60 whitespace-nowrap">
+                                    <th class="py-3.5 px-5">Documento</th>
+                                    <th class="py-3.5 px-4">Fornecedor</th>
+                                    <th class="py-3.5 px-4">NIF</th>
                                     <th class="py-3.5 px-4">Data</th>
                                     <th class="py-3.5 px-4 text-right">Líquido</th>
                                     <th class="py-3.5 px-4 text-right">IVA</th>
                                     <th class="py-3.5 px-4 text-right">Total</th>
-                                    <th class="py-3.5 px-5 text-right">Estado / Ação</th>
+                                    <th class="py-3.5 px-5 text-right">Estado</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#1E293B]/60 text-sm">
@@ -2181,36 +2202,31 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                     const stBadge = inv.status === 'Aprovada'
                                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                                         : 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-                                    const typeColor = inv.docType === 'Nota de Crédito' ? 'text-rose-400' : inv.docType === 'Guia de Remessa' ? 'text-amber-300' : 'text-sky-400';
-
+                                    const idx = appState.invoices.indexOf(inv);
+                                    const nifWrong = inv.source && inv.customerNif !== restaurantNif();
+                                    // Produtos escondidos: a pesquisa da tabela também os encontra, mas só aparecem no detalhe.
+                                    const items = (inv.lines || []).map(l => l.service ? l.label : getIngredient(l.ing)?.name).concat(inv.itemsSummary || '').join(' ');
                                     return `
-                                        <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver detalhe" onclick="openInvoiceDetail(${appState.invoices.indexOf(inv)})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${appState.invoices.indexOf(inv)})">
-                                            <td class="py-3.5 px-5">
-                                                <div class="font-mono font-semibold text-white">${escHtml(inv.id)}</div>
-                                                <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}</div>
-                                                ${inv.source && inv.customerNif !== restaurantNif() ? `<div class="text-[11px] font-mono text-rose-400">NIF adquirente: ${escHtml(inv.customerNif || 'em falta')}</div>` : ''}
-                                            </td>
+                                        <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver itens e detalhe" onclick="openInvoiceDetail(${idx})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${idx})">
+                                            <td class="py-3.5 px-5 font-mono font-semibold text-white whitespace-nowrap">${escHtml(inv.id)}<span hidden> ${escHtml(items)}</span></td>
                                             <td class="py-3.5 px-4">
                                                 <div class="font-medium text-white">${sup ? escHtml(sup.name) : 'Fornecedor Removido'}</div>
-                                                <div class="text-xs font-mono text-slate-400">NIF ${sup ? escHtml(sup.nif) : '-'}</div>
+                                                ${sup?.tradeName ? `<div class="text-xs text-slate-400">${escHtml(sup.tradeName)}</div>` : ''}
                                             </td>
-                                            <td class="py-3.5 px-4 font-mono text-xs text-slate-400">${escHtml(inv.date)}</td>
-                                            <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-200">${fmtEur(inv.net)}</td>
-                                            <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-400">${fmtEur(inv.vat)}</td>
-                                            <td class="py-3.5 px-4 text-right font-mono font-bold tabular-nums text-white">${fmtEur(inv.total)}</td>
+                                            <td class="py-3.5 px-4 font-mono text-xs text-slate-400 whitespace-nowrap">${sup ? escHtml(sup.nif) : '-'}</td>
+                                            <td class="py-3.5 px-4 font-mono text-xs text-slate-400 whitespace-nowrap">${escHtml(inv.date)}</td>
+                                            <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-200 whitespace-nowrap">${fmtEur(inv.net)}</td>
+                                            <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-400 whitespace-nowrap">${fmtEur(inv.vat)}</td>
+                                            <td class="py-3.5 px-4 text-right font-mono font-bold tabular-nums text-white whitespace-nowrap">${fmtEur(inv.total)}</td>
                                             <td class="py-3.5 px-5 text-right">
-                                                ${inv.status !== 'Aprovada' ? (
-                                                    role.canApproveInvoices ? `
-                                                        <button onclick="event.stopPropagation();approveExistingInvoice(appState.invoices[${appState.invoices.indexOf(inv)}].id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">
-                                                            Aprovar
-                                                        </button>
-                                                    ` : `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">Em Revisão</span>`
-                                                ) : `
-                                                    <span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">✓ Aprovada</span>
-                                                `}
+                                                <div class="inline-flex items-center justify-end gap-2 whitespace-nowrap">
+                                                    ${nifWrong ? `<span class="inline-flex px-2 py-1 rounded-full text-[11px] font-mono border bg-rose-500/15 text-rose-400 border-rose-500/30" title="NIF adquirente: ${escHtml(inv.customerNif || 'em falta')}">NIF errado</span>` : ''}
+                                                    ${inv.status !== 'Aprovada' && role.canApproveInvoices
+                                                        ? `<button onclick="event.stopPropagation();approveExistingInvoice(appState.invoices[${idx}].id)" class="px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">Aprovar</button>`
+                                                        : `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">${inv.status === 'Aprovada' ? '✓ Aprovada' : 'Em Revisão'}</span>`}
+                                                </div>
                                             </td>
-                                        </tr>
-                                    `;
+                                        </tr>`;
                                 }).join('')}
                             </tbody>
                         </table>
@@ -2239,7 +2255,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ${info('Número', escHtml(inv.id))}
                     ${info('ATCUD', escHtml(inv.atcud || '—'))}
                     ${info('Estado', escHtml(inv.status))}
-                    ${info('Origem', escHtml(inv.source || 'Registo manual'))}
+                    ${info('Origem', escHtml(inv.source ? inv.source.split(' · ')[0] : 'Registo manual'))}
                     ${inv.receiptRef ? info('Guia faturada', escHtml(inv.receiptRef)) : ''}
                     ${inv.billedBy ? info('Faturada em', escHtml(inv.billedBy)) : ''}
                     ${inv.orderId ? info('Encomenda', escHtml(inv.orderId)) : ''}
@@ -3040,7 +3056,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const rows = ex.lines.map((l, idx) => ocrRowHtml(l, idx)).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal((via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF') + (order ? ' · encomenda ' + order.id : ''), fileName, `<div id="ocr-review" class="space-y-4 text-sm">
+            openModal((via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF') + (order ? ' · encomenda ' + order.id : ''), ex.invoice_number || 'Número por confirmar', `<div id="ocr-review" class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
