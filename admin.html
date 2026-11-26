@@ -517,20 +517,97 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             <p id="login-error" role="alert" class="hidden text-xs text-rose-400">Utilizador ou palavra-passe incorretos.</p>
             <button class="w-full py-2 rounded-lg text-sm font-semibold bg-sky-600 hover:bg-sky-500 text-white">Entrar</button>
         </form>
+        <p id="login-wait" class="text-sm text-slate-400">A carregar dados…</p>
     </div>
     <script>
-        // shortcut: credenciais fixas no código só afastam visitas casuais, qualquer pessoa as lê no código-fonte; ao passar para online, usar autenticação no servidor.
-        (() => {
-            const gate = document.getElementById('login-gate'), key = 'kareca_admin_sessao';
-            try { if (sessionStorage.getItem(key) === '1') return gate.remove(); } catch {}
-            document.getElementById('login-form').addEventListener('submit', e => {
+        // Dados do backoffice no Supabase (esquema careca, ver supabase/migrations/20261126160000_careca_backoffice.sql).
+        // O localStorage fica como cópia local: a app lê-o ao arrancar e o karecaSync envia para o Supabase as áreas que mudaram.
+        // shortcut: utilizador e palavra-passe ficam no sessionStorage e seguem em cada pedido; ao abrir a mais pessoas, passar a Supabase Auth.
+        window.karecaSync = (() => {
+            const URL_RPC = 'https://fgxxaenvuzkbmllnsdxj.supabase.co/rest/v1/rpc/', API_KEY = 'sb_publishable_AwB8iD34jREa3LrkJSw3cw_ubDTXh5b';
+            const SESSION = 'kareca_admin_sessao', STATE = 'kareca_restaurante_chiado_v2', VERSION = 'kareca_backoffice_versao', RESTAURANT = 'chiado';
+            // Preferências de ecrã: ficam só neste browser.
+            const LOCAL_ONLY = ['activeTab', 'supplierSubTab', 'recipeSubTab', 'activeBcgQuadrant', 'selectedRecipeId', 'activeZone', 'activeRole', 'recipeFormRows'];
+            const gate = document.getElementById('login-gate'), form = document.getElementById('login-form'), error = document.getElementById('login-error');
+            let creds = null, version = 0, synced = {}, timer = null, busy = false, again = false, ready;
+            const readyPromise = new Promise(r => { ready = r; });
+
+            async function rpc(fn, args) {
+                const res = await fetch(URL_RPC + fn, { method: 'POST', headers: { apikey: API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+                const body = await res.json().catch(() => null);
+                if (!res.ok) throw Object.assign(Error(body?.message || 'Erro ' + res.status), { code: body?.code });
+                return body;
+            }
+            const auth = () => ({ p_utilizador: creds.u, p_senha: creds.p, p_restaurante: RESTAURANT });
+            const wait = document.getElementById('login-wait');
+            const showError = msg => { form.hidden = false; wait.hidden = true; error.textContent = msg; error.classList.remove('hidden'); };
+
+            async function start() {
+                form.hidden = true; wait.hidden = false;
+                let remote;
+                try { remote = await rpc('careca_backoffice_ler', auth()); }
+                catch (err) {
+                    if (err.code === '28P01') { try { sessionStorage.removeItem(SESSION); } catch {} creds = null; return showError('Utilizador ou palavra-passe incorretos.'); }
+                    return showError('Sem ligação ao Supabase: ' + err.message + '. Tente entrar de novo.');
+                }
+                let local = null;
+                try { local = JSON.parse(localStorage.getItem(STATE) || 'null'); } catch {}
+                const localVersion = Number(localStorage.getItem(VERSION) || 0);
+                if (remote.versao > 0 && remote.versao !== localVersion) {
+                    // Outro browser gravou depois: o Supabase ganha e a página recarrega com esses dados.
+                    localStorage.setItem(STATE, JSON.stringify({ ...(local || {}), ...remote.partes }));
+                    localStorage.setItem(VERSION, String(remote.versao));
+                    return location.reload();
+                }
+                version = remote.versao;
+                synced = Object.fromEntries(Object.entries(remote.partes).map(([k, v]) => [k, JSON.stringify(v)]));
+                gate.remove();
+                ready();
+                schedule(0); // envia o que só existe neste browser (primeira vez, cópia importada, alterações sem rede)
+            }
+
+            function schedule(delay = 700) { clearTimeout(timer); timer = setTimeout(push, delay); }
+            async function push() {
+                await readyPromise;
+                if (busy) { again = true; return; }
+                const state = { ...appState };
+                const parts = {}, current = {};
+                for (const [k, v] of Object.entries(state)) {
+                    if (LOCAL_ONLY.includes(k) || v === undefined) continue;
+                    current[k] = JSON.stringify(v);
+                    if (current[k] !== synced[k]) parts[k] = v;
+                }
+                const remove = Object.keys(synced).filter(k => !(k in current));
+                if (!Object.keys(parts).length && !remove.length) return;
+                busy = true;
+                try {
+                    version = await rpc('careca_backoffice_gravar', { ...auth(), p_versao_base: version, p_partes: parts, p_apagar: remove });
+                    localStorage.setItem(VERSION, String(version));
+                    for (const k of Object.keys(parts)) synced[k] = current[k];
+                    for (const k of remove) delete synced[k];
+                } catch (err) {
+                    if (err.code === '40001') {
+                        window.alert('Os dados foram alterados noutro browser. A página vai carregar a versão guardada no Supabase.');
+                        return location.reload();
+                    }
+                    // Fica no localStorage e volta a tentar na próxima alteração ou ao recarregar.
+                    showToast('Não foi possível guardar no Supabase', 'As alterações ficaram neste browser. ' + err.message, 'warning');
+                } finally {
+                    busy = false;
+                    if (again) { again = false; schedule(); }
+                }
+            }
+
+            try { const saved = JSON.parse(sessionStorage.getItem(SESSION)); if (saved?.u) creds = saved; } catch {}
+            form.addEventListener('submit', e => {
                 e.preventDefault();
-                const f = e.target;
-                if (f.user.value.trim() === 'admin' && f.pass.value === 'admin') {
-                    try { sessionStorage.setItem(key, '1'); } catch {}
-                    gate.remove();
-                } else document.getElementById('login-error').classList.remove('hidden');
+                creds = { u: form.user.value.trim(), p: form.pass.value };
+                try { sessionStorage.setItem(SESSION, JSON.stringify(creds)); } catch {}
+                error.classList.add('hidden');
+                start();
             });
+            if (creds) start(); else wait.hidden = true;
+            return { schedule };
         })();
     </script>
 
@@ -1125,6 +1202,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const json = JSON.stringify(copy);
                 localStorage.setItem(STORAGE_KEY,json);
                 storageBaseline = json;
+                window.karecaSync.schedule();
             } catch (err) {
                 if (err.message === 'Conflito entre janelas') throw err;
                 window.alert('Falha ao guardar neste navegador. As alterações estão apenas nesta janela.');
@@ -1135,7 +1213,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         function confirmResetDemoData() {
             const html = `
                 <div class="space-y-4">
-                    <p class="text-sm text-slate-300">Esta ação apaga todos os dados guardados neste browser (<span class="font-mono text-sky-400">localStorage</span>): fornecedores, artigos, receitas, faturas, vendas e inventário. Exporte uma cópia antes se quiser guardá-los.</p>
+                    <p class="text-sm text-slate-300">Esta ação apaga todos os dados guardados no Supabase e neste browser: fornecedores, artigos, receitas, faturas, vendas e inventário. Exporte uma cópia antes se quiser guardá-los.</p>
                     <div class="flex justify-end gap-3 pt-2">
                         <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
                         <button onclick="executeResetDemoData()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white">Apagar Dados</button>
