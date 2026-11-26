@@ -114,6 +114,7 @@ function render(d) {
 
   <div class="sec-t">Gemini (leitura de faturas)</div>
   <div class="banner info">Custo <b>estimado</b> a partir dos tokens de cada pedido e da tabela de preços abaixo (nível pago). A chave do AI Studio não tem API de consumo: o valor faturado exato está no <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud Billing</a> e os limites reais de pedidos por minuto e por dia em <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">AI Studio → Uso e limites</a>. Se a chave estiver no nível gratuito, o custo real é 0.</div>
+  <div id="gemini-cfg" style="margin-bottom:12px"></div>
   <div class="grid k4">
     ${kpi('Gasto este mês (estimado)', usd(m.custo_usd), `mês anterior: ${usd(g.mes_anterior_usd)}`)}
     ${kpi('Previsão até fim do mês', usd(previsao), `ao ritmo atual · total desde o início ${usd(g.total_usd)}`)}
@@ -158,9 +159,31 @@ function render(d) {
   </div>`;
 }
 
+function renderConfig(c) {
+  const el = $('gemini-cfg');
+  if (!el || !c) return;
+  const dis = c.pode_editar ? '' : 'disabled';
+  el.innerHTML = `<form class="card" id="cfg-form"><h2>Configuração do Gemini</h2>
+    <p class="small ${c.chave_fim ? '' : 'mut'}" style="margin-bottom:10px">${c.chave_fim ? `Chave configurada: ••••${esc(c.chave_fim)} · atualizada a ${data(c.atualizado_em)}` : '<b style="color:var(--warn)">Sem chave:</b> a leitura de faturas com OCR não funciona até configurar uma.'}</p>
+    <div class="grid k4">
+      <label class="small">Nova chave da API (Google AI Studio)<input id="cfg-chave" type="password" autocomplete="off" placeholder="${c.chave_fim ? 'deixe vazio para manter' : 'AIza…'}" ${dis}></label>
+      <label class="small">Modelo<select id="cfg-modelo" ${dis} style="width:100%;margin-top:4px;background:#030712;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:inherit">${(c.modelos || []).map(m => `<option ${m === c.modelo ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></label>
+      <label class="small">Orçamento mensal (USD)<input id="cfg-orc" type="number" min="0" step="1" value="${esc(c.orcamento_usd ?? '')}" required ${dis}></label>
+      <div style="display:flex;align-items:flex-end"><button style="width:100%" ${dis}>Guardar</button></div>
+    </div>
+    <p class="mut small" style="margin-top:8px">${c.pode_editar ? 'A chave fica no servidor e nunca volta ao browser. Ao atingir o orçamento do mês, a leitura de faturas para até o aumentar.' : 'Para alterar, saia e entre com a conta Gmail de administrador.'}</p>
+    <div id="cfg-msg"></div></form>`;
+  $('cfg-form').onsubmit = async e => {
+    e.preventDefault();
+    const { error } = await sb.rpc('careca_gemini_config_guardar', { p_chave: $('cfg-chave').value, p_modelo: $('cfg-modelo').value, p_orcamento_usd: Number($('cfg-orc').value) });
+    if (error) { $('cfg-msg').innerHTML = `<div class="banner err" style="margin-top:8px">${esc(error.message)}</div>`; return; }
+    carregar();
+  };
+}
+
 async function carregar() {
   $('msg').innerHTML = '<p class="mut">A carregar…</p>';
-  const { data: d, error } = await sb.rpc('careca_painel');
+  const [{ data: d, error }, { data: cfg }] = await Promise.all([sb.rpc('careca_painel'), sb.rpc('careca_gemini_config')]);
   if (error) {
     $('out').innerHTML = '';
     const semAcesso = demoLogin() ? 'O acesso admin/admin só funciona enquanto os dados forem de demonstração. Saia e entre com a conta Gmail.' : 'Esta conta não tem acesso às métricas.';
@@ -168,6 +191,7 @@ async function carregar() {
     return;
   }
   render(d);
+  renderConfig(cfg);
 }
 
 async function mostrar(sessao) {
