@@ -596,6 +596,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .pl-table td{padding:8px}.pl-link{color:#7dd3fc;font-weight:600;text-align:left}.pl-link:hover{text-decoration:underline}
 .pl-pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;margin:10px 12px;font-size:.8rem;color:#94a3b8}
 .pl-pager span:first-child{margin-right:auto}
+.pl-export{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#94a3b8;font-size:.8rem}.pl-mini{padding:3px 9px;border-radius:6px;border:1px solid #354862;color:#7dd3fc;font-size:.75rem;font-weight:600}.pl-mini:hover{background:#1e293b}
 .ft-addch{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin:10px 12px 12px!important}.ft-addch label:first-child{flex:1 1 200px}.ft-addch label:nth-child(2){flex:0 1 100px}.ft-addch .ft-add{margin:0}
 .ft-channels td input{min-width:80px}
 .ft-mode{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -4187,15 +4188,120 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             return `<tr><td><button type="button" class="pl-link" onclick="openRecipeView('${escHtml(r.id)}')">${escHtml(r.name)}</button></td>
                 <td><code class="ft-code">${escHtml(r.code || '—')}</code></td><td>${escHtml(r.version || '—')}</td>
                 <td>${r.recipeType === 'sub_recipe' ? 'Preparação' : 'Prato final'}</td><td>${escHtml(r.category || '—')}</td>
-                <td class="ft-num">${r.sheetDate ? escHtml(r.sheetDate.split('-').reverse().join('-')) : '—'}</td><td>${escHtml(r.responsible || '—')}</td></tr>`;
+                <td class="ft-num">${r.sheetDate ? escHtml(r.sheetDate.split('-').reverse().join('-')) : '—'}</td><td>${escHtml(r.responsible || '—')}</td>
+                <td><span class="pl-export">${exportButtons(r.id, 'pl-mini')}</span></td></tr>`;
         }
         function buildRecipeList() {
             const list = [...appState.recipes].sort((a, b) => a.name.localeCompare(b.name, 'pt', { numeric: true }));
             return `<section class="work-panel"><h2>Fichas técnicas</h2>
                 <p class="work-muted">Clique no nome para abrir a ficha completa.</p>
                 <div class="ft-scroll"><table class="ft-table pl-table" data-paged="recipes">
-                <thead><tr><th>Prato / preparação</th><th>Código</th><th>Versão</th><th>Tipo</th><th>Categoria</th><th>Data</th><th>Responsável</th></tr></thead>
-                <tbody>${list.map(recipeListRow).join('') || '<tr><td colspan="7" class="ft-empty">Ainda não há fichas técnicas. Use «+ Nova Ficha Técnica».</td></tr>'}</tbody></table></div></section>`;
+                <thead><tr><th>Prato / preparação</th><th>Código</th><th>Versão</th><th>Tipo</th><th>Categoria</th><th>Data</th><th>Responsável</th><th>Exportar</th></tr></thead>
+                <tbody>${list.map(recipeListRow).join('') || '<tr><td colspan="8" class="ft-empty">Ainda não há fichas técnicas. Use «+ Nova Ficha Técnica».</td></tr>'}</tbody></table></div></section>`;
+        }
+
+        // --- EXPORTAR FICHA TÉCNICA (EXCEL / PDF) ---
+        // As bibliotecas só são descarregadas na primeira exportação.
+        const EXPORT_LIBS = {
+            xlsx: ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'],
+            pdf: ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js']
+        };
+        const loadedScripts = {};
+        function loadScript(src) {
+            return loadedScripts[src] ||= new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = () => { delete loadedScripts[src]; reject(Error('Sem ligação para descarregar ' + src.split('/').slice(-3, -1).join(' '))); };
+                document.head.appendChild(s);
+            });
+        }
+        // Nome do ficheiro = nome da receita sem espaços (e sem caracteres que os sistemas de ficheiros recusam).
+        function recipeFileName(rec) {
+            return String(rec.name || 'ficha').replace(/[\s\\/:*?"<>|]+/g, '') || 'ficha';
+        }
+        // Conteúdo da ficha em secções de linhas, usado tanto no Excel como no PDF.
+        function recipeExportSections(rec) {
+            const isFinal = rec.recipeType === 'final_product';
+            const cost = calculateRecipeCost(rec);
+            const target = rec.targetFcPct ?? targetFcPct();
+            const unitLabel = rec.yieldUnit === 'un' ? 'dose' : rec.yieldUnit;
+            const money = v => Math.round((Number(v) || 0) * 100) / 100;
+            const found = recipeAllergens(rec);
+            return {
+                meta: [
+                    ['Código', rec.code || ''], ['Versão', rec.version || ''], ['Data', rec.sheetDate ? rec.sheetDate.split('-').reverse().join('-') : ''],
+                    ['Responsável', rec.responsible || ''], ['Dose (n.º de porções)', `${rec.yieldQuantity} ${rec.yieldUnit}`],
+                    ['Tipo', isFinal ? 'Prato final' : 'Preparação (sub-receita)'], ['Categoria', rec.category || ''],
+                    ...(isFinal ? [['Food cost pretendido (%)', target]] : []), ['Quebra na confeção (%)', rec.cookingLossPct || 0]
+                ],
+                ingredients: [['Código', 'Ingrediente', 'Qtd.', 'Unid.', 'Observações', 'Custo (€)'], ...rec.items.map(item => {
+                    const isPrep = item.type === 'sub_recipe';
+                    const ref = isPrep ? getRecipe(item.refId) : getIngredient(item.refId);
+                    const lineCost = calculateRecipeCost({ ...rec, extraFixedCost: 0, yieldQuantity: 1, cookingLossPct: 0, items: [item] }).batchCost;
+                    return [(isPrep ? ref?.code : ref?.sku) || '', (isPrep ? '[Prep.] ' : '') + (ref?.name || 'Artigo indisponível'), Number(item.netQty) || 0, item.unit, item.note || '', money(lineCost)];
+                })],
+                costs: [
+                    ...(rec.extraFixedCost ? [['Temperos e guarnições menores (€)', money(rec.extraFixedCost)]] : []),
+                    ['Custo total da receita (€)', money(cost.batchCost)], [`Custo por ${unitLabel} (€)`, money(cost.unitCost)]
+                ],
+                channels: isFinal ? [['Canal', 'Taxa (%)', 'PVP c/ IVA (€)', 'Food cost (%)', 'Margem (€)'],
+                    ...getChannelMetrics(rec).map(c => [c.name, c.key === 'sala' ? '' : c.commissionPct, money(c.pvpGross), c.pvpGross > 0 ? Math.round(c.foodCostPct * 10) / 10 : '', money(c.marginEur)])] : null,
+                allergens: ALLERGENS.map(a => [found.includes(a) ? 'Sim' : '—', a]),
+                method: rec.method || '',
+                notes: rec.notes || ''
+            };
+        }
+        async function exportRecipe(id, format) {
+            const rec = getRecipe(id);
+            if (!rec) return;
+            const name = recipeFileName(rec);
+            const d = recipeExportSections(rec);
+            try {
+                if (format === 'xlsx') {
+                    await loadScript(EXPORT_LIBS.xlsx[0]);
+                    const rows = [['FICHA TÉCNICA DE RESTAURANTE'], [rec.name], [], ...d.meta, [], ['INGREDIENTES'], ...d.ingredients, [], ...d.costs, [],
+                        ['MÉTODO DE CONFEÇÃO'], ...d.method.split('\n').map(l => [l]), [],
+                        ...(d.channels ? [['PREÇOS POR CANAL'], ...d.channels, []] : []),
+                        ['ALERGÉNIOS (INCLUINDO DERIVADOS)'], ...d.allergens, [], ['NOTAS'], ...d.notes.split('\n').map(l => [l])];
+                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                    ws['!cols'] = [{ wch: 30 }, { wch: 34 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 12 }];
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Ficha técnica');
+                    XLSX.writeFile(wb, name + '.xlsx');
+                } else {
+                    for (const src of EXPORT_LIBS.pdf) await loadScript(src);
+                    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+                    const dark = [30, 41, 59];
+                    let y = 16;
+                    doc.setFontSize(9); doc.setTextColor(2, 132, 199); doc.text('FICHA TÉCNICA DE RESTAURANTE', 14, y);
+                    doc.setFontSize(16); doc.setTextColor(15, 23, 42); doc.text(rec.name, 14, y += 8);
+                    const pt = v => typeof v === 'number' ? v.toLocaleString('pt-PT', { maximumFractionDigits: 3 }) : v;
+                    const table = (title, head, body, opts = {}) => {
+                        body = body.map(r => r.map(pt));
+                        doc.autoTable({ startY: y + 4, pageBreak: 'avoid', rowPageBreak: 'avoid', head: head ? [head] : undefined, body, theme: 'grid', margin: { left: 14, right: 14 },
+                            headStyles: { fillColor: dark, textColor: 255, fontStyle: 'bold' }, styles: { fontSize: 9, cellPadding: 1.8 },
+                            ...(title ? { head: [[{ content: title, colSpan: (head || body[0] || [1]).length, styles: { fillColor: dark, textColor: 255 } }], ...(head ? [head] : [])] } : {}), ...opts });
+                        y = doc.lastAutoTable.finalY;
+                    };
+                    table(null, null, d.meta, { columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } } });
+                    table('INGREDIENTES', d.ingredients[0], d.ingredients.slice(1), { columnStyles: { 2: { halign: 'right' }, 5: { halign: 'right' } } });
+                    table(null, null, d.costs, { columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } } });
+                    table('MÉTODO DE CONFEÇÃO', null, [[d.method || '—']]);
+                    if (d.channels) table('PREÇOS POR CANAL', d.channels[0], d.channels.slice(1), { columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } } });
+                    table('ALERGÉNIOS (INCLUINDO DERIVADOS)', null, d.allergens.reduce((rows, a, i) => (i % 2 ? rows[rows.length - 1].push(...a) : rows.push([...a]), rows), []), { columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 2: { cellWidth: 14, halign: 'center' } } });
+                    table('NOTAS', null, [[d.notes || '—']]);
+                    doc.save(name + '.pdf');
+                }
+                showToast('Ficha exportada', `${name}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`, 'success');
+            } catch (err) {
+                console.error('Exportação falhou', err);
+                showToast('Não foi possível exportar', err.message, 'warning');
+            }
+        }
+        function exportButtons(id, cls = 'work-btn') {
+            return `<button type="button" class="${cls}" onclick="exportRecipe('${escHtml(id)}','xlsx')">Excel</button>
+                <button type="button" class="${cls}" onclick="exportRecipe('${escHtml(id)}','pdf')">PDF</button>`;
         }
 
         // Ficha técnica só de leitura, no layout do modelo em papel.
@@ -4255,6 +4361,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div class="flex flex-wrap justify-end gap-3">
                     ${role.canEditRecipes ? `<button type="button" class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar</button>` : ''}
                     ${!isFinal && role.canCountInventory ? `<button type="button" class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>` : ''}
+                    <span class="pl-export" aria-label="Exportar ficha">Exportar: ${exportButtons(rec.id)}</span>
                     ${role.canEditRecipes ? `<button type="button" class="work-btn primary" onclick="openRecipeModal('${rec.id}')">Editar ficha</button>` : ''}
                     <button type="button" class="work-btn" onclick="closeModal()">Fechar</button>
                 </div></div>`;
