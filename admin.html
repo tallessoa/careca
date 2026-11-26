@@ -1682,15 +1682,32 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         // ====================================================================
         function renderActiveView() {
             const main = document.getElementById('main-content');
-            switch (appState.activeTab) {
-                case 'dashboard': main.innerHTML = buildDashboardView(); break;
-                case 'purchases': main.innerHTML = buildPurchasesView(); break;
-                case 'suppliers': main.innerHTML = buildSuppliersView(); break;
-                case 'recipes':   main.innerHTML = buildRecipesView(); break;
-                case 'sales':     main.innerHTML = buildSalesView(); break;
-                case 'inventory': main.innerHTML = buildInventoryView(); break;
+            // Se uma vista falhar, mostra o erro em vez de deixar o ecrã anterior (parecia que o clique não fazia nada).
+            try {
+                switch (appState.activeTab) {
+                    case 'dashboard': main.innerHTML = buildDashboardView(); break;
+                    case 'purchases': main.innerHTML = buildPurchasesView(); break;
+                    case 'suppliers': main.innerHTML = buildSuppliersView(); break;
+                    case 'recipes':   main.innerHTML = buildRecipesView(); break;
+                    case 'sales':     main.innerHTML = buildSalesView(); break;
+                    case 'inventory': main.innerHTML = buildInventoryView(); break;
+                }
+            } catch (err) {
+                console.error('Erro ao abrir a secção ' + appState.activeTab, err);
+                main.innerHTML = `<section class="work-panel"><h2>Não foi possível abrir esta secção</h2>
+                    <p class="work-muted">Erro: ${escHtml(err.message)}</p>
+                    <div class="work-actions"><button type="button" class="work-btn primary" onclick="resetViewState()">Repor a vista</button></div></section>`;
             }
         }
+        // Volta às sub-abas e escolhas por omissão desta secção (ficam só neste browser).
+        function resetViewState() {
+            Object.assign(appState, { recipeSubTab: 'catalogue', supplierSubTab: 'catalog', activeBcgQuadrant: 'star', selectedRecipeId: '' });
+            if (!appState.roles[appState.activeRole]) appState.activeRole = 'owner';
+            persistState();
+            renderActiveView();
+        }
+        // Erros noutros cliques (ex.: abrir uma ficha) aparecem num aviso em vez de falharem em silêncio.
+        window.addEventListener('error', e => { if (typeof showToast === 'function') showToast('Ocorreu um erro', e.message, 'warning'); });
 
         // --------------------------------------------------------------------
         // PAINEL 1: DASHBOARD EXECUTIVO & DRE OPERACIONAL
