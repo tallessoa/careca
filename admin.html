@@ -2083,7 +2083,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canApproveInvoices ? `
-                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Ler fatura com OCR (PDF ou foto)</button>
+                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Ler Fatura com IA (PDF ou foto)</button>
                             <input id="invoice-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" class="hidden" onchange="readInvoiceFile(this)">
                             <button onclick="openManualPurchaseModal()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow-lg shadow-blue-600/25 transition-all">
                                 + Registar Compra Manual
@@ -3829,7 +3829,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const btn = 'flex-1 p-4 rounded-xl text-left text-sm border';
             openModal('Encomenda ' + id + ' entregue', 'Registe a fatura do fornecedor para conferir o que foi pedido com o que veio.', `<div class="flex flex-col sm:flex-row gap-3">
                 <button onclick="openManualPurchaseModal('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>Preencher à mão</strong><br><span class="text-xs text-slate-400">As linhas vêm da encomenda: ajuste o que veio, o preço cobrado e as ofertas.</span></button>
-                <button onclick="readOrderInvoice('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>✨ Ler fatura com OCR</strong><br><span class="text-xs text-slate-400">PDF ou foto; a revisão mostra a conferência com a encomenda.</span></button></div>
+                <button onclick="readOrderInvoice('${id}')" class="${btn} bg-[#111827] border-sky-400/30 text-white"><strong>✨ Ler Fatura com IA</strong><br><span class="text-xs text-slate-400">PDF ou foto; a revisão mostra a conferência com a encomenda.</span></button></div>
                 <p class="mt-3 text-xs text-slate-400">A encomenda só passa a «Entregue» quando aprovar a fatura.</p>`);
         }
         function readOrderInvoice(id) {
@@ -4398,7 +4398,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canEditRecipes ? `
                             <button onclick="openRecipeModal(null, true)" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300 transition-all">
-                                Ler ficha por OCR
+                                ✨ Ler Ficha com IA
                             </button>
                             <button onclick="openRecipeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
                                 + Nova Ficha Técnica
@@ -4437,7 +4437,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div class="space-y-4">
                     ${isEdit ? '' : `<div class="ft-mode" role="group" aria-label="Como preencher a ficha">
                         <button type="button" id="ft-mode-manual" aria-pressed="${!startInOcrMode}" onclick="setRecipeFillMode(false)">✍️ Preencher manualmente</button>
-                        <button type="button" id="ft-mode-ocr" aria-pressed="${startInOcrMode}" onclick="setRecipeFillMode(true)">📄 Ler documento por OCR</button>
+                        <button type="button" id="ft-mode-ocr" aria-pressed="${startInOcrMode}" onclick="setRecipeFillMode(true)">✨ Ler Ficha com IA</button>
                     </div>
                     <div id="recipe-ocr-panel" class="ft-box ft-ocr" ${startInOcrMode ? '' : 'hidden'}>
                         <label>Foto ou PDF de uma ficha técnica (PDF, JPG, PNG, WEBP ou HEIC, até 14 MB)
