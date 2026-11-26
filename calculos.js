@@ -334,6 +334,34 @@ function cleanItemName(text) {
     return name;
 }
 
+// Divide uma linha com vários produtos («Kit Pasta de Wasabi (2 × 1 kg) e Gengibre Gari (2 × 1,5 kg)») em partes.
+// Corta em « e », «+», «;» ou «,» fora de parênteses; sem separador dá duas partes iguais para editar.
+// Os valores ficam a zero: o utilizador indica quanto custou cada parte.
+function splitInvoiceLine(line) {
+    const text = String(line.description ?? '');
+    const pieces = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === '(' || c === '[') depth++;
+        else if ((c === ')' || c === ']') && depth > 0) depth--;
+        else if (depth === 0) {
+            const sep = /[+;,]/.test(c) ? 1 : / e /i.test(text.slice(i, i + 3)) ? 3 : 0;
+            if (sep) { pieces.push(text.slice(start, i)); start = i + sep; i += sep - 1; }
+        }
+    }
+    pieces.push(text.slice(start));
+    const names = pieces.map(t => t.trim()).filter(Boolean);
+    // «Kit»/«Pack» descreve o conjunto, não o produto da primeira parte.
+    const parts = names.length >= 2 ? names.map(n => n.replace(/^(kit|pack|conjunto|lote)\s+(de\s+)?/i, '')) : [text.trim(), text.trim()];
+    return parts.map(description => ({ description, qty: Number(line.qty) || 1, unit: line.unit || 'un', unit_price_net: 0, line_total_net: 0, vat_rate: line.vat_rate, sku: '' }));
+}
+
+// Diferença, em euros arredondados ao cêntimo, entre o total da linha e a soma das partes (0 = bate certo).
+function splitDifference(lineTotal, partTotals) {
+    return Math.round((Number(lineTotal) - partTotals.reduce((s, t) => s + (Number(t) || 0), 0)) * 100) / 100;
+}
+
 // Quantidade total de uma linha em unidade base (kg, L ou un). Peso e volume convertem-se diretamente;
 // embalagens (saco, caixa, pacote…) multiplicam a quantidade pelo tamanho escrito na descrição: 3 sacos de 20 kg = 60 kg.
 function invoiceLineBase(line) {

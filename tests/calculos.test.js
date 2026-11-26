@@ -388,3 +388,24 @@ test('cleanItemName dá um nome curto sem embalagem nem texto comercial', () => 
     assert.equal(ctx.cleanItemName('5 kg'), '5 kg');
     assert.equal(ctx.cleanItemName(undefined), '');
 });
+
+test('splitInvoiceLine divide um kit em partes com a embalagem de cada uma', () => {
+    const ctx = load({});
+    const line = { description: 'Kit Pasta de Wasabi (2 × 1 kg) e Gengibre Gari (2 × 1,5 kg)', qty: 1, unit: 'un', unit_price_net: 30, line_total_net: 30, vat_rate: 23 };
+    const parts = ctx.splitInvoiceLine(line);
+    assert.deepEqual([...parts].map(p => p.description), ['Pasta de Wasabi (2 × 1 kg)', 'Gengibre Gari (2 × 1,5 kg)']);
+    assert.deepEqual([...parts].map(p => [p.qty, p.unit, p.vat_rate, p.line_total_net]), [[1, 'un', 23, 0], [1, 'un', 23, 0]]);
+    // Cada parte usa o tamanho da sua embalagem: 2 kg de wasabi e 3 kg de gengibre.
+    assert.deepEqual([...parts].map(p => { const b = ctx.invoiceLineBase(p); return [b.unit, b.qty]; }), [['kg', 2], ['kg', 3]]);
+    // Ao preencher os valores, o preço por kg sai de cada parte.
+    parts[0].line_total_net = 18; parts[1].line_total_net = 12;
+    near(ctx.invoiceLineToBase(parts[0], { baseUnit: 'kg' }).price, 9);
+    near(ctx.invoiceLineToBase(parts[1], { baseUnit: 'kg' }).price, 4);
+    assert.equal(ctx.splitDifference(30, [18, 12]), 0);
+    assert.equal(ctx.splitDifference(30, [18, 11.99]), 0.01);
+    assert.equal(ctx.splitDifference(30, [0.1, 0.2, 29.7]), 0);
+    // Sem separador: duas partes iguais para o utilizador editar; vírgula dentro de parênteses não corta.
+    assert.equal(ctx.splitInvoiceLine({ description: 'Sushi mix (salmão, atum)', qty: 2, unit: 'cx' }).length, 2);
+    assert.equal(ctx.splitInvoiceLine({ description: 'Sushi mix (salmão, atum)', qty: 2, unit: 'cx' })[1].description, 'Sushi mix (salmão, atum)');
+    assert.equal(ctx.splitInvoiceLine({ description: 'Nori + Arroz + Vinagre', qty: 1, unit: 'un' }).length, 3);
+});
