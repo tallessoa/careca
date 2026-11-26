@@ -2285,7 +2285,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         async function drawInvoiceQr(text) {
             const box = () => document.getElementById('inv-qr');
             try {
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
+                await loadScript('vendor/qrcode.js'); // qrcode-generator 1.4.4 (MIT), guardado no repositório
                 const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
                 if (!box()) return;
                 box().innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true, alt: 'Código QR da fatura' });
