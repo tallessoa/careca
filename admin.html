@@ -1788,7 +1788,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
-                                    <th class="py-3.5 px-5">Documento</th>
+                                    <th class="py-3.5 px-5">Fatura</th>
                                     <th class="py-3.5 px-4">Fornecedor &amp; NIF</th>
                                     <th class="py-3.5 px-4">Data</th>
                                     <th class="py-3.5 px-4 text-right">Líquido</th>
@@ -1809,12 +1809,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver detalhe" onclick="openInvoiceDetail(${appState.invoices.indexOf(inv)})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${appState.invoices.indexOf(inv)})">
                                             <td class="py-3.5 px-5">
                                                 <div class="font-mono font-semibold text-white">${escHtml(inv.id)}</div>
-                                                <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}${inv.source ? ' · ' + escHtml(inv.source) : ''}</div>
+                                                <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}</div>
                                                 ${inv.source && inv.customerNif !== restaurantNif() ? `<div class="text-[11px] font-mono text-rose-400">NIF adquirente: ${escHtml(inv.customerNif || 'em falta')}</div>` : ''}
                                             </td>
                                             <td class="py-3.5 px-4">
                                                 <div class="font-medium text-white">${sup ? escHtml(sup.name) : 'Fornecedor Removido'}</div>
-                                                <div class="text-xs font-mono text-slate-400">NIF ${sup ? escHtml(sup.nif) : '-'} • ${escHtml(inv.itemsSummary)}</div>
+                                                <div class="text-xs font-mono text-slate-400">NIF ${sup ? escHtml(sup.nif) : '-'}</div>
                                             </td>
                                             <td class="py-3.5 px-4 font-mono text-xs text-slate-400">${escHtml(inv.date)}</td>
                                             <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-200">${fmtEur(inv.net)}</td>
