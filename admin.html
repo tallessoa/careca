@@ -485,15 +485,25 @@ html.gloss-off .gloss-term::after{content:none}
 .gloss-help:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 </style>
 <style>
-/* Listas de seleção com o tema do painel: seta própria e lista de opções escura em vez do estilo nativo claro. */
+/* Listas de seleção com o tema do painel. O <select> nativo fica escondido (guarda o valor e os eventos) e é mostrado
+   um botão com uma lista própria, porque os telemóveis abrem a lista nativa do sistema, que o CSS não consegue estilizar. */
 html{color-scheme:dark}
-select{-webkit-appearance:none;appearance:none;background-color:#050814;color:#f1f5f9;border:1px solid #1E293B;border-radius:.75rem;padding-right:2.25rem!important;cursor:pointer;
+select.kd-native{display:none!important}
+.kd-btn{display:inline-flex;align-items:center;gap:.5rem;text-align:left;min-height:2.25rem;background-color:#050814;color:#f1f5f9;border:1px solid #1E293B;border-radius:.75rem;padding-left:.75rem;padding-right:2.25rem!important;cursor:pointer;position:relative;max-width:100%;font:inherit;
 background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2338BDF8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .75rem center;background-size:12px}
-select:hover{border-color:#334155}
-select:focus{outline:none;border-color:#38BDF8;box-shadow:0 0 0 2px rgba(56,189,248,.2)}
-select:disabled{opacity:.5;cursor:not-allowed}
-select option,select optgroup{background:#0B1120;color:#E2E8F0}
-#role-selector{border:0;box-shadow:none}
+.kd-btn:hover{border-color:#334155}
+.kd-btn:focus-visible,.kd-btn[aria-expanded=true]{outline:none;border-color:#38BDF8;box-shadow:0 0 0 2px rgba(56,189,248,.2)}
+.kd-btn:disabled{opacity:.5;cursor:not-allowed}
+.kd-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-field .kd-btn,.work-panel .kd-btn{box-sizing:border-box;width:100%;padding-top:10px;padding-bottom:10px;border-color:#354862;border-radius:8px;background-color:#080f1e}
+#role-selector + .kd-btn{background-color:transparent;border:0;box-shadow:none}
+.kd-list{position:fixed;z-index:2147483646;overflow-y:auto;overscroll-behavior:contain;padding:.25rem;border-radius:.75rem;background:#0B1120;border:1px solid rgba(56,189,248,.35);box-shadow:0 20px 50px -12px rgba(0,0,0,.8);outline:none}
+.kd-opt{display:flex;align-items:center;gap:.5rem;padding:.6rem .75rem;border-radius:.5rem;color:#E2E8F0;font-size:.875rem;cursor:pointer;user-select:none}
+.kd-opt[aria-selected=true]{color:#7DD3FC;font-weight:600}
+.kd-opt[aria-selected=true]::after{content:"✓";margin-left:auto;color:#38BDF8}
+.kd-opt.kd-active{background:#1E293B}
+.kd-opt[aria-disabled=true]{opacity:.4;cursor:not-allowed}
+@media (pointer:coarse){.kd-opt{padding:.85rem .9rem;font-size:1rem}}
 </style>
 </head>
 <body class="font-sans antialiased bg-[#050814] text-slate-100 min-h-screen flex flex-col">
@@ -734,6 +744,125 @@ select option,select optgroup{background:#0B1120;color:#E2E8F0}
     <!-- ===================================================================== -->
     <!-- LÓGICA REATIVA, RBAC COMPLETO, STOCK POR LOJA, BCG DINÂMICA & STORAGE -->
     <!-- ===================================================================== -->
+    <script>
+    // Lista de seleção própria (ver CSS .kd-*): cada <select> ganha um botão ao lado; o <select> continua a guardar o valor,
+    // por isso o código existente (value, onchange) não muda. Os selects criados depois são apanhados pelo MutationObserver.
+    (() => {
+        let current = null;
+        const sync = sel => {
+            const btn = sel?._kd;
+            if (!btn) return;
+            const text = sel.options[sel.selectedIndex]?.text ?? '';
+            btn.querySelector('.kd-text').textContent = text || '—';
+            btn.disabled = sel.disabled;
+            const name = sel.getAttribute('aria-label');
+            if (name) btn.setAttribute('aria-label', name + ': ' + text);
+        };
+        for (const prop of ['value', 'selectedIndex']) {
+            const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, prop);
+            Object.defineProperty(HTMLSelectElement.prototype, prop, { ...d, set(v) { d.set.call(this, v); sync(this); } });
+        }
+        function enhance(sel) {
+            if (sel._kd || sel.multiple) return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = sel.className + ' kd-btn';
+            btn.setAttribute('aria-haspopup', 'listbox');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.innerHTML = '<span class="kd-text"></span>';
+            btn.addEventListener('click', () => current?.sel === sel ? close() : open(sel));
+            btn.addEventListener('keydown', e => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(sel); } });
+            sel._kd = btn;
+            sel.classList.add('kd-native');
+            sel.after(btn);
+            sync(sel);
+        }
+        function close(focus = true) {
+            if (!current) return;
+            const { sel, list } = current;
+            current = null;
+            list.remove();
+            sel._kd.setAttribute('aria-expanded', 'false');
+            if (focus && sel._kd.isConnected) sel._kd.focus();
+        }
+        function highlight(i) {
+            const { list } = current;
+            list.querySelector('.kd-active')?.classList.remove('kd-active');
+            const it = list.querySelector(`[data-i="${i}"]`);
+            if (!it) return;
+            it.classList.add('kd-active');
+            list.setAttribute('aria-activedescendant', it.id);
+            it.scrollIntoView({ block: 'nearest' });
+            current.active = i;
+        }
+        function choose(i) {
+            const sel = current.sel;
+            const changed = sel.selectedIndex !== i;
+            sel.selectedIndex = i;
+            close();
+            if (changed) { sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+        }
+        function open(sel) {
+            if (sel.disabled) return;
+            close(false);
+            const btn = sel._kd, list = document.createElement('div');
+            list.className = 'kd-list';
+            list.setAttribute('role', 'listbox');
+            list.tabIndex = -1;
+            [...sel.options].forEach((o, i) => {
+                if (o.hidden) return;
+                const it = document.createElement('div');
+                it.className = 'kd-opt';
+                it.id = 'kd-opt-' + i;
+                it.dataset.i = i;
+                it.setAttribute('role', 'option');
+                it.setAttribute('aria-selected', String(i === sel.selectedIndex));
+                if (o.disabled) it.setAttribute('aria-disabled', 'true');
+                it.textContent = o.text;
+                list.append(it);
+            });
+            document.body.append(list);
+            const r = btn.getBoundingClientRect(), width = Math.min(Math.max(r.width, 200), innerWidth - 16);
+            const below = innerHeight - r.bottom - 8, above = r.top - 8, up = below < Math.min(list.scrollHeight, 240) && above > below;
+            Object.assign(list.style, { width: width + 'px', left: Math.max(8, Math.min(r.left, innerWidth - width - 8)) + 'px', maxHeight: Math.min(360, up ? above : below) + 'px' });
+            if (up) list.style.bottom = innerHeight - r.top + 4 + 'px'; else list.style.top = r.bottom + 4 + 'px';
+            btn.setAttribute('aria-expanded', 'true');
+            current = { sel, list, active: -1 };
+            highlight(Math.max(0, sel.selectedIndex));
+            list.addEventListener('click', e => { const it = e.target.closest('.kd-opt'); if (it && !it.hasAttribute('aria-disabled')) choose(+it.dataset.i); });
+            list.addEventListener('keydown', e => {
+                const items = [...list.querySelectorAll('.kd-opt:not([aria-disabled])')].map(it => +it.dataset.i);
+                const pos = items.indexOf(current.active);
+                const go = n => { e.preventDefault(); highlight(items[Math.max(0, Math.min(items.length - 1, n))]); };
+                if (e.key === 'ArrowDown') go(pos + 1);
+                else if (e.key === 'ArrowUp') go(pos - 1);
+                else if (e.key === 'Home') go(0);
+                else if (e.key === 'End') go(items.length - 1);
+                else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (current.active >= 0) choose(current.active); }
+                else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+                else if (e.key === 'Tab') close(false);
+                else if (e.key.length === 1) {
+                    const k = e.key.toLowerCase(), next = items.slice(pos + 1).concat(items.slice(0, pos + 1)).find(i => sel.options[i].text.trim().toLowerCase().startsWith(k));
+                    if (next != null) highlight(next);
+                }
+            });
+            list.focus({ preventScroll: true });
+        }
+        document.addEventListener('pointerdown', e => { if (current && !current.list.contains(e.target) && !current.sel._kd.contains(e.target)) close(false); }, true);
+        document.addEventListener('scroll', e => { if (current && !current.list.contains(e.target)) close(false); }, true);
+        addEventListener('resize', () => close(false));
+        new MutationObserver(records => {
+            for (const r of records) {
+                if (r.type === 'attributes') { sync(r.target); continue; }
+                const inSelect = r.target.closest?.('select');
+                if (inSelect) { sync(inSelect); continue; }
+                r.addedNodes.forEach(n => { if (n.nodeType !== 1) return; if (n.matches('select')) enhance(n); n.querySelectorAll('select').forEach(enhance); });
+            }
+            if (current && !current.sel.isConnected) close(false);
+        }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+        document.querySelectorAll('select').forEach(enhance);
+    })();
+    </script>
     <script src="calculos.js"></script>
     <script>
         const LEGACY_KEY = 'kareca_solutions_backoffice_v3';
@@ -2571,10 +2700,10 @@ select option,select optgroup{background:#0B1120;color:#E2E8F0}
                         <label class="text-xs text-slate-300">Qtd. em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
                         <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
                     </div>
-                    <div class="ocr-new hidden grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 rounded-lg border border-sky-400/30 bg-sky-500/5">
-                        <label class="text-xs text-slate-300">Nome do artigo<input class="ocr-new-name ${field} font-sans" value="${escHtml(l.description || '')}"></label>
-                        <label class="text-xs text-slate-300">Unidade base<select class="ocr-new-unit ${field}" onchange="ocrRowChanged(this)">${['kg', 'L', 'un'].map(u => `<option ${u === guessBaseUnit(l.unit).unit ? 'selected' : ''}>${u}</option>`).join('')}</select></label>
-                        <label class="text-xs text-slate-300">Categoria<select class="ocr-new-cat ${field} font-sans">${ING_CATEGORIES.map(c => `<option>${c}</option>`).join('')}</select></label>
+                    <div class="ocr-new hidden flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border border-sky-400/30 bg-sky-500/5 text-xs">
+                        <input type="hidden" class="ocr-new-name" value="${escHtml(l.description || '')}"><input type="hidden" class="ocr-new-unit" value="${guessBaseUnit(l.unit).unit}"><input type="hidden" class="ocr-new-cat" value="${ING_CATEGORIES[0]}">
+                        <span class="ocr-new-summary text-sky-200"></span>
+                        <button type="button" onclick="openNewIngredientDialog(this.closest('.ocr-row'))" class="px-2.5 py-1 rounded-lg text-sky-300 border border-sky-400/30">Editar artigo</button>
                     </div>
                     <div class="ocr-price text-[11px] font-mono ${ing && !base ? 'text-amber-300' : 'text-slate-400'}">${ing && !base ? 'Unidade «' + escHtml(l.unit || '?') + '» não convertível: indique a quantidade em ' + escHtml(ing.baseUnit) + '.' : ''}</div>
                 </div>`;
@@ -2602,10 +2731,14 @@ select option,select optgroup{background:#0B1120;color:#E2E8F0}
         function ocrRowChanged(el, keepHint = false) {
             const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
             row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
-            if (choice === '__new' && el.classList.contains('ocr-ing')) {
-                const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)], guess = guessBaseUnit(l.unit);
-                row.querySelector('.ocr-new-unit').value = guess.unit;
-                row.querySelector('.ocr-qty').value = +(Number(l.qty) * guess.factor).toFixed(4);
+            if (el.classList.contains('ocr-ing')) {
+                if (choice === '__new') {
+                    const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)], guess = guessBaseUnit(l.unit);
+                    row.querySelector('.ocr-new-unit').value = guess.unit;
+                    row.querySelector('.ocr-qty').value = +(Number(l.qty) * guess.factor).toFixed(4);
+                    row.querySelector('.ocr-new-summary').textContent = `Artigo novo: ${row.querySelector('.ocr-new-name').value} · ${guess.unit} · ${row.querySelector('.ocr-new-cat').value}`;
+                    if (!keepHint) openNewIngredientDialog(row);
+                } else { row.dataset.prev = choice; delete row.dataset.named; }
             }
             const qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
             const out = row.querySelector('.ocr-price');
@@ -2616,6 +2749,49 @@ select option,select optgroup{background:#0B1120;color:#E2E8F0}
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
             out.textContent = qty > 0 ? `${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
+        }
+        // Janela por cima da revisão para dar nome, unidade e categoria ao artigo novo. O artigo só é criado ao aprovar a fatura.
+        function openNewIngredientDialog(row) {
+            document.getElementById('new-ing-dialog')?.remove();
+            const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)];
+            const v = c => row.querySelector('.ocr-new-' + c).value;
+            const field = 'mt-1 w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400';
+            const ov = document.createElement('div');
+            ov.id = 'new-ing-dialog';
+            ov.className = 'fixed inset-0 flex items-center justify-center p-4 bg-black/70';
+            ov.style.zIndex = '60';
+            ov.style.background = 'rgba(0,0,0,.65)';
+            ov.innerHTML = `<form role="dialog" aria-modal="true" aria-labelledby="nd-title" class="w-full max-w-md rounded-2xl bg-[#0B1120] border border-sky-400/40 p-5 space-y-4 shadow-2xl">
+                <div><h3 id="nd-title" class="text-base font-bold text-white">Artigo novo no catálogo</h3><p class="text-xs text-slate-400 mt-1">Linha da fatura: «${escHtml(l.description || '')}»</p></div>
+                <label class="block text-xs text-slate-300">Nome do artigo<input id="nd-name" required class="${field}" value="${escHtml(v('name'))}"></label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="block text-xs text-slate-300">Unidade base<select id="nd-unit" class="${field} w-full">${['kg', 'L', 'un'].map(u => `<option ${u === v('unit') ? 'selected' : ''}>${u}</option>`).join('')}</select></label>
+                    <label class="block text-xs text-slate-300">Categoria<select id="nd-cat" class="${field} w-full">${ING_CATEGORIES.map(c => `<option ${c === v('cat') ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
+                </div>
+                <p class="text-xs text-slate-400">Confirme a quantidade na linha depois de escolher a unidade. O artigo é criado quando aprovar a fatura.</p>
+                <div class="flex justify-end gap-3"><button type="button" data-cancel class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Usar este artigo</button></div></form>`;
+            const cancel = () => {
+                ov.remove();
+                if (!row.dataset.named) { const sel = row.querySelector('.ocr-ing'); sel.value = row.dataset.prev || ''; ocrRowChanged(sel, true); ocrRowChanged(row.querySelector('.ocr-qty')); }
+            };
+            ov.querySelector('[data-cancel]').onclick = cancel;
+            ov.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented) cancel(); });
+            ov.querySelector('form').onsubmit = e => {
+                e.preventDefault();
+                const name = ov.querySelector('#nd-name').value.trim();
+                if (!name) return;
+                const unit = ov.querySelector('#nd-unit').value, cat = ov.querySelector('#nd-cat').value;
+                Object.entries({ name, unit, cat }).forEach(([c, val]) => { row.querySelector('.ocr-new-' + c).value = val; });
+                row.querySelector('.ocr-new-summary').textContent = `Artigo novo: ${name} · ${unit} · ${cat}`;
+                row.dataset.named = '1';
+                ov.remove();
+                ocrRowChanged(row.querySelector('.ocr-qty'));
+            };
+            document.body.append(ov);
+            const input = ov.querySelector('#nd-name');
+            input.focus();
+            input.select();
         }
         function approveOcrInvoice() {
             const ex = ocrDraft?.ex;
@@ -2630,7 +2806,8 @@ select option,select optgroup{background:#0B1120;color:#E2E8F0}
                 return ing ? { ing, qty, price: total / qty, vat } : { service: true, label: ex.lines[idx].description, qty: 1, price: total, vat };
             });
             if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
-            if (rows.some(r => r.querySelector('.ocr-ing').value === '__new' && !r.querySelector('.ocr-new-name').value.trim())) { showToast('Falta o nome', 'Dê um nome ao artigo novo.', 'warning'); return; }
+            const unnamed = rows.find(r => r.querySelector('.ocr-ing').value === '__new' && !r.dataset.named);
+            if (unnamed) { openNewIngredientDialog(unnamed); return; }
             const before = structuredClone(appState);
             let supplierId = document.getElementById('ocr-supplier').value;
             if (supplierId === '__new') {
@@ -4731,7 +4908,7 @@ select option,select optgroup{background:#0B1120;color:#E2E8F0}
     const escapePattern = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const names = [...aliases.keys()].sort((a,b)=>b.length-a.length).map(escapePattern);
     const pattern = new RegExp('(?<![\\p{L}\\p{N}_])(?:'+names.join('|')+')(?![\\p{L}\\p{N}_])','giu');
-    const excluded = 'script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget]';
+    const excluded = 'script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
     function help(term) {
         const button = document.createElement('button');
         button.type = 'button';
