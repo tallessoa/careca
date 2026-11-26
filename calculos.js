@@ -100,10 +100,11 @@ function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore
     const baseCost = costObj.totalRecipeCost;
     const vatDiv = 1 + Number(recipe.vatRate ?? 13) / 100;
 
+    // Sala é o canal base, sem taxa. Os restantes vêm da configuração (appState.salesChannels); os preços antigos de Takeaway/Uber continuam a valer.
+    const legacy = { takeaway: recipe.pvpTakeawayGross, uber: recipe.pvpUberGross };
     const channels = [
         { key: 'sala', name: 'Sala (Dine-in)', pvpGross: Number(recipe.pvpSalaGross) || 0, commissionPct: 0, packaging: 0.00 },
-        { key: 'takeaway', name: 'Takeaway', pvpGross: Number(recipe.pvpTakeawayGross) || 0, commissionPct: 0, packaging: 0.45 },
-        { key: 'uber', name: 'Uber Eats (Delivery)', pvpGross: Number(recipe.pvpUberGross) || 0, commissionPct: 30, packaging: 0.65 }
+        ...salesChannels().map(ch => ({ key: ch.id, name: ch.name, pvpGross: Number(recipe.channelPrices?.[ch.id] ?? legacy[ch.id]) || 0, commissionPct: Number(ch.feePct) || 0, packaging: Number(ch.packaging) || 0 }))
     ];
 
     return channels.map(ch => {
@@ -250,10 +251,17 @@ function suggestedPvpGross(unitCost, targetFcPct, vatRate) {
     return unitCost / (targetFcPct / 100) * (1 + Number(vatRate ?? 13) / 100);
 }
 
-// PVP Takeaway e Uber sugeridos: PVP Sala + a taxa (%) de cada canal calculada sobre o PVP Sala. Arredonda ao cêntimo.
-function channelPricesFromSala(salaGross, feeTakeawayPct = 0, feeUberPct = 30) {
-    const withFee = pct => Math.round((Number(salaGross) || 0) * (1 + (Number(pct) || 0) / 100) * 100) / 100;
-    return { takeaway: withFee(feeTakeawayPct), uber: withFee(feeUberPct) };
+const DEFAULT_SALES_CHANNELS = [
+    { id: 'takeaway', name: 'Takeaway', feePct: 0, packaging: 0.45 },
+    { id: 'uber', name: 'Uber Eats (Delivery)', feePct: 30, packaging: 0.65 }
+];
+function salesChannels() {
+    return appState.salesChannels ?? DEFAULT_SALES_CHANNELS;
+}
+
+// PVP sugerido de um canal: PVP Sala + a taxa (%) do canal calculada sobre o PVP Sala. Arredonda ao cêntimo.
+function channelPriceFromSala(salaGross, feePct) {
+    return Math.round((Number(salaGross) || 0) * (1 + (Number(feePct) || 0) / 100) * 100) / 100;
 }
 
 // Valor do stock do restaurante. counted=true usa a última contagem física (matéria-prima + preparações contadas);

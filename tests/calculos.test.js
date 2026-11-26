@@ -496,10 +496,21 @@ test('nome do fornecedor: artigo curto e reconhecimento pela descrição da fatu
     assert.equal(ctx.matchIngredient('Ovos Classe M').id, 'ovosm');
 });
 
-test('channelPricesFromSala: taxa de cada canal sobre o PVP Sala', () => {
+test('channelPriceFromSala: taxa do canal sobre o PVP Sala', () => {
     const ctx = load({});
-    const p = ctx.channelPricesFromSala(11.3, 10, 30);
-    near(p.takeaway, 12.43);
-    near(p.uber, 14.69);
-    assert.equal(ctx.channelPricesFromSala(0).uber, 0);
+    near(ctx.channelPriceFromSala(11.3, 10), 12.43);
+    near(ctx.channelPriceFromSala(11.3, 30), 14.69);
+    assert.equal(ctx.channelPriceFromSala(0, 15), 0);
+});
+
+test('canais configuráveis: preço por canal, taxa como comissão, preços antigos de Uber mantêm-se', () => {
+    const c = load({ ...bowlState(), salesChannels: [{ id: 'uber', name: 'Uber', feePct: 15 }, { id: 'glovo', name: 'Glovo', feePct: 20 }] });
+    const rec = c.getRecipe('rec_bowl');
+    rec.channelPrices = { glovo: 21 };
+    const [sala, uber, glovo] = c.getChannelMetrics(rec);
+    assert.equal(sala.key, 'sala');
+    near(uber.pvpGross, 19.9);
+    near(uber.commEur, 19.9 / 1.13 * 0.15);
+    near(glovo.pvpGross, 21);
+    near(glovo.commEur, 21 / 1.13 * 0.2);
 });
