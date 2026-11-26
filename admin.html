@@ -1809,6 +1809,127 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         // --------------------------------------------------------------------
         // PAINEL 2: COMPRAS & FATURAS (MANUAL + PREVIEW GEMINI OCR)
         // --------------------------------------------------------------------
+        // Pesquisa e paginação comuns às tabelas do backoffice. O estado fica em memória enquanto a página está aberta.
+        const pagers = {};
+        const pager = key => pagers[key] ??= { q: '', month: '', from: '', to: '', page: 1, perPage: 25 };
+        const foldText = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+        // Filtra pela pesquisa (todas as palavras) e pelo período, e devolve a página atual.
+        function pageOf(key, items, textOf, dateOf) {
+            const p = pager(key), words = foldText(p.q).trim().split(/\s+/).filter(Boolean);
+            const all = items.filter(it => (!dateOf || ((!p.from || dateOf(it) >= p.from) && (!p.to || dateOf(it) <= p.to)))
+                && (!words.length || words.every(w => foldText(textOf(it)).includes(w))));
+            const pages = Math.max(1, Math.ceil(all.length / p.perPage));
+            p.page = Math.min(Math.max(1, p.page), pages);
+            const start = (p.page - 1) * p.perPage;
+            return { rows: all.slice(start, start + p.perPage), total: all.length, start, pages, empty: items.length ? 'Nada corresponde à pesquisa.' : 'Ainda não há registos.' };
+        }
+        function setPager(key, field, value) {
+            const p = pager(key);
+            if (field === 'month') {
+                const [y, m] = value.split('-').map(Number);
+                Object.assign(p, { month: value, from: value ? value + '-01' : '', to: value ? value + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0') : '' });
+            } else if (field === 'clear') Object.assign(p, { q: '', month: '', from: '', to: '' });
+            else {
+                p[field] = field === 'perPage' || field === 'page' ? Number(value) : value;
+                if (field === 'from' || field === 'to') p.month = '';
+            }
+            if (field !== 'page') p.page = 1;
+            const focusId = document.activeElement?.id, caret = document.activeElement?.selectionStart;
+            renderActiveView();
+            // Repor o foco (e abrir o <details> onde a tabela está) para se poder continuar a escrever.
+            document.querySelectorAll(`[data-pager="${key}"]`).forEach(el => { for (let d = el.closest('details'); d; d = d.parentElement?.closest('details')) d.open = true; });
+            const el = focusId && document.getElementById(focusId);
+            if (el) { el.focus(); if (caret != null && el.setSelectionRange) try { el.setSelectionRange(caret, caret); } catch {} }
+        }
+        function pagerSearchHtml(key, placeholder, withDates = false) {
+            const p = pager(key), field = 'px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400';
+            const date = (f, label, type) => `<label class="text-xs text-slate-400 ${f === 'month' ? 'col-span-2 sm:col-span-1' : ''}">${label}<input id="pg-${key}-${f}" type="${type}" value="${escHtml(p[f])}" onchange="setPager('${key}', '${f}', this.value)" class="mt-1 block w-full ${field}"></label>`;
+            return `<div data-pager="${key}" class="flex flex-col lg:flex-row lg:items-end gap-3">
+                <label class="flex-1 text-xs text-slate-400">Pesquisar<input id="pg-${key}-q" type="search" value="${escHtml(p.q)}" oninput="setPager('${key}', 'q', this.value)" placeholder="${escHtml(placeholder)}" class="mt-1 w-full ${field}"></label>
+                ${withDates ? `<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${date('month', 'Mês', 'month')}${date('from', 'De', 'date')}${date('to', 'Até', 'date')}</div>` : ''}
+                ${p.q || p.from || p.to ? `<button id="pg-${key}-clear" type="button" onclick="setPager('${key}', 'clear')" class="px-3 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:text-white">Limpar</button>` : ''}
+            </div>`;
+        }
+        function pagerFooterHtml(key, pg) {
+            const p = pager(key);
+            const btn = (f, label, page, disabled, aria) => `<button id="pg-${key}-${f}" type="button" ${disabled ? 'disabled' : ''} onclick="setPager('${key}', 'page', ${page})" aria-label="${aria}" class="px-2.5 py-1 rounded-lg border border-[#1E293B] text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed">${label}</button>`;
+            return `<div data-pager="${key}" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-[#1E293B] text-xs font-mono text-slate-400">
+                <label class="flex items-center gap-2 whitespace-nowrap">Por página
+                    <select id="pg-${key}-perPage" onchange="setPager('${key}', 'perPage', this.value)" class="px-2 py-1 rounded-lg bg-[#050814] border border-[#1E293B] text-white">
+                        ${[10, 25, 50, 100].map(n => `<option value="${n}" ${n === p.perPage ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                </label>
+                <div class="flex items-center gap-2">
+                    <span>${pg.total ? `${pg.start + 1}–${pg.start + pg.rows.length} de ${pg.total}` : '0 de 0'}</span>
+                    ${btn('prev', '‹', p.page - 1, p.page <= 1, 'Página anterior')}
+                    <span>${p.page} / ${pg.pages}</span>
+                    ${btn('next', '›', p.page + 1, p.page >= pg.pages, 'Página seguinte')}
+                </div>
+            </div>`;
+        }
+        const emptyRowHtml = (cols, pg) => `<tr><td colspan="${cols}" class="py-8 px-4 text-center font-sans text-sm text-slate-400">${pg.empty}</td></tr>`;
+
+        function invoiceSearchText(inv) {
+            const sup = getSupplier(inv.supplierId);
+            const items = (inv.lines || []).map(l => l.service ? l.label : getIngredient(l.ing)?.name);
+            return [inv.id, inv.docType, inv.status, inv.atcud, inv.date, sup?.name, sup?.tradeName, sup?.nif, inv.itemsSummary, ...items].join(' ');
+        }
+
+        function invoiceTableHtml() {
+            const role = appState.roles[appState.activeRole];
+            const pg = pageOf('invoices', appState.invoices.filter(inv => inv.store === appState.activeStore).sort((a, b) => String(b.date).localeCompare(String(a.date))), invoiceSearchText, inv => inv.date);
+            const list = pg.rows;
+            return `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60 whitespace-nowrap">
+                                <th class="py-3.5 px-5">Documento</th>
+                                <th class="py-3.5 px-4">Fornecedor</th>
+                                <th class="py-3.5 px-4">NIF</th>
+                                <th class="py-3.5 px-4">Data</th>
+                                <th class="py-3.5 px-4 text-right">Líquido</th>
+                                <th class="py-3.5 px-4 text-right">IVA</th>
+                                <th class="py-3.5 px-4 text-right">Total</th>
+                                <th class="py-3.5 px-5 text-right">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[#1E293B]/60 text-sm">
+                            ${list.length ? list.map(inv => {
+                                const idx = appState.invoices.indexOf(inv);
+                                const sup = getSupplier(inv.supplierId);
+                                const stBadge = inv.status === 'Aprovada'
+                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+                                const nifWrong = inv.source && inv.customerNif !== restaurantNif();
+                                return `
+                                    <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver itens e detalhe" onclick="openInvoiceDetail(${idx})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${idx})">
+                                        <td class="py-3.5 px-5 font-mono font-semibold text-white whitespace-nowrap">${escHtml(inv.id)}</td>
+                                        <td class="py-3.5 px-4">
+                                            <div class="font-medium text-white">${sup ? escHtml(sup.name) : 'Fornecedor Removido'}</div>
+                                            ${sup?.tradeName ? `<div class="text-xs text-slate-400">${escHtml(sup.tradeName)}</div>` : ''}
+                                        </td>
+                                        <td class="py-3.5 px-4 font-mono text-xs text-slate-400 whitespace-nowrap">${sup ? escHtml(sup.nif) : '-'}</td>
+                                        <td class="py-3.5 px-4 font-mono text-xs text-slate-400 whitespace-nowrap">${escHtml(inv.date)}</td>
+                                        <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-200 whitespace-nowrap">${fmtEur(inv.net)}</td>
+                                        <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-400 whitespace-nowrap">${fmtEur(inv.vat)}</td>
+                                        <td class="py-3.5 px-4 text-right font-mono font-bold tabular-nums text-white whitespace-nowrap">${fmtEur(inv.total)}</td>
+                                        <td class="py-3.5 px-5 text-right">
+                                            <div class="inline-flex items-center justify-end gap-2 whitespace-nowrap">
+                                                ${nifWrong ? `<span class="inline-flex px-2 py-1 rounded-full text-[11px] font-mono border bg-rose-500/15 text-rose-400 border-rose-500/30" title="NIF adquirente: ${escHtml(inv.customerNif || 'em falta')}">NIF errado</span>` : ''}
+                                                ${inv.status !== 'Aprovada' && role.canApproveInvoices
+                                                    ? `<button onclick="event.stopPropagation();approveExistingInvoice(appState.invoices[${idx}].id)" class="px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">Aprovar</button>`
+                                                    : `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">${inv.status === 'Aprovada' ? '✓ Aprovada' : 'Em Revisão'}</span>`}
+                                            </div>
+                                        </td>
+                                    </tr>`;
+                            }).join('') : emptyRowHtml(8, pg)}
+                        </tbody>
+                    </table>
+                </div>
+                ${pagerFooterHtml('invoices', pg)}`;
+        }
+
         function buildPurchasesView() {
             const role = appState.roles[appState.activeRole];
             const list = appState.invoices.filter(inv => inv.store === appState.activeStore);
@@ -1836,7 +1957,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
                         <div class="text-xs text-slate-400">Total Compras Aprovadas (Líquido)</div>
                         <div class="mt-1.5 font-mono font-bold text-2xl text-white tabular-nums">${fmtEur(totalApproved)}</div>
@@ -1845,75 +1966,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <div class="text-xs text-slate-400">Documentos Pendentes de Revisão</div>
                         <div class="mt-1.5 font-mono font-bold text-2xl text-amber-400 tabular-nums">${pendingCount}</div>
                     </div>
-                    <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
-                        <div class="text-xs text-slate-400">Leitura de faturas (OCR)</div>
-                        <div class="mt-1.5 font-mono font-semibold text-sm ${restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full ${restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
-                            ${restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
-                        </div>
-                        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono">
-                            <button onclick="openSettingsModal()" class="text-sky-400 underline">Definições</button>
-                            ${role.canApproveInvoices ? `<button onclick="openOcrReview({...OCR_SAMPLE, customer_nif: restaurantNif()}, 'exemplo-fatura.pdf')" class="text-sky-400 underline">Ver exemplo</button>
-                            <button onclick="openOcrReview({...OCR_SAMPLE, invoice_number: 'FT 2026/9944', customer_nif: '501234567', customer_name: 'Outro Restaurante, Lda.'}, 'exemplo-nif-errado.pdf')" class="text-sky-400 underline">Exemplo com NIF errado</button>` : ''}
-                        </div>
-                    </div>
                 </div>
 
-                <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
-                                    <th class="py-3.5 px-5">Fatura</th>
-                                    <th class="py-3.5 px-4">Fornecedor &amp; NIF</th>
-                                    <th class="py-3.5 px-4">Data</th>
-                                    <th class="py-3.5 px-4 text-right">Líquido</th>
-                                    <th class="py-3.5 px-4 text-right">IVA</th>
-                                    <th class="py-3.5 px-4 text-right">Total</th>
-                                    <th class="py-3.5 px-5 text-right">Estado / Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-[#1E293B]/60 text-sm">
-                                ${list.map(inv => {
-                                    const sup = getSupplier(inv.supplierId);
-                                    const stBadge = inv.status === 'Aprovada'
-                                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-                                    const typeColor = inv.docType === 'Nota de Crédito' ? 'text-rose-400' : inv.docType === 'Guia de Remessa' ? 'text-amber-300' : 'text-sky-400';
+                ${pagerSearchHtml('invoices', 'Nº da fatura, fornecedor, NIF, produto…', true)}
 
-                                    return `
-                                        <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver detalhe" onclick="openInvoiceDetail(${appState.invoices.indexOf(inv)})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${appState.invoices.indexOf(inv)})">
-                                            <td class="py-3.5 px-5">
-                                                <div class="font-mono font-semibold text-white">${escHtml(inv.id)}</div>
-                                                <div class="text-[11px] font-mono ${typeColor}">${escHtml(inv.docType)}</div>
-                                                ${inv.source && inv.customerNif !== restaurantNif() ? `<div class="text-[11px] font-mono text-rose-400">NIF adquirente: ${escHtml(inv.customerNif || 'em falta')}</div>` : ''}
-                                            </td>
-                                            <td class="py-3.5 px-4">
-                                                <div class="font-medium text-white">${sup ? escHtml(sup.name) : 'Fornecedor Removido'}</div>
-                                                <div class="text-xs font-mono text-slate-400">NIF ${sup ? escHtml(sup.nif) : '-'}</div>
-                                            </td>
-                                            <td class="py-3.5 px-4 font-mono text-xs text-slate-400">${escHtml(inv.date)}</td>
-                                            <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-200">${fmtEur(inv.net)}</td>
-                                            <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-400">${fmtEur(inv.vat)}</td>
-                                            <td class="py-3.5 px-4 text-right font-mono font-bold tabular-nums text-white">${fmtEur(inv.total)}</td>
-                                            <td class="py-3.5 px-5 text-right">
-                                                ${inv.status !== 'Aprovada' ? (
-                                                    role.canApproveInvoices ? `
-                                                        <button onclick="event.stopPropagation();approveExistingInvoice(appState.invoices[${appState.invoices.indexOf(inv)}].id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all">
-                                                            Aprovar
-                                                        </button>
-                                                    ` : `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">Em Revisão</span>`
-                                                ) : `
-                                                    <span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-mono border ${stBadge}">✓ Aprovada</span>
-                                                `}
-                                            </td>
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] overflow-hidden">${invoiceTableHtml()}</div>
             `;
         }
 
@@ -1937,7 +1994,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ${info('Número', escHtml(inv.id))}
                     ${info('ATCUD', escHtml(inv.atcud || '—'))}
                     ${info('Estado', escHtml(inv.status))}
-                    ${info('Origem', escHtml(inv.source || 'Registo manual'))}
+                    ${info('Origem', escHtml(inv.source ? inv.source.split(' · ')[0] : 'Registo manual'))}
                     ${inv.receiptRef ? info('Guia faturada', escHtml(inv.receiptRef)) : ''}
                     ${inv.billedBy ? info('Faturada em', escHtml(inv.billedBy)) : ''}
                     ${inv.orderId ? info('Encomenda', escHtml(inv.orderId)) : ''}
@@ -2715,7 +2772,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const rows = ex.lines.map((l, idx) => ocrRowHtml(l, idx)).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal(via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
+            openModal(via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF', ex.invoice_number || 'Número por confirmar', `<div class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -2992,6 +3049,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 return m.minStock > 0 && m.stockTheoretical < m.minStock;
             });
 
+            const pg_sup = pageOf('sup', appState.suppliers, s => [s.name, s.tradeName, s.nif, s.category, s.email, s.phone].join(' '));
+            const pg_ing = pageOf('ing', appState.ingredients, i => [i.name, i.sku, i.category, i.zone, i.packLabel, ...Object.values(i.supplierNames || {})].join(' '));
             let tabContent = '';
             if (sub === 'suppliers') {
                 tabContent = `
@@ -3007,7 +3066,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 </button>
                             ` : `<span class="text-[11px] font-mono text-slate-500">🔒 Só leitura (${escHtml(role.label)})</span>`}
                         </div>
-                        <div class="overflow-x-auto">
+                        <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('sup', 'Nome, NIF, categoria, contacto…')}</div>
+<div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead>
                                     <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
@@ -3020,7 +3080,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-[#1E293B]/60 text-sm">
-                                    ${appState.suppliers.map(s => {
+                                    ${pg_sup.rows.map(s => {
                                         const trend = supplierPriceTrend(s.id);
                                         const isHigh = trend.inflationPct > 5;
                                         return `
@@ -3056,10 +3116,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                                 </td>
                                             </tr>
                                         `;
-                                    }).join('')}
+                                    }).join('') || emptyRowHtml(6, pg_sup)}
                                 </tbody>
                             </table>
-                        </div>
+                        </div>${pagerFooterHtml('sup', pg_sup)}
                     </div>
                 `;
             } else if (sub === 'catalog') {
@@ -3076,7 +3136,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 </button>
                             ` : `<span class="text-[11px] font-mono text-slate-500">🔒 Só leitura (${escHtml(role.label)})</span>`}
                         </div>
-                        <div class="overflow-x-auto">
+                        <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('ing', 'Nome, SKU, categoria, zona…')}</div>
+<div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead>
                                     <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
@@ -3090,7 +3151,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-[#1E293B]/60 text-sm">
-                                    ${appState.ingredients.map(i => {
+                                    ${pg_ing.rows.map(i => {
                                         const m = getIngMetricsForStore(i, appState.activeStore);
                                         const lossPct = Math.round((1 - i.yieldFactor) * 100);
                                         const yieldPct = Math.round(i.yieldFactor * 100);
@@ -3127,10 +3188,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                                 </td>
                                             </tr>
                                         `;
-                                    }).join('')}
+                                    }).join('') || emptyRowHtml(7, pg_ing)}
                                 </tbody>
                             </table>
-                        </div>
+                        </div>${pagerFooterHtml('ing', pg_ing)}
                     </div>
                 `;
             } else {
@@ -3714,14 +3775,16 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const sala = getChannelMetrics(r)[0];
                 return { r, sala, suggested: suggestedPvpGross(sala.totalCost, target, r.vatRate) };
             }).sort((a, b) => b.sala.foodCostPct - a.sala.foodCostPct);
+            const pg_fc = pageOf('fc', rows, x => x.r.name);
             return `<section class="work-panel"><h2>Food cost de todas as fichas (Sala)</h2>
                 <p class="work-muted">Meta: ${fmtPct(target)}. Ordenado do food cost mais alto para o mais baixo. Clique num prato para abrir a ficha.</p>
-                <div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
+                <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('fc', 'Prato…')}</div>
+<div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
                 <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 pr-3">Prato</th><th class="py-2 px-3 text-right">Custo</th><th class="py-2 px-3 text-right">PVP c/ IVA</th><th class="py-2 px-3 text-right">Food cost</th><th class="py-2 pl-3 text-right">PVP sugerido</th></tr></thead>
-                <tbody class="divide-y divide-[#1E293B]/60">${rows.map(({ r, sala, suggested }) => `<tr class="cursor-pointer hover:bg-[#111827]/70" onclick="selectRecipe('${r.id}')">
+                <tbody class="divide-y divide-[#1E293B]/60">${pg_fc.rows.map(({ r, sala, suggested }) => `<tr class="cursor-pointer hover:bg-[#111827]/70" onclick="selectRecipe('${r.id}')">
                     <td class="py-2 pr-3 font-sans text-white">${escHtml(r.name)}</td><td class="py-2 px-3 text-right">${fmtEur(sala.totalCost)}</td><td class="py-2 px-3 text-right">${fmtEur(sala.pvpGross)}</td>
                     <td class="py-2 px-3 text-right ${sala.foodCostPct > target ? 'text-rose-400' : 'text-emerald-400'}">${sala.pvpGross > 0 ? fmtPct(sala.foodCostPct) : '—'}</td>
-                    <td class="py-2 pl-3 text-right">${fmtEur(suggested)}</td></tr>`).join('')}</tbody></table></div></section>`;
+                    <td class="py-2 pl-3 text-right">${fmtEur(suggested)}</td></tr>`).join('') || emptyRowHtml(5, pg_fc)}</tbody></table></div>${pagerFooterHtml('fc', pg_fc)}</section>`;
         }
         function buildRecipesView() {
             const sub = appState.recipeSubTab === 'dag' ? 'catalogue' : appState.recipeSubTab;
@@ -3766,6 +3829,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const activeQ = appState.activeBcgQuadrant;
                 const meta = bcgMeta[activeQ];
                 const filteredDishes = bcgCalc.classified.filter(item => item.quadrant === activeQ);
+            const pg_menu = pageOf('menu', filteredDishes, x => x.recipe.name);
 
                 content = `
                     <div class="space-y-5">
@@ -3813,7 +3877,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                     <span class="text-xs font-mono px-3 py-1 rounded-full bg-blue-600/20 text-sky-300 border border-sky-400/30">${filteredDishes.length} artigos</span>
                                 </div>
 
-                                <div class="overflow-x-auto rounded-xl border border-[#1E293B] bg-[#050814]">
+                                <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('menu', 'Prato…')}</div>
+<div class="overflow-x-auto rounded-xl border border-[#1E293B] bg-[#050814]">
                                     <table class="w-full text-left border-collapse">
                                         <thead>
                                             <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400">
@@ -3827,7 +3892,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         <tbody class="divide-y divide-[#1E293B]/60 text-xs sm:text-sm font-mono tabular-nums">
                                             ${filteredDishes.length === 0 ? `
                                                 <tr><td colspan="5" class="py-6 px-4 text-center font-sans text-xs text-slate-400">Nenhum prato neste quadrante para os limiares atuais.</td></tr>
-                                            ` : filteredDishes.map(item => `
+                                            ` : pg_menu.rows.map(item => `
                                                 <tr class="hover:bg-[#111827]/70">
                                                     <td class="py-3 px-4 font-sans font-semibold text-white">${escHtml(item.recipe.name)}</td>
                                                     <td class="py-3 px-3 text-right text-slate-300">${fmtEur(item.sala.pvpNet)}</td>
@@ -3835,10 +3900,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                                     <td class="py-3 px-3 text-right font-bold text-emerald-400">${fmtEur(item.marginEur)}</td>
                                                     <td class="py-3 px-4 text-right text-sky-400">${item.sold30d} un</td>
                                                 </tr>
-                                            `).join('')}
+                                            `).join('') || emptyRowHtml(5, pg_menu)}
                                         </tbody>
                                     </table>
-                                </div>
+                                </div>${pagerFooterHtml('menu', pg_menu)}
 
                                 <div class="p-4 rounded-xl bg-[#050814] border border-sky-400/25">
                                     <div class="text-xs font-mono uppercase text-sky-400 mb-1">Recomendação Estratégica Operacional</div>
@@ -4348,6 +4413,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         function buildSalesView() {
             const role = appState.roles[appState.activeRole];
             const log = appState.salesLog.filter(t => t.store === appState.activeStore);
+            const pg_sales = pageOf('sales', log, t => [t.id, t.time, t.source, t.item].join(' '));
+            const pg_pos = pageOf('pos', appState.posMappings, m => [m.posCode, m.posName, m.type, ...m.targets].join(' '));
 
             return `
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -4424,7 +4491,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             <button class="bg-blue-600 rounded p-2">Associar código</button></form>` : ''}
                         <p class="text-xs text-slate-400">Cada código de caixa explode automaticamente nos respetivos ingredientes e sub-receitas</p>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('pos', 'Código, artigo, ficha…')}</div>
+<div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
@@ -4436,7 +4504,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#1E293B]/60 text-xs sm:text-sm">
-                                ${appState.posMappings.map(m => `
+                                ${pg_pos.rows.map(m => `
                                     <tr class="hover:bg-[#111827]/70">
                                         <td class="py-3.5 px-5 font-mono font-bold text-sky-400">${escHtml(m.posCode)}</td>
                                         <td class="py-3.5 px-4 font-semibold text-white">${escHtml(m.posName)}</td>
@@ -4449,10 +4517,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         <td class="py-3.5 px-5 text-right font-mono font-semibold text-white">${fmtEur(m.priceGross)}
                                             ${role.canApproveInvoices ? `<button onclick="removePosMapping(${escHtml(JSON.stringify(m.posCode))})" class="ml-2 text-xs font-sans font-normal text-rose-300 hover:text-white underline">Remover</button>` : ''}</td>
                                     </tr>
-                                `).join('')}
+                                `).join('') || emptyRowHtml(5, pg_pos)}
                             </tbody>
                         </table>
-                    </div>
+                    </div>${pagerFooterHtml('pos', pg_pos)}
                 </div>
 
                 <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] overflow-hidden">
@@ -4460,7 +4528,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <h3 class="font-bold text-base text-white">Histórico Recente de Vendas &amp; COGS Abatido</h3>
                         <span class="text-xs font-mono text-slate-400">${log.length} registos</span>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('sales', 'Referência, origem, artigo…')}</div>
+<div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
@@ -4473,7 +4542,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#1E293B]/60 text-xs sm:text-sm font-mono tabular-nums">
-                                ${log.map(tx => `
+                                ${pg_sales.rows.map(tx => `
                                     <tr class="hover:bg-[#111827]/70">
                                         <td class="py-3 px-5 text-slate-300">${escHtml(tx.id)} <span class="text-slate-500">(${escHtml(tx.time)})</span></td>
                                         <td class="py-3 px-4">
@@ -4485,10 +4554,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         <td class="py-3 px-4 text-right font-semibold text-emerald-400">${fmtEur(tx.net)}</td>
                                         <td class="py-3 px-5 text-right text-sky-400">${fmtEur(tx.cogs)}</td>
                                     </tr>
-                                `).join('')}
+                                `).join('') || emptyRowHtml(6, pg_sales)}
                             </tbody>
                         </table>
-                    </div>
+                    </div>${pagerFooterHtml('sales', pg_sales)}
                 </div>
             `;
         }
@@ -4926,6 +4995,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const storeName = appState.stores[appState.activeStore].name;
             const zones = [...new Set([...appState.ingredients,...appState.subRecipesInventory].map(i=>i.zone))];
             const variance = calculateInventoryVariance(appState.activeStore);
+            const pg_variance = pageOf('variance', variance.rows, r => [r.name, r.zone].join(' '));
             const canEditCount = role.canCountInventory;
 
             const draft = appState.countDrafts?.[appState.activeStore];
@@ -4952,7 +5022,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             <span class="font-bold text-base ${variance.totalVarianceEur < 0 ? 'text-rose-400' : 'text-emerald-400'}">${fmtEur(variance.totalVarianceEur)}</span>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('variance', 'Ingrediente, zona…')}</div>
+<div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60">
@@ -4965,7 +5036,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#1E293B]/60 text-xs sm:text-sm font-mono tabular-nums">
-                                ${variance.rows.map(r => {
+                                ${pg_variance.rows.map(r => {
                                     const neg = r.varianceQty < -0.05;
                                     const pos = r.varianceQty > 0.05;
                                     return `
@@ -4982,10 +5053,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                             </td>
                                         </tr>
                                     `;
-                                }).join('')}
+                                }).join('') || emptyRowHtml(6, pg_variance)}
                             </tbody>
                         </table>
-                    </div>
+                    </div>${pagerFooterHtml('variance', pg_variance)}
                 </div>
 
                 </details>
@@ -4996,13 +5067,15 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     const items = appState.ingredients.filter(i => i.byStore[RESTAURANT]?.stockTheoretical > 0)
                         .map(i => ({ i, m: i.byStore[RESTAURANT], c: checks.filter(c => c.ingId === i.id) }))
                         .sort((a, b) => (b.c.length - a.c.length) || String(a.m.expiry || '9999').localeCompare(String(b.m.expiry || '9999')));
+                    const pg_expiry = pageOf('expiry', items, x => x.i.name);
                     const badge = c => ({ expired: '<span class="text-rose-400">Validade passada</span>', expiring: '<span class="text-amber-300">A terminar</span>', idle: `<span class="text-amber-300">Parado há ${c.days} dias</span>` })[c.kind];
                     return `<section class="work-panel"><h2>Validades e artigos parados</h2>
                     <p class="work-muted">A validade é preenchida ao receber mercadoria quando o artigo tem dias de validade no catálogo, e pode ser corrigida aqui. Artigos sem saídas há ${idleDays} dias ou mais geram um alerta para verificar a validade (altere o prazo em Definições).</p>
-                    <div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm"><thead><tr class="text-[11px] font-mono uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Stock</th><th class="py-2 px-3">Validade</th><th class="py-2 px-3">Última saída</th><th class="py-2 px-3">Estado</th></tr></thead>
-                    <tbody class="divide-y divide-[#1E293B]/60">${items.map(({ i, m, c }) => `<tr><td class="py-2 px-3 text-white">${escHtml(i.name)}</td><td class="py-2 px-3 text-right font-mono">${fmtNum(m.stockTheoretical, 2)} ${escHtml(i.baseUnit)}</td>
+                    <div class="px-5 py-3 border-b border-[#1E293B]">${pagerSearchHtml('expiry', 'Artigo…')}</div>
+<div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm"><thead><tr class="text-[11px] font-mono uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Stock</th><th class="py-2 px-3">Validade</th><th class="py-2 px-3">Última saída</th><th class="py-2 px-3">Estado</th></tr></thead>
+                    <tbody class="divide-y divide-[#1E293B]/60">${pg_expiry.rows.map(({ i, m, c }) => `<tr><td class="py-2 px-3 text-white">${escHtml(i.name)}</td><td class="py-2 px-3 text-right font-mono">${fmtNum(m.stockTheoretical, 2)} ${escHtml(i.baseUnit)}</td>
                         <td class="py-2 px-3"><input type="date" aria-label="Validade de ${escHtml(i.name)}" value="${escHtml(m.expiry || '')}" ${canEditCount ? '' : 'disabled'} onchange="setExpiry('${i.id}', this.value)" class="px-2 py-1 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white"></td>
-                        <td class="py-2 px-3 font-mono text-slate-400">${lastOut(i.id) ? escHtml(lastOut(i.id).slice(0, 10)) : '—'}</td><td class="py-2 px-3">${c.map(badge).join(' · ') || '<span class="text-emerald-400">OK</span>'}</td></tr>`).join('')}</tbody></table></div></section>`;
+                        <td class="py-2 px-3 font-mono text-slate-400">${lastOut(i.id) ? escHtml(lastOut(i.id).slice(0, 10)) : '—'}</td><td class="py-2 px-3">${c.map(badge).join(' · ') || '<span class="text-emerald-400">OK</span>'}</td></tr>`).join('') || emptyRowHtml(5, pg_expiry)}</tbody></table></div>${pagerFooterHtml('expiry', pg_expiry)}</section>`;
                 })()}
                 ${(()=>{const preps=appState.recipes.filter(r=>r.recipeType==='sub_recipe');return preps.length?`<section class="work-panel"><h2>Preparações</h2>
                     <p class="work-muted">Produza lotes de preparações para abater a matéria-prima no momento em que é transformada.</p>
