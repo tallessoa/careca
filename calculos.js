@@ -415,3 +415,44 @@ function parseInvoiceText(rows, ownNif = '') {
         : !printedTotals.some(n => Math.abs(n - gross) <= 0.01) ? `a soma das linhas com IVA (${gross.toFixed(2)}) não aparece como total no documento` : '';
     return { ok: !reason, reason, ex };
 }
+
+// CMP antes de uma entrada (para anular ou corrigir uma compra). Se a entrada era todo o stock, não há como recuar: mantém o CMP.
+function reverseWeightedAverageCost(stockQty, cmp, qty, price) {
+    const rest = stockQty - qty;
+    if (rest <= 1e-9) return cmp;
+    const before = (stockQty * cmp - qty * price) / rest;
+    return Number.isFinite(before) && before >= 0 ? before : cmp;
+}
+
+// Data ISO (AAAA-MM-DD) mais n dias.
+function addDaysIso(date, n) {
+    const d = new Date(String(date).slice(0, 10) + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+// Dias inteiros entre duas datas (b − a).
+function daysBetween(a, b) {
+    return Math.round((Date.parse(String(b).slice(0, 10)) - Date.parse(String(a).slice(0, 10))) / 86400000);
+}
+
+// Artigos com stock a verificar: validade passada, validade a terminar (≤ 2 dias) ou parados (sem saídas há idleDays dias).
+// Parado conta desde a última saída; se nunca saiu, desde a última entrada. Sem movimentos não há como saber: não alerta.
+function stockCheckList(ingredients, movements, store, today, idleDays = 14) {
+    const out = [];
+    for (const ing of ingredients) {
+        const m = ing.byStore?.[store];
+        if (!m || !(m.stockTheoretical > 0)) continue;
+        if (m.expiry) {
+            const left = daysBetween(today, m.expiry);
+            if (left < 0) out.push({ ingId: ing.id, kind: 'expired', days: -left });
+            else if (left <= 2) out.push({ ingId: ing.id, kind: 'expiring', days: left });
+        }
+        const own = movements.filter(mv => mv.ingredient === ing.id && mv.store === store && mv.date && mv.type !== 'correcao');
+        const last = list => list.reduce((d, mv) => (mv.date > d ? mv.date : d), '');
+        const since = last(own.filter(mv => mv.qty < 0)) || last(own.filter(mv => mv.qty > 0));
+        const idle = since ? daysBetween(since, today) : 0;
+        if (since && idle >= idleDays) out.push({ ingId: ing.id, kind: 'idle', days: idle });
+    }
+    return out;
+}

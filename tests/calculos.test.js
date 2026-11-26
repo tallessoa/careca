@@ -336,3 +336,28 @@ test('parseInvoiceText: recusa quando o total impresso não bate ou falta o NIF'
     assert.equal(ctx.parseInvoiceText(pdfRows.map(r => r.replace('509 412 882', '509 412 883')), '516234870').ok, false);
     assert.equal(ctx.parseInvoiceText(['Documento digitalizado'], '').ok, false);
 });
+
+test('reverseWeightedAverageCost: desfaz a entrada; se era todo o stock mantém o CMP', () => {
+    const ctx = load({});
+    const after = ctx.weightedAverageCost(10, 5, 10, 7); // 6
+    near(ctx.reverseWeightedAverageCost(20, after, 10, 7), 5);
+    near(ctx.reverseWeightedAverageCost(10, 7, 10, 7), 7);
+});
+
+test('stockCheckList: validade passada, a terminar e artigo parado', () => {
+    const ctx = load({});
+    const ings = [
+        { id: 'a', byStore: { chiado: { stockTheoretical: 2, expiry: '2026-11-20' } } },
+        { id: 'b', byStore: { chiado: { stockTheoretical: 2, expiry: '2026-11-27' } } },
+        { id: 'c', byStore: { chiado: { stockTheoretical: 2 } } },
+        { id: 'd', byStore: { chiado: { stockTheoretical: 0, expiry: '2026-01-01' } } },
+        { id: 'e', byStore: { chiado: { stockTheoretical: 1 } } }
+    ];
+    const mv = [
+        { ingredient: 'c', store: 'chiado', qty: 5, date: '2026-10-01' }, { ingredient: 'c', store: 'chiado', qty: -1, date: '2026-11-01T10:00:00Z' },
+        { ingredient: 'b', store: 'chiado', qty: -1, date: '2026-11-25' }
+    ];
+    const r = ctx.stockCheckList(ings, mv, 'chiado', '2026-11-26', 14).map(x => x.ingId + ':' + x.kind + ':' + x.days);
+    assert.deepEqual([...r], ['a:expired:6', 'b:expiring:1', 'c:idle:25']);
+    assert.equal(ctx.addDaysIso('2026-11-30', 3), '2026-12-03');
+});
