@@ -461,11 +461,35 @@
 @media(max-width:480px){.work-panel{padding:12px}.work-row{padding:10px}.work-pair{gap:6px}.count-entry{grid-template-columns:minmax(0,1fr) 85px}}
 </style>
 <style>
-.sim-table{width:100%;border-collapse:collapse}.sim-table th,.sim-table td{padding:8px;text-align:right;border-bottom:1px solid #26354b}.sim-table th:first-child{text-align:left}.sim-table tbody th[colspan]{color:#7dd3fc}
-.sim-ingredient-list{gap:4px}
-.sim-ingredient-list .count-entry{padding:4px 10px;line-height:1.2}
-.sim-ingredient-list .work-field{display:flex;align-items:center;gap:6px;white-space:nowrap}
-.sim-ingredient-list input[data-ingredient]{padding:4px 6px}
+.sim-cols{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}@media(min-width:1024px){.sim-cols{grid-template-columns:5fr 7fr}}
+.sim-box{padding:18px;border-radius:16px;background:#050814;border:1px solid rgba(56,189,248,.22);min-width:0}.sim-final{border-color:rgba(56,189,248,.35)}
+.sim-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px;padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid rgba(56,189,248,.15)}
+.sim-head h3{margin:2px 0 0;font-size:1.15rem;font-weight:700;color:#fff}.sim-head small b{color:#fff}
+.sim-level{font:600 11px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.05em;color:#38bdf8}.sim-green{color:#34d399}
+.sim-tag{font:12px ui-monospace,monospace;padding:4px 10px;border-radius:8px;background:rgba(59,130,246,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.25)}
+.sim-tag.sim-good{background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3)}.sim-tag.sim-bad{background:rgba(244,63,94,.15);color:#fb7185;border-color:rgba(244,63,94,.35)}
+.sim-link{font:12px ui-monospace,monospace;color:#94a3b8;text-decoration:underline;text-underline-offset:4px}.sim-link:hover{color:#38bdf8}
+.sim-price{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 6px}.sim-price label{font-weight:700;color:#fff}
+.sim-price span{display:flex;align-items:center;gap:6px;font:700 1.1rem ui-monospace,monospace;color:#38bdf8}
+.work-panel .sim-price input{width:7.5rem;text-align:right;font:700 1.25rem ui-monospace,monospace;color:#38bdf8;border-color:rgba(56,189,248,.4)}
+.sim-scale{display:flex;justify-content:space-between;gap:6px;font:11px ui-monospace,monospace;color:#94a3b8;margin:6px 0 14px}
+.sim-alert{padding:12px 14px;border-radius:14px;border:1px solid}.sim-alert div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}
+.sim-alert strong{font:700 12px ui-monospace,monospace;text-transform:uppercase}.sim-alert span{font:11px ui-monospace,monospace;text-transform:uppercase;padding:2px 8px;border-radius:6px}.sim-alert p{margin:6px 0 0;font-size:.8rem;color:#cbd5e1}
+.sim-warn{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.35)}.sim-warn strong{color:#fbbf24}.sim-warn span{background:rgba(245,158,11,.2);color:#fcd34d}
+.sim-ok{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.3)}.sim-ok strong{color:#34d399}.sim-ok span{background:rgba(16,185,129,.2);color:#6ee7b7}
+.sim-gain{background:rgba(14,165,233,.08);border-color:rgba(56,189,248,.3)}.sim-gain strong{color:#38bdf8}.sim-gain span{background:rgba(14,165,233,.2);color:#7dd3fc}
+.sim-scen{margin-top:16px;padding-top:12px;border-top:1px solid rgba(56,189,248,.15)}.sim-scen small{font:11px ui-monospace,monospace;text-transform:uppercase;color:#94a3b8}
+.sim-scen div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}.sim-scen button{padding:9px 4px;border-radius:12px;font-size:12px;font-weight:600;background:#030712;border:1px solid}
+.sim-s0{border-color:rgba(56,189,248,.2)!important;color:#e2e8f0}.sim-s1{border-color:rgba(245,158,11,.35)!important;color:#fcd34d}.sim-s2{border-color:rgba(244,63,94,.35)!important;color:#fda4af}
+.sim-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}@media(max-width:480px){.sim-grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sim-stat{padding:10px;border-radius:12px;background:#0b1120;border:1px solid rgba(56,189,248,.15);min-width:0}.sim-stat small{font:11px ui-monospace,monospace;color:#94a3b8}
+.sim-stat b{display:block;font:700 1.2rem ui-monospace,monospace;color:#fff;font-variant-numeric:tabular-nums}.sim-accent{color:#38bdf8!important}.sim-red{color:#fb7185!important}.sim-greenv{color:#34d399!important}
+.sim-subs{margin-top:10px;display:grid;gap:6px}.sim-sub{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;font:12px ui-monospace,monospace;color:#cbd5e1;padding:6px 10px;border-radius:8px;background:#0b1120}.sim-sub b{color:#38bdf8}
+.sim-flow{width:max-content;max-width:100%;margin:10px auto;padding:4px 12px;border-radius:999px;background:rgba(37,99,235,.2);border:1px solid rgba(56,189,248,.25);font:11px ui-monospace,monospace;color:#7dd3fc}
+.sim-meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-top:14px;font:11px ui-monospace,monospace;color:#34d399}.sim-meta span:last-child{color:#94a3b8}
+.sim-bar{height:6px;border-radius:999px;background:#1e293b;margin-top:6px;overflow:hidden}.sim-bar i{display:block;height:100%;background:linear-gradient(90deg,#34d399,#38bdf8)}.sim-bar i.sim-bad{background:#f43f5e}
+.sim-final:has(.sim-bar .sim-bad) .sim-meta span:first-child{color:#fb7185}
+.sim-others{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 14px;font:11px ui-monospace,monospace;color:#94a3b8}
 </style>
 <style>
 #app-sidebar .nav-item{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:44px;padding:8px 10px;text-align:left}
@@ -4020,36 +4044,93 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             return result;
         }
 
-        function simulationResults(recipe, prices) {
-            const unit = recipe.yieldUnit === 'un' ? 'dose' : escHtml(recipe.yieldUnit);
-            const actual = calculateRecipeCost(recipe).unitCost;
-            const simulated = calculateRecipeCost(recipe,prices).unitCost;
-            const current = getChannelMetrics(recipe);
-            const channels = getChannelMetrics(recipe,prices);
-            const row = (name,a,b) => `<tr><th scope="row">${name}</th><td>${a}</td><td>${b}</td></tr>`;
-            return `<h3>Impacto por ${unit}</h3><div class="overflow-x-auto"><table class="sim-table"><thead><tr><th>Indicador</th><th>Atual</th><th>Simulado</th></tr></thead>
-                <tbody>${row('Custo da receita',fmtEur(actual),fmtEur(simulated))}
-                ${channels.map((c,i)=>c.pvpNet>0?`<tr><th colspan="3">${escHtml(c.name)}</th></tr>
-                    ${row('Food cost',fmtPct(current[i].foodCostPct),fmtPct(c.foodCostPct))}
-                    ${row('Margem',fmtEur(current[i].marginEur),fmtEur(c.marginEur))}
-                    ${row('Margem (%)',fmtPct(current[i].marginPct),fmtPct(c.marginPct))}`:'').join('')}</tbody></table></div>`;
+        // Simulador em cascata: preço de um insumo → sub-receitas → prato final (só no ecrã, nada é gravado).
+        const simState = { ingId: null, price: null };
+        const SIM_SCENARIOS = [[0, 'Base'], [8.5, '+8,5%'], [37, '+37%']];
+
+        function simContext() {
+            const dish = getRecipe(document.getElementById('sim-panel')?.dataset.recipe);
+            const ing = getIngredient(simState.ingId);
+            return dish && ing ? { dish, ing, base: getIngMetricsForStore(ing).cmp } : null;
         }
 
-        function updateSimulation(form) {
-            const result = document.getElementById('simulation-results');
-            const recipe = getRecipe(form.dataset.recipe);
-            if (!result || !recipe) return;
-            const prices = new Map();
-            for (const input of form.querySelectorAll('[data-ingredient]')) {
-                const raw = input.value.trim();
-                if (!raw) continue;
-                if (!/^\d+(?:[.,]\d{1,4})?$/.test(raw) || !Number.isFinite(Number(raw.replace(',','.')))) {
-                    result.textContent = 'Introduza um preço positivo ou zero, com até quatro casas decimais.';
-                    return;
-                }
-                prices.set(input.dataset.ingredient,Number(raw.replace(',','.')));
-            }
-            result.innerHTML = simulationResults(recipe,prices);
+        function simQtyLabel(qty, unit) {
+            if (unit === 'kg' && qty < 1) return `${fmtNum(qty * 1000, 0)} g`;
+            if (unit === 'L' && qty < 1) return `${fmtNum(qty * 1000, 0)} ml`;
+            return `${fmtNum(qty, unit === 'un' ? 2 : 3)} ${escHtml(unit)}`;
+        }
+
+        function simAlert(price, base, unit) {
+            const delta = base > 0 ? (price - base) / base * 100 : 0;
+            const ref = `${fmtEur(base)}/${escHtml(unit)}`;
+            const [tone, title, pill, desc] = delta > 5
+                ? ['warn', `⚠ Alerta de inflação (+${fmtPct(delta)})`, '> 5,0% limite', `Subida superior a 5% face ao custo médio atual (${ref}). Recálculo em cascata nas sub-receitas e no prato.`]
+                : delta >= 0
+                    ? ['ok', `Preço dentro da tolerância (+${fmtPct(delta)})`, 'Estável', `Variação até 5% face ao custo médio atual (${ref}). Sem alerta de inflação.`]
+                    : ['gain', `Poupança negociada (${fmtPct(delta)})`, 'Ganho de margem', `Preço abaixo do custo médio atual (${ref}). A margem do prato sobe.`];
+            return `<div class="sim-alert sim-${tone}"><div><strong>${title}</strong><span>${pill}</span></div><p>${desc}</p></div>`;
+        }
+
+        function simCascade({ dish, ing, base }, price) {
+            const prices = new Map([[ing.id, price]]);
+            const use = ingredientUsage(dish, ing.id);
+            const yf = ingYieldFactor(ing);
+            const unit = escHtml(ing.baseUnit);
+            const doseCost = use.grossQty * price;
+            const [now, sim] = [getChannelMetrics(dish)[0], getChannelMetrics(dish, prices)[0]];
+            const target = Number(dish.targetFcPct ?? targetFcPct()) || 30;
+            const hasPvp = sim.pvpNet > 0;
+            const over = hasPvp && sim.foodCostPct > target;
+            const subs = use.subRecipes.map(getRecipe).filter(Boolean).map(sub => {
+                const u = sub.yieldUnit === 'un' ? 'dose' : escHtml(sub.yieldUnit);
+                return `<div class="sim-sub"><span>${escHtml(sub.name)}</span><span>${fmtEur(calculateRecipeCost(sub).unitCost)} → <b>${fmtEur(calculateRecipeCost(sub, prices).unitCost)}</b> / ${u}</span></div>`;
+            }).join('');
+            const others = getChannelMetrics(dish, prices).slice(1).filter(c => c.pvpNet > 0)
+                .map(c => `<span>${escHtml(c.name)}: FC ${fmtPct(c.foodCostPct)} · margem ${fmtEur(c.marginEur)}</span>`).join('');
+            const stat = (label, value, cls = '', was = '') => `<div class="sim-stat"><small>${label}</small><b class="${cls}">${value}</b>${was ? `<small>Atual: ${was}</small>` : ''}</div>`;
+            return `<div class="sim-box">
+                    <div class="sim-head"><div><span class="sim-level">Nível 2 • ${use.subRecipes.length ? 'Sub-receita intermédia' : 'Insumo no prato'}</span><h3>${escHtml(ing.name)}</h3></div>
+                        <span class="sim-tag">Quebra técnica: ${fmtPct((1 - yf) * 100, 0)} (rendimento ${fmtNum(yf, 2)})</span></div>
+                    <div class="sim-grid3">
+                        ${stat(`Custo líquido / ${unit}`, `${fmtEur(price / yf)}/${unit}`)}
+                        ${stat('Dose na ficha', use.netQty > 0 ? simQtyLabel(use.netQty, ing.baseUnit) : '—')}
+                        ${stat('Custo da dose', fmtEur(doseCost), 'sim-accent', fmtEur(use.grossQty * base))}
+                    </div>${subs ? `<div class="sim-subs">${subs}</div>` : ''}
+                </div>
+                <div class="sim-flow">↓ Atualização imediata no prato final</div>
+                <div class="sim-box sim-final">
+                    <div class="sim-head"><div><span class="sim-level sim-green">Nível 3 • Prato final</span><h3>${escHtml(dish.name)}</h3>
+                        <small>PVP s/ IVA: <b>${hasPvp ? fmtEur(sim.pvpNet) : '—'}</b> • Restantes custos: <b>${fmtEur(sim.totalCost - doseCost)}</b></small></div>
+                        <span class="sim-tag ${!hasPvp ? '' : over ? 'sim-bad' : 'sim-good'}">${!hasPvp ? 'Sem PVP de sala' : over ? 'Acima da meta de food cost' : 'Meta food cost OK'}</span></div>
+                    <div class="sim-grid3">
+                        ${stat('Custo técnico', fmtEur(sim.totalCost), '', fmtEur(now.totalCost))}
+                        ${stat('Food cost (%)', hasPvp ? fmtPct(sim.foodCostPct) : '—', over ? 'sim-red' : 'sim-greenv', hasPvp ? fmtPct(now.foodCostPct) : '')}
+                        ${stat('Margem bruta (€)', hasPvp ? fmtEur(sim.marginEur) : '—', 'sim-accent', hasPvp ? fmtEur(now.marginEur) : '')}
+                    </div>
+                    <div class="sim-meta"><span>${!hasPvp ? 'Defina o PVP de sala na ficha para ver o food cost.' : over ? `Acima da meta definida (> ${fmtPct(target)}). PVP sugerido: ${fmtEur(suggestedPvpGross(sim.totalCost, target, dish.vatRate))} c/ IVA` : `Dentro da meta definida (≤ ${fmtPct(target)})`}</span><span>Meta alvo: ${fmtPct(target)}</span></div>
+                    <div class="sim-bar"><i class="${over ? 'sim-bad' : ''}" style="width:${hasPvp ? Math.min(100, sim.foodCostPct / target * 100) : 0}%"></i></div>
+                    ${others ? `<div class="sim-others">${others}</div>` : ''}
+                </div>`;
+        }
+
+        function setSimPrice(value, source) {
+            const ctx = simContext();
+            const price = Math.max(0, Number(String(value).replace(',', '.')));
+            if (!ctx || !Number.isFinite(price)) return;
+            simState.price = price;
+            const unit = ctx.ing.baseUnit;
+            const slider = document.getElementById('sim-slider');
+            const input = document.getElementById('sim-price');
+            if (source !== 'slider') { slider.max = Math.max(Number(slider.max), price); slider.value = price; }
+            if (source !== 'input') input.value = price.toFixed(2);
+            document.getElementById('sim-alert').innerHTML = simAlert(price, ctx.base, unit);
+            document.getElementById('sim-cascade').innerHTML = simCascade(ctx, price);
+        }
+
+        function selectSimIngredient(id) {
+            simState.ingId = id;
+            simState.price = null;
+            renderActiveView();
         }
 
         function buildCostSimulation(selected) {
@@ -4057,15 +4138,32 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const dish = dishes.find(r=>r.id===selected?.id) || dishes[0];
             if (!dish) return '<p class="work-panel">Crie uma ficha de produto final para simular os custos.</p>';
             const ingredients = [...simulationIngredients(dish).values()];
-            return `<section class="work-panel"><h2>Simular custos de um prato</h2>
-                <label class="work-field">Prato<select onchange="selectRecipe(this.value)">${dishes.map(r=>`<option value="${escHtml(r.id)}" ${r.id===dish.id?'selected':''}>${escHtml(r.name)}</option>`).join('')}</select></label>
-                <h3>Preços dos ingredientes</h3><p class="work-muted">Introduza os preços que quer testar. Os campos vazios usam o custo médio atual.</p>
-                <form data-recipe="${escHtml(dish.id)}" oninput="updateSimulation(this)" onsubmit="event.preventDefault()"><div class="work-list sim-ingredient-list">
-                ${ingredients.map(ing=>{const cmp=getIngMetricsForStore(ing).cmp;
-                    return `<label class="work-row count-entry"><span><strong>${escHtml(ing.name)}</strong><small>Atual: ${fmtEur(cmp,4)}/${escHtml(ing.baseUnit)}</small></span>
-                        <span class="work-field">€ / ${escHtml(ing.baseUnit)}<input inputmode="decimal" autocomplete="off" data-ingredient="${escHtml(ing.id)}" placeholder="${fmtNum(cmp,4)}"></span></label>`;
-                }).join('')}</div><div class="work-actions"><button type="button" class="work-btn" onclick="this.form.reset();updateSimulation(this.form)">Repor custos atuais</button></div></form>
-                <div id="simulation-results" aria-live="polite">${simulationResults(dish,new Map())}</div></section>`;
+            if (!ingredients.some(i => i.id === simState.ingId)) { simState.ingId = ingredients[0]?.id ?? null; simState.price = null; }
+            const ing = getIngredient(simState.ingId);
+            const dishSelect = `<label class="work-field">Ficha técnica<select onchange="selectRecipe(this.value)">${dishes.map(r=>`<option value="${escHtml(r.id)}" ${r.id===dish.id?'selected':''}>${escHtml(r.name)}</option>`).join('')}</select></label>`;
+            if (!ing) return `<section class="work-panel"><h2>Simulador de custos</h2>${dishSelect}<p class="work-muted">Esta ficha ainda não tem insumos.</p></section>`;
+            const base = getIngMetricsForStore(ing).cmp;
+            const price = simState.price ?? base;
+            const unit = escHtml(ing.baseUnit);
+            const min = +(base * 0.8).toFixed(2), max = +Math.max(base * 1.6, price, 1).toFixed(2);
+            return `<section class="work-panel" id="sim-panel" data-recipe="${escHtml(dish.id)}"><h2>Simulador de custos</h2>
+                <p class="work-muted">Escolha uma ficha e um dos seus insumos, ajuste o preço de compra e veja a propagação em cascata na sub-receita e no prato final. Nada é gravado.</p>
+                <div class="sim-cols"><div class="sim-box">
+                    <div class="sim-head"><div><span class="sim-level">Nível 1 • Matéria-prima</span><h3>Compra a fornecedor</h3></div>
+                        <button type="button" class="sim-link" onclick="setSimPrice(${base})">Base ${fmtEur(base)}</button></div>
+                    <div class="work-fields">${dishSelect}
+                        <label class="work-field">Insumo da ficha<select onchange="selectSimIngredient(this.value)">${ingredients.map(i=>`<option value="${escHtml(i.id)}" ${i.id===ing.id?'selected':''}>${escHtml(i.name)}</option>`).join('')}</select></label></div>
+                    <div class="sim-price"><label for="sim-price">${escHtml(ing.name)}</label>
+                        <span><input id="sim-price" type="number" min="0" step="0.01" inputmode="decimal" value="${price.toFixed(2)}" oninput="setSimPrice(this.value,'input')"> €/${unit}</span></div>
+                    <input id="sim-slider" type="range" class="dag-slider" aria-label="Preço de compra de ${escHtml(ing.name)}" min="${min}" max="${max}" step="0.01" value="${price}" oninput="setSimPrice(this.value,'slider')">
+                    <div class="sim-scale"><span>Mín: ${fmtEur(min)}</span><span>Ref: ${fmtEur(base)}</span><span>Máx: ${fmtEur(max)}</span></div>
+                    <div id="sim-alert" aria-live="polite">${simAlert(price, base, ing.baseUnit)}</div>
+                    <div class="sim-scen"><small>Simular cenários:</small><div>${SIM_SCENARIOS.map(([pct, label], i) => {
+                        const p = +(base * (1 + pct / 100)).toFixed(2);
+                        return `<button type="button" class="sim-s${i}" onclick="setSimPrice(${p})">${fmtEur(p)} (${label})</button>`;
+                    }).join('')}</div></div>
+                </div>
+                <div id="sim-cascade" aria-live="polite">${simCascade({ dish, ing, base }, price)}</div></div></section>`;
         }
 
         function recipeListRow(r) {

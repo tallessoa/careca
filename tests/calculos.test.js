@@ -528,3 +528,18 @@ test('orderCheck: falta, a mais, não veio, não encomendado, oferta e preço', 
     assert.equal(by.e.status, 'Não encomendado'); assert.equal(by.e.offerOnly, true);
     assert.equal(out.length, 5);
 });
+
+test('ingredientUsage segue as sub-receitas até à dose do prato', () => {
+    const c = load(bowlState());
+    const u = c.ingredientUsage(c.getRecipe('rec_bowl'), 'ing_salmao');
+    near(u.netQty, 0.18);
+    near(u.grossQty, 0.18 / 0.82);
+    assert.deepEqual([...u.subRecipes], ['rec_sub_salmao']);
+    const direct = c.ingredientUsage(c.getRecipe('rec_bowl'), 'ing_abacate');
+    near(direct.netQty, 0.065);
+    assert.equal(direct.subRecipes.length, 0);
+    // custo da dose do insumo = bruto × preço, coerente com o custo da ficha
+    const prices = new Map([['ing_salmao', 20]]);
+    const bowl = c.getRecipe('rec_bowl');
+    near(c.calculateRecipeCost(bowl, prices).unitCost - c.calculateRecipeCost(bowl).unitCost, u.grossQty * (20 - 12.35));
+});

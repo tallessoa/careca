@@ -72,8 +72,7 @@ function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId
             if (!ing) return;
             const ingMetrics = getIngMetricsForStore(ing, storeId);
             const baseNetQty = convertToBaseQty(item.netQty, item.unit || ing.baseUnit, ing.baseUnit);
-            const yieldFactor = Math.max(0.05, Math.min(1, Number(ing.yieldFactor) || 1));
-            const grossQty = baseNetQty / yieldFactor;
+            const grossQty = baseNetQty / ingYieldFactor(ing);
             const unitPrice = prices?.get(ing.id) ?? ingMetrics.cmp;
             itemsCost += grossQty * unitPrice;
         } else if (item.type === 'sub_recipe') {
@@ -87,12 +86,47 @@ function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId
     });
 
     const batchCost = itemsCost + (Number(recipe.extraFixedCost) || 0);
-    const yieldQty = Math.max(0.001, Number(recipe.yieldQuantity) || 1);
-    const cookingLoss = Math.max(0, Math.min(0.95, (Number(recipe.cookingLossPct) || 0) / 100));
-    const netYield = Math.max(0.001, yieldQty * (1 - cookingLoss));
-    const unitCost = batchCost / netYield;
+    const unitCost = batchCost / recipeNetYield(recipe);
 
     return {batchCost,unitCost,totalRecipeCost:unitCost};
+}
+
+function ingYieldFactor(ing) {
+    return Math.max(0.05, Math.min(1, Number(ing.yieldFactor) || 1));
+}
+
+// Rendimento líquido do lote, depois da quebra de cocção.
+function recipeNetYield(recipe) {
+    const yieldQty = Math.max(0.001, Number(recipe.yieldQuantity) || 1);
+    const cookingLoss = Math.max(0, Math.min(0.95, (Number(recipe.cookingLossPct) || 0) / 100));
+    return Math.max(0.001, yieldQty * (1 - cookingLoss));
+}
+
+// Quanto de um insumo entra numa unidade (dose) da receita, seguindo as sub-receitas.
+// netQty e grossQty na unidade base do insumo; subRecipes = ids das sub-receitas por onde passa.
+function ingredientUsage(recipe, ingId, visited = new Set()) {
+    const out = { netQty: 0, grossQty: 0, subRecipes: [] };
+    if (!recipe || visited.has(recipe.id)) return out;
+    const next = new Set(visited).add(recipe.id);
+    const perUnit = 1 / recipeNetYield(recipe);
+    (recipe.items || []).forEach(item => {
+        if (item.type === 'ingredient' && item.refId === ingId) {
+            const ing = getIngredient(ingId);
+            const qty = ing ? convertToBaseQty(item.netQty, item.unit || ing.baseUnit, ing.baseUnit) * perUnit : NaN;
+            if (!Number.isFinite(qty)) return;
+            out.netQty += qty;
+            out.grossQty += qty / ingYieldFactor(ing);
+        } else if (item.type === 'sub_recipe') {
+            const sub = getRecipe(item.refId);
+            const used = ingredientUsage(sub, ingId, next);
+            const k = sub ? convertToBaseQty(item.netQty, item.unit || sub.yieldUnit, sub.yieldUnit) * perUnit : NaN;
+            if (!(used.netQty > 0) || !Number.isFinite(k)) return;
+            out.netQty += used.netQty * k;
+            out.grossQty += used.grossQty * k;
+            for (const id of [sub.id, ...used.subRecipes]) if (!out.subRecipes.includes(id)) out.subRecipes.push(id);
+        }
+    });
+    return out;
 }
 
 function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore) {
