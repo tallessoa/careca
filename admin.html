@@ -1432,7 +1432,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const isCrit = a.severity === 'critical';
                 const borderCol = isCrit ? 'border-rose-500/35 bg-rose-500/5' : 'border-amber-500/35 bg-amber-500/5';
                 const pillCol = isCrit ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300';
-                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', idle_stock: 'PARADO' }[a.type] || 'ALERTA';
+                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', idle_stock: 'PARADO', new_supplier: 'NOVO', new_ingredient: 'NOVO' }[a.type] || 'ALERTA';
 
                 return `
                     <div class="p-4 rounded-xl border ${a.unread ? borderCol : 'border-[#1E293B] bg-[#111827]/60 opacity-75'} transition-all">
@@ -2671,6 +2671,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <label class="text-slate-300">Data<input id="ocr-date" type="date" class="${field}" value="${escHtml(/^\d{4}-\d{2}-\d{2}$/.test(ex.date) ? ex.date : new Date().toLocaleDateString('sv-SE'))}"></label>
                     <label class="text-slate-300">ATCUD<input id="ocr-atcud" class="${field}" value="${escHtml(ex.atcud || '')}"></label>
                 </div>
+                ${supplier ? '' : `<div class="p-3 rounded-xl bg-sky-500/10 border border-sky-400/40 text-xs text-sky-200"><strong>Fornecedor novo.</strong> É a primeira fatura de ${escHtml(ex.supplier_name || 'este fornecedor')} (NIF ${escHtml(ex.supplier_nif || '—')}). Ao aprovar, o fornecedor é criado e fica um alerta para completar a ficha.</div>`}
                 <label class="block text-xs text-slate-300">Fornecedor (NIF lido: ${escHtml(ex.supplier_nif || '—')})<select id="ocr-supplier" class="${field} font-sans">
                     ${supplier ? '' : `<option value="__new">+ Criar fornecedor «${escHtml(ex.supplier_name || 'Sem nome')}» (NIF ${escHtml(ex.supplier_nif || '—')})</option>`}
                     ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
@@ -2869,14 +2870,19 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (unnamed) { openNewIngredientDialog(unnamed); return; }
             const before = structuredClone(appState);
             let supplierId = document.getElementById('ocr-supplier').value;
+            const newAlert = (type, title, message) => appState.alerts.unshift({ id: crypto.randomUUID(), type, severity: 'warning', store: RESTAURANT, unread: true,
+                time: new Date().toLocaleString('pt-PT'), document: number, title, message });
             if (supplierId === '__new') {
                 supplierId = 'sup_' + Date.now();
                 appState.suppliers.unshift({ id: supplierId, name: ex.supplier_name || 'Fornecedor ' + ex.supplier_nif, nif: ex.supplier_nif || '', category: 'Por classificar', email: '', phone: '', terms: '30 dias' });
+                newAlert('new_supplier', 'Fornecedor novo: ' + appState.suppliers[0].name, `Criado a partir da fatura ${number}. Complete a ficha em Fornecedores: nome comercial, categoria, prazo de pagamento, e-mail e telefone.`);
             }
             rows.forEach((row, idx) => {
                 if (lines[idx].ing !== '__new') return;
-                lines[idx].ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
-                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' }).id;
+                const ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
+                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' });
+                lines[idx].ing = ing.id;
+                newAlert('new_ingredient', 'Artigo novo: ' + ing.name, `Criado a partir da fatura ${number}. Confirme em Insumos a categoria, a zona, o stock mínimo, os alergénios e a validade.`);
             });
             // Guarda o nome que o fornecedor usa na fatura («Ovos 15dz Classe L»): o artigo fica com o nome curto, a fatura seguinte reconhece-o.
             rows.forEach((row, idx) => {
