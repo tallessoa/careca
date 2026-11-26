@@ -2253,7 +2253,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const lines = inv.lines || [];
             const guide = inv.receiptRef ? appState.invoices.find(g => g.id === inv.receiptRef && g.supplierId === inv.supplierId) : null;
             openModal(inv.docType + ' ' + inv.id, sup?.name || 'Fornecedor removido', `<div class="space-y-5">
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div class="flex flex-col sm:flex-row gap-4"><div class="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4">
                     ${info('Fornecedor', escHtml(sup?.name || 'Fornecedor removido'))}
                     ${info('NIF do fornecedor', escHtml(sup?.nif || '—'))}
                     ${info('Data', escHtml(inv.date))}
@@ -2264,7 +2264,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ${inv.receiptRef ? info('Guia faturada', escHtml(inv.receiptRef)) : ''}
                     ${inv.billedBy ? info('Faturada em', escHtml(inv.billedBy)) : ''}
                     ${inv.orderId ? info('Encomenda', escHtml(inv.orderId)) : ''}
-                </div>
+                </div>${inv.qr ? `<div id="inv-qr" title="${escHtml(inv.qr)}" style="width:9rem;height:9rem" class="shrink-0 p-2 rounded-xl bg-white text-[11px] text-slate-500 flex items-center justify-center">A gerar QR…</div>` : ''}</div>
                 <div class="text-sm">NIF do adquirente: ${nifRow}</div>
                 ${lines.length ? `<div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
                     <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Qtd.</th><th class="py-2 px-3 text-right">Preço s/ IVA</th><th class="py-2 px-3 text-right">IVA</th><th class="py-2 px-3 text-right">Total s/ IVA</th></tr></thead>
@@ -2279,6 +2279,18 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div class="flex justify-end gap-6 text-sm font-mono"><span class="text-slate-400">Líquido <strong class="text-white">${fmtEur(inv.net)}</strong></span><span class="text-slate-400">IVA <strong class="text-white">${fmtEur(inv.vat)}</strong></span><span class="text-slate-400">Total <strong class="text-white">${fmtEur(inv.total)}</strong></span></div>
                 ${inv.edits?.length ? `<details class="text-xs text-slate-400"><summary>Editado ${inv.edits.length} vez(es)</summary>${inv.edits.map(e => `<div>${escHtml(new Date(e.date).toLocaleString('pt-PT'))} · ${escHtml(e.by)} · antes: ${escHtml(e.before.id)}, ${escHtml(e.before.date)}, ${fmtEur(e.before.total)}</div>`).join('')}</details>` : ''}
                 <div class="flex justify-end gap-3">${appState.roles[appState.activeRole].canApproveInvoices ? `<button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+            if (inv.qr) drawInvoiceQr(inv.qr);
+        }
+        // QR fiscal refeito no browser a partir do texto que a IA leu (só o texto fica guardado).
+        async function drawInvoiceQr(text) {
+            const box = () => document.getElementById('inv-qr');
+            try {
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
+                const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
+                if (!box()) return;
+                box().innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true, alt: 'Código QR da fatura' });
+                box().firstChild.setAttribute('width', '100%');
+            } catch (e) { if (box()) box().textContent = 'QR indisponível'; }
         }
         const ING_CATEGORIES = ['Proteínas', 'Hortícolas', 'Laticínios', 'Secos', 'Bebidas', 'Embalagens'];
         // Categorias de insumos: as de base, as criadas pelo utilizador e as que já estão em uso no catálogo.
@@ -2741,6 +2753,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 invoice_number: { type: 'STRING' }, atcud: { type: 'STRING' }, date: { type: 'STRING', description: 'AAAA-MM-DD' },
                 supplier_name: { type: 'STRING' }, supplier_nif: { type: 'STRING' },
                 customer_name: { type: 'STRING' }, customer_nif: { type: 'STRING', description: 'NIF do adquirente/cliente; vazio se não existir' },
+                qr_code: { type: 'STRING', description: 'texto completo do código QR fiscal (A:NIF*B:...*...), copiado sem alterações; vazio se não existir ou não se conseguir ler' },
                 lines: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
                     description: { type: 'STRING' }, sku: { type: 'STRING' }, qty: { type: 'NUMBER' }, unit: { type: 'STRING', description: 'kg, g, L, cl, ml, un ou a unidade impressa' },
                     unit_price_net: { type: 'NUMBER', description: 'preço unitário sem IVA, após descontos' }, line_total_net: { type: 'NUMBER' }, vat_rate: { type: 'NUMBER' },
@@ -3308,7 +3321,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             });
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
             const inv = { orderId: ocrDraft.orderId || undefined, id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
-                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: (ocrDraft.via || 'OCR') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
+                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), qr: String(ex.qr_code || '').trim() || undefined, source: (ocrDraft.via || 'OCR') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
             try { postReceipt(inv); } catch (error) { appState = before; showToast('Compra pendente', error.message, 'warning'); return; }
             closeOrder(inv);
             ocrDraft = null;
