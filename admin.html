@@ -603,6 +603,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .ft-ro .ft-meta>div span{color:#94a3b8;font-size:.75rem}.ft-ro .ft-meta>div strong{color:#f1f5f9;font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
 @media(min-width:720px){.ft-ro .ft-meta>div:nth-child(4),.ft-ro .ft-meta>div:nth-child(6),.ft-ro .ft-meta>div:nth-child(7){grid-column:span 2}}
 .ft-ro .ft-table td{padding:7px 8px}
+.ft-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}
+.ft-actions .work-btn{height:40px;padding:0 16px;border-radius:10px;font-size:.85rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+.ft-export{display:inline-flex;align-items:center;gap:8px;color:#94a3b8;font-size:.8rem;white-space:nowrap}
+.ft-export .work-btn{background:#1e293b;color:#7dd3fc;border:1px solid #354862}
+.ft-export .work-btn:hover{background:#27364f}
 .ft-ro .ft-top{grid-template-columns:minmax(0,1fr)}
 @media(min-width:900px){.ft-ro .ft-top{grid-template-columns:minmax(0,4fr) minmax(0,1fr)}}
 .ft-ro .ft-ingredients .ft-table td,.ft-ro .ft-ingredients .ft-table th{padding-left:6px;padding-right:6px}
@@ -4394,15 +4399,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </tbody></table></div>
                     <p class="ft-hint">${rec.priceMode === 'manual' ? 'Preços escritos à mão nesta ficha.' : `Preços calculados com ${fmtPct(target)} de food cost pretendido e a configuração dos canais de venda.`} IVA ${fmtPct(rec.vatRate, 0)}. Food cost sobre o PVP sem IVA, incluindo os custos fixos do canal.</p></section>` : ''}
                 <div class="ft-grid">
-                <div class="ft-grid">
                     <section class="ft-box"><h3 class="ft-bar">Alergénios (incluindo derivados)</h3>
                         <ul class="ft-allergens">${ALLERGENS.map(a => `<li class="${found.includes(a) ? 'on' : ''}"><span aria-hidden="true">${found.includes(a) ? '✓' : '—'}</span>${escHtml(a)}${found.includes(a) ? '<span class="sr-only"> (contém)</span>' : ''}</li>`).join('')}</ul></section>
                     <section class="ft-box"><h3 class="ft-bar">Notas</h3><p class="ft-text">${escHtml(rec.notes || '—')}</p></section>
                 </div>
-                <div class="flex flex-wrap justify-end gap-3">
+                <div class="ft-actions" role="group" aria-label="Ações da ficha">
                     ${role.canEditRecipes ? `<button type="button" class="work-btn" onclick="confirmDeleteRecipe('${rec.id}')">Eliminar</button>` : ''}
                     ${!isFinal && role.canCountInventory ? `<button type="button" class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>` : ''}
-                    <span class="pl-export" aria-label="Exportar ficha">Exportar: ${exportButtons(rec.id)}</span>
+                    <div class="ft-export" aria-label="Exportar ficha"><span>Exportar</span>${exportButtons(rec.id)}</div>
                     ${role.canEditRecipes ? `<button type="button" class="work-btn primary" onclick="openRecipeModal('${rec.id}')">Editar ficha</button>` : ''}
                     <button type="button" class="work-btn" onclick="closeModal()">Fechar</button>
                 </div></div>`;
@@ -4570,7 +4574,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canEditRecipes ? `
-                            <button onclick="openRecipeModal(null, true)" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300 transition-all">
+                            <button onclick="pickRecipeFile()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300 transition-all">
                                 ✨ Ler Ficha com IA
                             </button>
                             <button onclick="openRecipeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
@@ -4594,7 +4598,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         }
 
         // --- CRUD FICHAS TÉCNICAS + LEITURA IA / OCR (EXCEL, PDF OU FOTO) ---
-        function openRecipeModal(recipeId = null, startInOcrMode = false) {
+        function openRecipeModal(recipeId = null) {
             if (!appState.roles[appState.activeRole].canEditRecipes) {
                 showToast('Permissão RBAC insuficiente', 'O perfil atual está em modo só leitura para fichas técnicas.', 'warning');
                 return;
@@ -4609,15 +4613,6 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
             const html = `
                 <div class="space-y-4">
-                    ${isEdit ? '' : `<div class="ft-mode" role="group" aria-label="Como preencher a ficha">
-                        <button type="button" id="ft-mode-manual" aria-pressed="${!startInOcrMode}" onclick="setRecipeFillMode(false)">✍️ Preencher manualmente</button>
-                        <button type="button" id="ft-mode-ocr" aria-pressed="${startInOcrMode}" onclick="setRecipeFillMode(true)">✨ Ler Ficha com IA</button>
-                    </div>
-                    <div id="recipe-ocr-panel" class="ft-box ft-ocr" ${startInOcrMode ? '' : 'hidden'}>
-                        <label>Foto ou PDF de uma ficha técnica (PDF, JPG, PNG, WEBP ou HEIC, até 14 MB)
-                            <input type="file" accept="application/pdf,image/*" onchange="readRecipeFile(this)"></label>
-                        <p id="recipe-ocr-status" role="status" class="ft-hint">O OCR preenche o cabeçalho, os ingredientes, o método e as notas. Os ingredientes são ligados aos artigos pelo código ou pelo nome; os que não encontrar ficam por escolher na pesquisa.</p>
-                    </div>`}
                     <form onsubmit="saveRecipeForm(event, '${rec ? rec.id : ''}')" class="ft-sheet" data-id="${rec ? rec.id : ''}">
                         <div class="ft-head">
                             <div class="ft-title">
@@ -4708,7 +4703,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 </div>
             `;
 
-            openModal(isEdit ? 'Editar Ficha Técnica' : 'Nova Ficha Técnica (Manual ou IA / OCR)', isEdit ? `${rec.name} (${rec.code})` : 'Configure insumos, sub-receitas, perdas e PVPs', html, 'xl');
+            openModal(isEdit ? 'Editar Ficha Técnica' : 'Nova Ficha Técnica', isEdit ? `${rec.name} (${rec.code})` : 'Configure insumos, sub-receitas, perdas e PVPs', html, 'xl');
             renderRecipeChannels(rec?.priceMode === 'manual' ? Object.fromEntries(getChannelMetrics(rec).map(c => [c.key, c.pvpGross])) : {});
             renderRecipeFormRows();
             recalcRecipeModalPreview();
@@ -4985,12 +4980,6 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             }
         }
 
-        function setRecipeFillMode(ocr) {
-            document.getElementById('ft-mode-manual').setAttribute('aria-pressed', String(!ocr));
-            document.getElementById('ft-mode-ocr').setAttribute('aria-pressed', String(ocr));
-            document.getElementById('recipe-ocr-panel').hidden = !ocr;
-        }
-
         const RECIPE_OCR_SCHEMA = {
             type: 'OBJECT',
             properties: {
@@ -5004,33 +4993,67 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             required: ['name', 'ingredients']
         };
 
-        // Lê uma ficha técnica (foto ou PDF) com o mesmo OCR das faturas e preenche o formulário aberto. Nada é gravado sem «Criar Ficha Técnica».
+        // Escolher a ficha (foto, PDF, Excel ou CSV) e ler com o mesmo OCR das faturas. Abre o formulário preenchido para rever; nada é gravado sem «Criar Ficha Técnica».
+        function pickRecipeFile() {
+            let input = document.getElementById('recipe-file');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'file'; input.id = 'recipe-file'; input.hidden = true;
+                input.accept = 'application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.xlsx,.xls,.csv,text/csv';
+                input.onchange = () => readRecipeFile(input);
+                document.body.appendChild(input);
+            }
+            input.click();
+        }
+        function readAsBase64(blob) {
+            return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro.')); r.readAsDataURL(blob); });
+        }
+        // Excel e CSV viram texto (CSV, uma secção por folha) para o mesmo pedido ao OCR.
+        async function sheetToCsv(file) {
+            if (/\.csv$/i.test(file.name)) return file.text();
+            await loadScript(EXPORT_LIBS.xlsx[0]);
+            const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+            return wb.SheetNames.map(n => `# Folha: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n])).join('\n');
+        }
         async function readRecipeFile(input) {
             const file = input.files[0];
-            const status = document.getElementById('recipe-ocr-status');
+            input.value = '';
             if (!file) return;
-            const say = text => { if (status) status.textContent = text; };
-            const mime = invoiceMime(file);
-            if (!mime) return say(`Formato não suportado: «${file.name}». Use PDF, JPG, PNG, WEBP ou HEIC.`);
-            if (file.size > 14 * 1024 * 1024) return say(`Ficheiro grande demais (${fmtNum(file.size / 1048576, 1)} MB). Máximo 14 MB.`);
-            if (!await invoiceMagicOk(file, mime).catch(() => false)) return say(`«${file.name}» não é um ${mime === 'application/pdf' ? 'PDF' : 'imagem'} válido.`);
-            input.disabled = true;
+            const isSheet = /\.(xlsx|xls|csv)$/i.test(file.name);
+            const mime = isSheet ? 'text/csv' : invoiceMime(file);
+            if (!mime) { showToast('Formato não suportado', `«${file.name}». Use PDF, foto, Excel ou CSV.`, 'warning'); return; }
+            if (file.size > 14 * 1024 * 1024) { showToast('Ficheiro grande demais', `${fmtNum(file.size / 1048576, 1)} MB. Máximo 14 MB.`, 'warning'); return; }
+            if (!isSheet && !await invoiceMagicOk(file, mime).catch(() => false)) { showToast('Ficheiro recusado', `«${file.name}» não é um ${mime === 'application/pdf' ? 'PDF' : 'imagem'} válido.`, 'warning'); return; }
+            openModal('A ler a ficha…', file.name, '<p class="text-sm text-slate-300"><span id="ocr-stage">A preparar o ficheiro</span>… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
+            const started = performance.now();
+            const ticker = setInterval(() => { const el = document.getElementById('ocr-elapsed'); if (el) el.textContent = Math.round((performance.now() - started) / 1000) + ' s'; }, 500);
+            const setStage = (label, text) => { const el = document.getElementById('ocr-stage'); if (el) el.textContent = text; };
             try {
-                say('A preparar o ficheiro…');
-                const upload = await prepareInvoiceImage(file, mime);
-                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro.')); r.readAsDataURL(upload); });
-                say('A ler a ficha com o OCR… pode demorar até um minuto.');
-                const { ex } = await geminiOcr(data, upload === file ? mime : upload.type,
-                    'Extrai os dados desta ficha técnica de restaurante portuguesa: cabeçalho, ingredientes (código, nome, quantidade líquida, unidade, observações), método de confeção e notas. Quantidades com vírgula decimal (0,08 = 0.08). Não inventes campos: deixa vazio o que não estiver no documento.',
-                    RECIPE_OCR_SCHEMA, (_, text) => say(text + '…'));
-                if (!document.getElementById('rec-name')) return; // o utilizador fechou a ficha entretanto
+                let data, uploadType;
+                if (isSheet) {
+                    setStage('Ler a folha', 'A ler a folha de cálculo');
+                    const csv = await sheetToCsv(file);
+                    data = await readAsBase64(new Blob([csv], { type: 'text/csv' }));
+                    uploadType = 'text/csv';
+                } else {
+                    setStage('Preparar o ficheiro', 'A preparar o ficheiro');
+                    const upload = await prepareInvoiceImage(file, mime);
+                    uploadType = upload === file ? mime : upload.type;
+                    data = await readAsBase64(upload);
+                }
+                const { ex } = await geminiOcr(data, uploadType,
+                    'Extrai os dados desta ficha técnica de restaurante portuguesa (pode ser uma foto, um PDF, uma folha de cálculo ou CSV em texto): cabeçalho, ingredientes (código, nome, quantidade líquida, unidade, observações), método de confeção e notas. Quantidades com vírgula decimal (0,08 = 0.08). Não inventes campos: deixa vazio o que não estiver no documento.',
+                    RECIPE_OCR_SCHEMA, setStage);
+                if (!ex.name && !(ex.ingredients || []).length) throw Error('Não encontrei uma ficha técnica neste ficheiro.');
+                openRecipeModal();
                 applyRecipeOcr(ex);
                 const missing = appState.recipeFormRows.filter(r => !r.refId).length;
-                say(`✓ Lidos ${appState.recipeFormRows.length} ingrediente(s) de «${file.name}».` + (missing ? ` Por ligar ao catálogo: ${missing} (a amarelo), escolha o artigo na pesquisa.` : '') + ' Reveja tudo antes de criar a ficha.');
+                showToast(`Ficha lida: ${file.name}`, `${appState.recipeFormRows.length} ingrediente(s).` + (missing ? ` ${missing} por ligar ao catálogo (a amarelo), escolha o artigo na pesquisa.` : '') + ' Reveja e clique em Criar Ficha Técnica.', missing ? 'warning' : 'success');
             } catch (e) {
                 console.error('Leitura de ficha técnica falhou', e);
-                say('Não foi possível ler a ficha: ' + e.message);
-            } finally { input.disabled = false; input.value = ''; }
+                closeModal();
+                showToast('Não foi possível ler a ficha', e.message.split('\n')[0], 'warning');
+            } finally { clearInterval(ticker); }
         }
 
         function applyRecipeOcr(ex) {
@@ -5867,7 +5890,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
     const escapePattern = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const names = [...aliases.keys()].sort((a,b)=>b.length-a.length).map(escapePattern);
     const pattern = new RegExp('(?<![\\p{L}\\p{N}_])(?:'+names.join('|')+')(?![\\p{L}\\p{N}_])','giu');
-    const excluded = '#modal-subtitle,.ft-head,.ft-title,.ft-mode,button,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
+    const excluded = '#modal-subtitle,.ft-head,.ft-title,.ft-mode,.ft-meta,.ft-bar,.ft-table th,.ft-hint,.ft-text,.ft-actions,.ft-export,button,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
     function help(term) {
         const button = document.createElement('button');
         button.type = 'button';
