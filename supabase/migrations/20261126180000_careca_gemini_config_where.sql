@@ -18,3 +18,11 @@ begin
   where id;
   update careca.gemini_limites set valor = p_orcamento_usd where chave = 'orcamento_mensal_usd';
 end $$;
+
+-- O painel só lista modelos com preço (para estimar o custo). Fonte: ai.google.dev/pricing, nível pago Standard, 26/11/2026.
+insert into careca.gemini_precos (modelo, valido_desde, entrada_usd_m, saida_usd_m) values
+  ('gemini-3.6-flash', '2026-01-01', 0.75, 3.75),
+  ('gemini-3.6-flash', '2027-01-01', 1.50, 7.50),
+  ('gemini-3.1-flash-lite', '2026-01-01', 0.25, 1.50),
+  ('gemini-3-flash-preview', '2026-01-01', 0.50, 3.00)
+on conflict (modelo, valido_desde) do nothing;
