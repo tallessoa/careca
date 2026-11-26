@@ -2716,6 +2716,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <label class="block text-xs text-slate-300">Fornecedor (NIF lido: ${escHtml(ex.supplier_nif || '—')})<select id="ocr-supplier" class="${field} font-sans">
                     ${supplier ? '' : `<option value="__new">+ Criar fornecedor «${escHtml(ex.supplier_name || 'Sem nome')}» (NIF ${escHtml(ex.supplier_nif || '—')})</option>`}
                     ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
+                ${supplier ? '' : `<label class="block text-xs text-slate-300">Nome comercial do fornecedor novo (marca, opcional)<input id="ocr-sup-trade" class="${field} font-sans" placeholder="Ex: o nome que está na fachada ou no camião"></label>`}
                 <div class="space-y-2">${rows}</div>
                 <div class="text-xs font-mono text-slate-300">Total lido: líquido ${fmtEur(ex.totals?.net)} · IVA ${fmtEur(ex.totals?.vat)} · total ${fmtEur(ex.totals?.gross)}${diff > 0.05 ? ` <span class="text-amber-300">· a soma das linhas (${fmtEur(net)}) não bate com o total: confira o documento.</span>` : ''}</div>
                 ${nifIssue ? '<label class="flex items-center gap-2 text-xs text-rose-200"><input type="checkbox" id="ocr-nif-ok"> Confirmo que a mercadoria foi recebida e quero lançar este documento mesmo assim.</label>' : ''}
@@ -2915,7 +2916,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 time: new Date().toLocaleString('pt-PT'), document: number, title, message });
             if (supplierId === '__new') {
                 supplierId = 'sup_' + Date.now();
-                appState.suppliers.unshift({ id: supplierId, name: ex.supplier_name || 'Fornecedor ' + ex.supplier_nif, nif: ex.supplier_nif || '', category: 'Por classificar', email: '', phone: '', terms: '30 dias' });
+                appState.suppliers.unshift({ id: supplierId, name: ex.supplier_name || 'Fornecedor ' + ex.supplier_nif, tradeName: document.getElementById('ocr-sup-trade')?.value.trim() || '', nif: ex.supplier_nif || '', category: 'Por classificar', email: '', phone: '', terms: '30 dias' });
                 newAlert('new_supplier', 'Fornecedor novo: ' + appState.suppliers[0].name, `Criado a partir da fatura ${number}. Complete a ficha em Fornecedores: nome comercial, categoria, prazo de pagamento, e-mail e telefone.`);
             }
             rows.forEach((row, idx) => {
