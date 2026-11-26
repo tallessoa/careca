@@ -5833,7 +5833,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
     const escapePattern = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const names = [...aliases.keys()].sort((a,b)=>b.length-a.length).map(escapePattern);
     const pattern = new RegExp('(?<![\\p{L}\\p{N}_])(?:'+names.join('|')+')(?![\\p{L}\\p{N}_])','giu');
-    const excluded = '#modal-subtitle,.ft-title,.ft-mode,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
+    const excluded = '#modal-subtitle,.ft-head,.ft-title,.ft-mode,button,script,style,svg,textarea,input,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.gloss-term,.gloss-help,[data-kareca-widget],.kd-btn,.kd-list';
     function help(term) {
         const button = document.createElement('button');
         button.type = 'button';
