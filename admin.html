@@ -484,6 +484,17 @@ html.gloss-off .gloss-term::after{content:none}
 .gloss-help:hover,.gloss-help:focus-visible{opacity:1;color:#38bdf8}
 .gloss-help:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 </style>
+<style>
+/* Listas de seleção com o tema do painel: seta própria e lista de opções escura em vez do estilo nativo claro. */
+html{color-scheme:dark}
+select{-webkit-appearance:none;appearance:none;background-color:#050814;color:#f1f5f9;border:1px solid #1E293B;border-radius:.75rem;padding-right:2.25rem!important;cursor:pointer;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2338BDF8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .75rem center;background-size:12px}
+select:hover{border-color:#334155}
+select:focus{outline:none;border-color:#38BDF8;box-shadow:0 0 0 2px rgba(56,189,248,.2)}
+select:disabled{opacity:.5;cursor:not-allowed}
+select option,select optgroup{background:#0B1120;color:#E2E8F0}
+#role-selector{border:0;box-shadow:none}
+</style>
 </head>
 <body class="font-sans antialiased bg-[#050814] text-slate-100 min-h-screen flex flex-col">
 
@@ -595,7 +606,7 @@ html.gloss-off .gloss-term::after{content:none}
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         <span>Repor Dados de Demo</span>
                     </button>
-                    <button onclick="openSettingsModal()" class="w-full py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Definições (NIF e Gemini)</button>
+                    <button onclick="openSettingsModal()" class="w-full py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Definições (NIF e OCR)</button>
                     <div class="grid grid-cols-2 gap-2">
                         <button onclick="exportBackup()" class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white">Exportar cópia</button>
                         <label class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-semibold bg-[#111827] border border-[#1E293B] text-slate-300 hover:text-white text-center cursor-pointer">Importar cópia<input type="file" accept=".json,application/json" class="hidden" onchange="importBackup(this)"></label>
@@ -804,7 +815,7 @@ html.gloss-off .gloss-term::after{content:none}
         function createDefaultState() {
             return {
                 activeTab: 'dashboard',
-                importedSales: [], movements: [], openingVolumeDate: new Date().toISOString(),
+                importedSales: [], movements: [{ store: 'chiado', ingredient: 'ing_vinho', document: 'FT 2026/0388', qty: 9, date: addDaysIso(new Date().toISOString(), -21) }], openingVolumeDate: new Date().toISOString(),
                 activeStore: RESTAURANT,
                 activeRole: 'owner',
                 settings: { restaurantNif: '516234870', geminiModel: 'gemini-3.8-flash' },
@@ -878,10 +889,10 @@ html.gloss-off .gloss-term::after{content:none}
                 // Stock, Mínimos e CMP diferenciados por Estabelecimento (ingredient_location_costs)
                 ingredients: [
                     {
-                        id: 'ing_salmao', allergens: ['Peixe'], supplierPrices: { sup_pescados: { price: 12.80, date: '2026-11-19' }, sup_iberica: { price: 13.40, date: '2026-10-28' } }, sku: 'PEIX-001', name: 'Lombo de Salmão Fresco', category: 'Proteínas', supplierId: 'sup_pescados', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa Esferovite 10 kg → 10,00 kg', yieldFactor: 0.82,
+                        id: 'ing_salmao', shelfLifeDays: 3, allergens: ['Peixe'], supplierPrices: { sup_pescados: { price: 12.80, date: '2026-11-19' }, sup_iberica: { price: 13.40, date: '2026-10-28' } }, sku: 'PEIX-001', name: 'Lombo de Salmão Fresco', category: 'Proteínas', supplierId: 'sup_pescados', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa Esferovite 10 kg → 10,00 kg', yieldFactor: 0.82,
                         priceHistory: [11.20, 11.40, 11.65, 11.80, 11.80, 12.80],
                         byStore: {
-                            chiado:   { stockTheoretical: 9.5, stockCounted: 9.3, minStock: 6.0, cmp: 12.35, lastCost: 12.80, prevCost: 11.80 },
+                            chiado:   { stockTheoretical: 9.5, stockCounted: 9.3, minStock: 6.0, cmp: 12.35, lastCost: 12.80, prevCost: 11.80, expiry: addDaysIso(new Date().toISOString(), 1) },
                         }
                     },
                     {
@@ -913,14 +924,14 @@ html.gloss-off .gloss-term::after{content:none}
                         }
                     },
                     {
-                        id: 'ing_cogumelos', sku: 'HORT-021', name: 'Mix Cogumelos Silvestres', category: 'Hortícolas', supplierId: 'sup_horta', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa 3 kg → 3,00 kg', yieldFactor: 0.90,
+                        id: 'ing_cogumelos', shelfLifeDays: 5, sku: 'HORT-021', name: 'Mix Cogumelos Silvestres', category: 'Hortícolas', supplierId: 'sup_horta', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa 3 kg → 3,00 kg', yieldFactor: 0.90,
                         priceHistory: [8.80, 8.90, 9.00, 9.10, 9.30, 9.50],
                         byStore: {
                             chiado:   { stockTheoretical: 2.4, stockCounted: 2.3, minStock: 3.0, cmp: 9.20, lastCost: 9.50, prevCost: 9.10 },
                         }
                     },
                     {
-                        id: 'ing_abacate', supplierPrices: { sup_horta: { price: 5.50, date: '2026-11-17' }, sup_iberica: { price: 5.20, date: '2026-11-10' } }, sku: 'HORT-007', name: 'Abacate Hass Maduro', category: 'Hortícolas', supplierId: 'sup_horta', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa 4 kg → 4,00 kg', yieldFactor: 0.75,
+                        id: 'ing_abacate', shelfLifeDays: 6, supplierPrices: { sup_horta: { price: 5.50, date: '2026-11-17' }, sup_iberica: { price: 5.20, date: '2026-11-10' } }, sku: 'HORT-007', name: 'Abacate Hass Maduro', category: 'Hortícolas', supplierId: 'sup_horta', zone: 'Câmara Fria', baseUnit: 'kg', packLabel: 'Caixa 4 kg → 4,00 kg', yieldFactor: 0.75,
                         priceHistory: [4.90, 5.10, 5.15, 5.20, 5.35, 5.50],
                         byStore: {
                             chiado:   { stockTheoretical: 4.2, stockCounted: 3.6, minStock: 3.5, cmp: 5.40, lastCost: 5.50, prevCost: 5.20 },
@@ -1166,6 +1177,7 @@ html.gloss-off .gloss-term::after{content:none}
         ensureCurrentPeriod();
         // Modelo por omissão antigo: a Google limitou o 2.5 a quem já o usava.
         if (appState.settings?.geminiModel === 'gemini-2.5-flash') appState.settings.geminiModel = 'gemini-3.8-flash';
+        (appState.invoices || []).forEach(inv => { if (inv.source?.startsWith('Gemini')) inv.source = inv.source.replace(/^Gemini/, 'OCR'); });
 
         let storageBaseline;
         try {storageBaseline = localStorage.getItem(STORAGE_KEY);} catch {storageBaseline = null;}
@@ -1355,6 +1367,34 @@ html.gloss-off .gloss-term::after{content:none}
             if (appState.activeTab === 'dashboard') renderActiveView();
         }
 
+        // Cria alertas de validade e de artigos parados. Não repete um alerta do mesmo artigo e tipo nos últimos 7 dias.
+        function refreshStockCheckAlerts() {
+            const today = new Date().toLocaleDateString('sv-SE');
+            const recent = (type, ingId) => appState.alerts.some(a => a.type === type && a.ingId === ingId && a.store === RESTAURANT && (a.unread || daysBetween(a.createdAt || today, today) < 7));
+            let added = 0;
+            for (const c of stockCheckList(appState.ingredients, appState.movements, RESTAURANT, today, appState.settings?.idleDays || 14)) {
+                const ing = getIngredient(c.ingId), type = c.kind === 'idle' ? 'idle_stock' : 'expiry';
+                if (recent(type, ing.id)) continue;
+                const m = ing.byStore[RESTAURANT], stock = fmtNum(m.stockTheoretical, 2) + ' ' + ing.baseUnit;
+                const text = {
+                    expired: [`${ing.name}: validade passada`, `Terminou a ${m.expiry} (há ${c.days} dia(s)) e há ${stock} em stock. Verifique e registe a quebra se for o caso.`],
+                    expiring: [`${ing.name}: validade a terminar`, `Termina a ${m.expiry}${c.days === 0 ? ' (hoje)' : ` (daqui a ${c.days} dia(s))`}. Há ${stock} em stock: use primeiro.`],
+                    idle: [`${ing.name}: sem saídas há ${c.days} dias`, `Há ${stock} em stock parado. Verifique a validade e o estado do produto.`]
+                }[c.kind];
+                appState.alerts.unshift({ id: crypto.randomUUID(), type, ingId: ing.id, severity: c.kind === 'expired' ? 'critical' : 'warning', store: RESTAURANT, unread: true,
+                    time: new Date().toLocaleString('pt-PT'), createdAt: today, title: text[0], message: text[1] });
+                added++;
+            }
+            return added;
+        }
+        function setExpiry(ingId, value) {
+            const m = getIngredient(ingId)?.byStore[RESTAURANT];
+            if (!m) return;
+            if (value) m.expiry = value; else delete m.expiry;
+            appState.alerts = appState.alerts.filter(a => !(a.type === 'expiry' && a.ingId === ingId && a.unread));
+            refreshStockCheckAlerts();
+            persistState(); updateChrome(); renderActiveView();
+        }
         function renderAlertsDrawer() {
             const container = document.getElementById('alerts-drawer-list');
             const filtered = appState.alerts.filter(a => a.store === appState.activeStore);
@@ -1368,7 +1408,7 @@ html.gloss-off .gloss-term::after{content:none}
                 const isCrit = a.severity === 'critical';
                 const borderCol = isCrit ? 'border-rose-500/35 bg-rose-500/5' : 'border-amber-500/35 bg-amber-500/5';
                 const pillCol = isCrit ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300';
-                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF' }[a.type] || 'ALERTA';
+                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', idle_stock: 'PARADO' }[a.type] || 'ALERTA';
 
                 return `
                     <div class="p-4 rounded-xl border ${a.unread ? borderCol : 'border-[#1E293B] bg-[#111827]/60 opacity-75'} transition-all">
@@ -1762,7 +1802,7 @@ html.gloss-off .gloss-term::after{content:none}
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canApproveInvoices ? `
-                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Ler fatura com Gemini (PDF ou foto)</button>
+                            <button onclick="pickInvoiceFile()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300">✨ Ler fatura com OCR (PDF ou foto)</button>
                             <input id="invoice-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" class="hidden" onchange="readInvoiceFile(this)">
                             <button onclick="openManualPurchaseModal()" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow-lg shadow-blue-600/25 transition-all">
                                 + Registar Compra Manual
@@ -1785,7 +1825,7 @@ html.gloss-off .gloss-term::after{content:none}
                         <div class="mt-1.5 font-mono font-bold text-2xl text-amber-400 tabular-nums">${pendingCount}</div>
                     </div>
                     <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
-                        <div class="text-xs text-slate-400">Leitura de faturas (Google Gemini)</div>
+                        <div class="text-xs text-slate-400">Leitura de faturas (OCR)</div>
                         <div class="mt-1.5 font-mono font-semibold text-sm ${geminiKey() && restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full ${geminiKey() && restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
                             ${geminiKey() && restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
@@ -1893,7 +1933,182 @@ html.gloss-off .gloss-term::after{content:none}
                 </table></div>${guide ? `<p class="text-xs text-slate-400">Linhas copiadas da guia ${escHtml(guide.id)}; o stock entrou com a guia.</p>` : ''}`
                 : `<p class="text-sm text-slate-400">${escHtml(inv.itemsSummary || '')}<br><span class="text-xs">Documento sem linhas detalhadas${inv.status !== 'Aprovada' ? ': as linhas são preenchidas ao aprovar' : ''}.</span></p>`}
                 <div class="flex justify-end gap-6 text-sm font-mono"><span class="text-slate-400">Líquido <strong class="text-white">${fmtEur(inv.net)}</strong></span><span class="text-slate-400">IVA <strong class="text-white">${fmtEur(inv.vat)}</strong></span><span class="text-slate-400">Total <strong class="text-white">${fmtEur(inv.total)}</strong></span></div>
-                <div class="flex justify-end"><button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+                ${inv.edits?.length ? `<details class="text-xs text-slate-400"><summary>Editado ${inv.edits.length} vez(es)</summary>${inv.edits.map(e => `<div>${escHtml(new Date(e.date).toLocaleString('pt-PT'))} · ${escHtml(e.by)} · antes: ${escHtml(e.before.id)}, ${escHtml(e.before.date)}, ${fmtEur(e.before.total)}</div>`).join('')}</details>` : ''}
+                <div class="flex justify-end gap-3">${appState.roles[appState.activeRole].canApproveInvoices ? `<button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+        }
+        const ING_CATEGORIES = ['Proteínas', 'Hortícolas', 'Laticínios', 'Secos', 'Bebidas', 'Embalagens'];
+        // Unidade base provável para a unidade escrita na fatura, e o fator para converter a quantidade.
+        function guessBaseUnit(unit) {
+            const u = String(unit ?? '').trim().toLowerCase().replace('.', '');
+            if (['kg', 'kgs'].includes(u)) return { unit: 'kg', factor: 1 };
+            if (['g', 'gr', 'grs'].includes(u)) return { unit: 'kg', factor: 0.001 };
+            if (['l', 'lt', 'lts', 'litro', 'litros'].includes(u)) return { unit: 'L', factor: 1 };
+            if (u === 'ml') return { unit: 'L', factor: 0.001 };
+            if (u === 'cl') return { unit: 'L', factor: 0.01 };
+            return { unit: 'un', factor: 1 };
+        }
+        // Artigo novo no catálogo, sem stock: a entrada vem do documento que o criou.
+        function createIngredient({ name, baseUnit, category, supplierId, price, sku = '' }) {
+            const zone = ['Proteínas', 'Hortícolas', 'Laticínios'].includes(category) ? 'Câmara Fria' : category === 'Bebidas' ? 'Bar' : 'Despensa Seca';
+            const byStore = Object.fromEntries(STORE_KEYS.map(k => [k, { stockTheoretical: 0, stockCounted: 0, minStock: 0, cmp: price, lastCost: price, prevCost: price }]));
+            const ing = { id: 'ing_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), sku, name, category, supplierId, zone, baseUnit, packLabel: '', yieldFactor: 1, allergens: [],
+                supplierPrices: {}, priceHistory: [price], byStore };
+            appState.ingredients.unshift(ing);
+            return ing;
+        }
+        // Preços de um fornecedor: atualiza a cotação e, se pedido, o último custo do catálogo e o CMP das fichas técnicas.
+        function openSupplierPrices(supId, extraIds = []) {
+            if (!appState.roles[appState.activeRole].canEditIngredients) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não pode alterar preços.', 'warning'); return; }
+            const sup = getSupplier(supId);
+            if (!sup) return;
+            const kept = [...document.querySelectorAll('#sp-rows .sp-row')].map(r => r.dataset.ing);
+            const ids = [...new Set([...appState.ingredients.filter(i => i.supplierId === supId || i.supplierPrices?.[supId]).map(i => i.id), ...kept, ...extraIds])];
+            const field = 'w-full px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white';
+            const rows = ids.map(id => {
+                const ing = getIngredient(id), m = ing.byStore[RESTAURANT], quote = ing.supplierPrices?.[supId];
+                const typed = document.querySelector(`#sp-rows .sp-row[data-ing="${id}"] .sp-price`)?.value;
+                return `<tr class="sp-row" data-ing="${id}"><td class="py-2 px-3 text-white">${escHtml(ing.name)}<div class="text-[11px] font-mono text-slate-500">${ing.supplierId === supId ? 'Fornecedor principal' : 'Fornecedor alternativo'}</div></td>
+                    <td class="py-2 px-3 text-right font-mono text-slate-300">${quote ? fmtEur(quote.price, 4) + '<div class="text-[11px] text-slate-500">' + escHtml(quote.date) + '</div>' : '—'}</td>
+                    <td class="py-2 px-3 text-right font-mono text-slate-300">${fmtEur(m.lastCost, 4)}<div class="text-[11px] text-slate-500">CMP ${fmtEur(m.cmp, 4)}</div></td>
+                    <td class="py-2 px-3"><input class="sp-price ${field}" type="number" step="any" min="0" value="${typed ?? +(quote?.price ?? m.lastCost).toFixed(4)}" aria-label="Novo preço de ${escHtml(ing.name)} por ${escHtml(ing.baseUnit)}"><div class="text-[11px] text-slate-500">€/${escHtml(ing.baseUnit)}</div></td>
+                    <td class="py-2 px-3 text-center"><input class="sp-catalog" type="checkbox" ${ing.supplierId === supId ? 'checked' : ''} aria-label="Atualizar catálogo"></td></tr>`;
+            }).join('');
+            const others = appState.ingredients.filter(i => !ids.includes(i.id));
+            openModal('Preços de ' + sup.name, 'Cotações do fornecedor e custos do catálogo', `<div class="space-y-4 text-sm">
+                <div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs sm:text-sm">
+                    <thead><tr class="text-[11px] font-mono uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Cotação atual</th><th class="py-2 px-3 text-right">Último custo</th><th class="py-2 px-3">Novo preço s/ IVA</th><th class="py-2 px-3 text-center">Atualizar catálogo</th></tr></thead>
+                    <tbody id="sp-rows" class="divide-y divide-[#1E293B]/60">${rows || '<tr><td colspan="5" class="py-4 px-3 text-slate-400">Ainda sem artigos deste fornecedor. Adicione abaixo.</td></tr>'}</tbody></table></div>
+                ${others.length ? `<div class="flex flex-wrap items-end gap-2"><label class="text-xs text-slate-300 flex-1 min-w-[200px]">Adicionar artigo do catálogo<select id="sp-add" class="${field} font-sans">${others.map(i => `<option value="${i.id}">${escHtml(i.name)} (${escHtml(i.baseUnit)})</option>`).join('')}</select></label>
+                    <button type="button" onclick="openSupplierPrices('${supId}', [document.getElementById('sp-add').value])" class="px-3 py-2 rounded-xl text-xs text-sky-300 border border-sky-400/30">+ Adicionar</button>
+                    <button type="button" onclick="closeModal(); openIngredientModal()" class="px-3 py-2 rounded-xl text-xs text-slate-300 border border-[#1E293B]">+ Artigo novo no catálogo</button></div>` : ''}
+                <label class="flex items-start gap-2 text-xs text-slate-300"><input id="sp-cmp" type="checkbox" class="mt-0.5"> Usar também como CMP nas fichas técnicas (só nas linhas com «Atualizar catálogo»). Sem esta opção, o CMP só muda quando entra uma compra.</label>
+                <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button type="button" onclick="saveSupplierPrices('${supId}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar preços</button></div></div>`, 'lg');
+        }
+        function saveSupplierPrices(supId) {
+            const today = new Date().toLocaleDateString('sv-SE'), useAsCmp = document.getElementById('sp-cmp').checked;
+            const rows = [...document.querySelectorAll('#sp-rows .sp-row')].map(r => ({ ing: getIngredient(r.dataset.ing), price: Number(r.querySelector('.sp-price').value), catalog: r.querySelector('.sp-catalog').checked }));
+            if (rows.some(r => !(r.price > 0))) { showToast('Preço inválido', 'Todos os preços têm de ser maiores que zero.', 'warning'); return; }
+            let changed = 0;
+            for (const { ing, price, catalog } of rows) {
+                const quote = ing.supplierPrices?.[supId];
+                if (!quote || Math.abs(quote.price - price) > 1e-9) { (ing.supplierPrices ??= {})[supId] = { price, date: today }; changed++; }
+                if (!catalog) continue;
+                const m = ing.byStore[RESTAURANT];
+                if (Math.abs(m.lastCost - price) > 1e-9) {
+                    if (m.lastCost > 0 && price > m.lastCost * 1.05) appState.alerts.unshift({ id: crypto.randomUUID(), type: 'price_inflation', severity: 'warning', store: RESTAURANT, unread: true, time: 'Agora',
+                        title: ing.name + ' · aumento ' + fmtPct((price / m.lastCost - 1) * 100), message: 'Preço atualizado em Fornecedores: ' + fmtEur(m.lastCost) + ' → ' + fmtEur(price) });
+                    m.prevCost = m.lastCost; m.lastCost = price; ing.priceHistory.push(price); changed++;
+                }
+                if (useAsCmp && Math.abs(m.cmp - price) > 1e-9) { m.cmp = price; changed++; }
+            }
+            persistState(); closeModal(); updateChrome(); renderActiveView();
+            showToast('Preços guardados', changed ? `${getSupplier(supId).name}: ${rows.length} artigo(s) revistos.` + (useAsCmp ? ' Fichas técnicas recalculadas.' : '') : 'Sem alterações.', 'success');
+        }
+        // Anula o efeito de um documento aprovado no stock e no CMP (para o voltar a lançar corrigido).
+        function reverseReceipt(inv) {
+            if (inv.status !== 'Aprovada' || !inv.lines?.length || inv.receiptRef) return;
+            const sign = inv.docType === 'Nota de Crédito' ? -1 : 1;
+            for (const l of inv.lines) {
+                const ing = !l.service && getIngredient(l.ing);
+                if (!ing) continue;
+                const m = ing.byStore[inv.store];
+                if (sign > 0) {
+                    m.cmp = reverseWeightedAverageCost(m.stockTheoretical, m.cmp, l.qty, l.price);
+                    const at = ing.priceHistory.lastIndexOf(l.price);
+                    if (at >= 0) ing.priceHistory.splice(at, 1);
+                    if (Math.abs(m.lastCost - l.price) < 1e-9) m.lastCost = m.prevCost ?? m.lastCost;
+                }
+                m.stockTheoretical -= sign * l.qty;
+                appState.movements.push({ store: inv.store, ingredient: l.ing, document: inv.id, qty: -sign * l.qty, date: new Date().toISOString(), type: 'correcao' });
+            }
+        }
+        function invoiceEditBlock(inv) {
+            if (!appState.roles[appState.activeRole].canApproveInvoices) return 'O perfil atual não pode editar documentos.';
+            if ((appState.periodCloses || []).some(c => c.period === String(inv.date).slice(0, 7))) return 'O mês deste documento já foi fechado.';
+            if (inv.billedBy) return `Esta guia já foi faturada na ${inv.billedBy}. Corrija a fatura ou emita uma nota de crédito.`;
+            return '';
+        }
+        function invoiceEditRow(l, field) {
+            const ingOpts = appState.ingredients.map(i => `<option value="${i.id}" ${l.ing === i.id ? 'selected' : ''}>${escHtml(i.name)} (${escHtml(i.baseUnit)})</option>`).join('');
+            return `<div class="ie-row grid grid-cols-2 sm:grid-cols-12 gap-2 items-end p-2 rounded-xl border border-[#1E293B]" ${l.service ? 'data-service="1"' : ''}>
+                <label class="col-span-2 sm:col-span-5 text-xs text-slate-300">${l.service ? 'Despesa (sem stock)<input class="ie-label ' + field + ' font-sans" value="' + escHtml(l.label || '') + '">' : 'Artigo<select class="ie-ing ' + field + ' font-sans" onchange="updateInvoiceEditTotal()">' + ingOpts + '</select>'}</label>
+                <label class="sm:col-span-2 text-xs text-slate-300">Qtd.<input class="ie-qty ${field}" type="number" step="any" min="0" value="${+Number(l.qty).toFixed(4)}" oninput="updateInvoiceEditTotal()"></label>
+                <label class="sm:col-span-2 text-xs text-slate-300">Preço s/ IVA<input class="ie-price ${field}" type="number" step="any" min="0" value="${+Number(l.price).toFixed(4)}" oninput="updateInvoiceEditTotal()"></label>
+                <label class="sm:col-span-2 text-xs text-slate-300">IVA %<input class="ie-vat ${field}" type="number" step="any" min="0" value="${l.vat}" oninput="updateInvoiceEditTotal()"></label>
+                <button type="button" onclick="this.closest('.ie-row').remove(); updateInvoiceEditTotal()" class="sm:col-span-1 px-2 py-1.5 rounded-lg text-xs text-rose-300 border border-rose-500/30" aria-label="Remover linha">✕</button></div>`;
+        }
+        function updateInvoiceEditTotal() {
+            const el = document.getElementById('ie-total');
+            if (!el) return;
+            const lines = invoiceEditLines(), net = lines.reduce((n, l) => n + l.qty * l.price, 0), vat = lines.reduce((n, l) => n + l.qty * l.price * l.vat / 100, 0);
+            el.textContent = `Líquido ${fmtEur(net)} · IVA ${fmtEur(vat)} · Total ${fmtEur(net + vat)}`;
+        }
+        function invoiceEditLines() {
+            return [...document.querySelectorAll('#ie-lines .ie-row')].map(r => {
+                const n = c => Number(r.querySelector('.ie-' + c).value);
+                return r.dataset.service ? { service: true, label: r.querySelector('.ie-label').value.trim() || 'Despesa', qty: n('qty'), price: n('price'), vat: n('vat') }
+                    : { ing: r.querySelector('.ie-ing').value, qty: n('qty'), price: n('price'), vat: n('vat') };
+            });
+        }
+        function openInvoiceEdit(idx) {
+            const inv = appState.invoices[idx];
+            if (!inv) return;
+            const blocked = invoiceEditBlock(inv);
+            if (blocked) { showToast('Não é possível editar', blocked, 'warning'); return; }
+            const field = 'w-full px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white';
+            const mode = inv.status === 'Aprovada' && inv.lines?.length && !inv.receiptRef ? 'lines' : inv.lines?.length || inv.status !== 'Aprovada' ? 'header' : 'totals';
+            openModal('Editar ' + inv.docType + ' ' + inv.id, getSupplier(inv.supplierId)?.name || '', `<div class="space-y-4 text-sm">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <label class="text-slate-300">Número<input id="ie-number" class="${field}" value="${escHtml(inv.id)}"></label>
+                    <label class="text-slate-300">Data<input id="ie-date" type="date" class="${field}" value="${escHtml(inv.date)}"></label>
+                    <label class="text-slate-300">ATCUD<input id="ie-atcud" class="${field}" value="${escHtml(inv.atcud || '')}"></label>
+                    <label class="text-slate-300">Fornecedor<select id="ie-supplier" class="${field} font-sans">${appState.suppliers.map(s => `<option value="${s.id}" ${s.id === inv.supplierId ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('')}</select></label>
+                </div>
+                ${mode === 'lines' ? `<div id="ie-lines" class="space-y-2">${inv.lines.map(l => invoiceEditRow(l, field)).join('')}</div>
+                    <div class="flex flex-wrap items-center justify-between gap-2"><button type="button" onclick="document.getElementById('ie-lines').insertAdjacentHTML('beforeend', invoiceEditRow({ ing: appState.ingredients[0].id, qty: 1, price: 0, vat: 6 }, '${field}')); updateInvoiceEditTotal()" class="px-3 py-1.5 rounded-lg text-xs text-sky-300 border border-sky-400/30">+ Linha</button>
+                    <span id="ie-total" class="text-xs font-mono text-slate-300"></span></div>
+                    <p class="text-xs text-slate-400">Ao guardar, a entrada original é anulada e o documento é lançado de novo: stock, CMP e histórico de preços ficam como se tivesse sido lançado já corrigido. O registo de stock guarda a correção.</p>`
+                : mode === 'totals' ? `<div class="grid grid-cols-2 gap-2 text-xs"><label class="text-slate-300">Líquido<input id="ie-net" type="number" step="0.01" class="${field}" value="${inv.net}"></label><label class="text-slate-300">IVA<input id="ie-vat" type="number" step="0.01" class="${field}" value="${inv.vat}"></label></div>
+                    <p class="text-xs text-slate-400">Documento sem linhas: só os valores mudam, o stock não é afetado.</p>`
+                : `<p class="text-xs text-slate-400">${inv.receiptRef ? 'As linhas vêm da guia ' + escHtml(inv.receiptRef) + ' e o stock entrou com ela: aqui só se corrige o cabeçalho.' : 'Documento por aprovar: corrija o cabeçalho; as linhas entram ao aprovar.'}</p>`}
+                <div class="flex justify-end gap-3"><button type="button" onclick="openInvoiceDetail(${idx})" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
+                <button type="button" onclick="saveInvoiceEdit(${idx}, '${mode}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar alterações</button></div></div>`, 'xl');
+            updateInvoiceEditTotal();
+        }
+        function saveInvoiceEdit(idx, mode) {
+            const inv = appState.invoices[idx];
+            const blocked = inv && invoiceEditBlock(inv);
+            if (!inv || blocked) { showToast('Não é possível editar', blocked || 'Documento não encontrado.', 'warning'); return; }
+            const header = { id: document.getElementById('ie-number').value.trim(), date: document.getElementById('ie-date').value, atcud: document.getElementById('ie-atcud').value.trim(), supplierId: document.getElementById('ie-supplier').value };
+            if (!header.id || !header.date) { showToast('Dados em falta', 'Indique o número e a data.', 'warning'); return; }
+            const before = structuredClone(appState), oldId = inv.id;
+            const edit = { date: new Date().toISOString(), by: appState.roles[appState.activeRole].label, before: { id: inv.id, date: inv.date, net: inv.net, total: inv.total } };
+            try {
+                if (appState.invoices.some((o, i) => i !== idx && o.store === inv.store && o.supplierId === header.supplierId && o.id === header.id)) throw Error('Já existe um documento com este número deste fornecedor.');
+                if (mode === 'lines') {
+                    const lines = invoiceEditLines();
+                    if (!lines.length) throw Error('O documento precisa de pelo menos uma linha.');
+                    reverseReceipt(inv);
+                    appState.invoices.splice(idx, 1);
+                    const edited = { ...inv, ...header, lines, net: null, vat: null, total: null, status: 'Em Revisão',
+                        itemsSummary: lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ') };
+                    postReceipt(edited);
+                    appState.invoices.splice(appState.invoices.indexOf(edited), 1);
+                    appState.invoices.splice(idx, 0, edited);
+                    edited.edits = [...(inv.edits || []), edit];
+                } else {
+                    const totals = mode === 'totals' ? { net: Number(document.getElementById('ie-net').value), vat: Number(document.getElementById('ie-vat').value) } : {};
+                    if (mode === 'totals' && !(Number.isFinite(totals.net) && Number.isFinite(totals.vat))) throw Error('Valores inválidos.');
+                    if (mode === 'totals') totals.total = Math.round((totals.net + totals.vat) * 100) / 100;
+                    Object.assign(inv, header, totals, { edits: [...(inv.edits || []), edit] });
+                    if (inv.receiptRef && oldId !== header.id) { const g = appState.invoices.find(g => g.id === inv.receiptRef && g.billedBy === oldId); if (g) g.billedBy = header.id; }
+                }
+                if (oldId !== header.id) appState.movements.filter(mv => mv.document === oldId && mv.store === inv.store).forEach(mv => { mv.document = header.id; });
+            } catch (error) { appState = before; showToast('Edição não guardada', error.message, 'warning'); return; }
+            refreshStockCheckAlerts();
+            persistState(); updateChrome(); renderActiveView(); openInvoiceDetail(idx);
+            showToast('Documento atualizado', header.id + (mode === 'lines' ? ' · stock e CMP recalculados' : ''), 'success');
         }
         function postReceipt(inv) {
             if (!appState.roles[appState.activeRole].canApproveInvoices) throw Error('Perfil sem permissão de aprovação.');
@@ -1929,6 +2144,11 @@ html.gloss-off .gloss-term::after{content:none}
                     m.lastCost = l.price;
                     ing.priceHistory.push(l.price);
                     (ing.supplierPrices ??= {})[inv.supplierId] = { price: l.price, date: inv.date };
+                    // Validade: mantém a do lote anterior se ainda estava dentro do prazo e termina antes (sai primeiro).
+                    if (ing.shelfLifeDays > 0) {
+                        const lot = addDaysIso(inv.date, ing.shelfLifeDays);
+                        if (!(oldQty > 0 && m.expiry && m.expiry >= inv.date && m.expiry < lot)) m.expiry = lot;
+                    }
                 }
                 m.stockTheoretical += sign*l.qty;
                 appState.movements.push({store:inv.store, ingredient:l.ing, document:inv.id, qty:sign*l.qty, date:inv.date});
@@ -1948,6 +2168,7 @@ html.gloss-off .gloss-term::after{content:none}
             try { postReceipt(inv); } catch (error) { showToast('Compra pendente', error.message,'warning'); return; }
             const order = (appState.purchaseOrders || []).find(o => o.id === inv.orderId);
             if (order) Object.assign(order, { status: 'Recebida', receivedBy: inv.id });
+            refreshStockCheckAlerts();
             persistState(); closeModal(); updateChrome(); renderActiveView();
             showToast('Documento aprovado',inv.id,'success');
         }
@@ -2151,8 +2372,9 @@ html.gloss-off .gloss-term::after{content:none}
             const field = 'mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white';
             openModal('Definições', 'Restaurante e leitura de faturas', `<form onsubmit="saveSettings(event)" class="space-y-4">
                 <label class="block text-xs text-slate-300">NIF do restaurante (adquirente nas faturas)<input id="set-nif" required value="${escHtml(s.restaurantNif || '')}" class="${field}" placeholder="500 000 000"></label>
-                <label class="block text-xs text-slate-300">Chave da API Google Gemini<input id="set-key" type="password" autocomplete="off" value="${escHtml(geminiKey())}" class="${field}" placeholder="AIza…"></label>
-                <label class="block text-xs text-slate-300">Modelo Gemini<input id="set-model" required value="${escHtml(s.geminiModel || 'gemini-3.8-flash')}" class="${field}"></label>
+                <label class="block text-xs text-slate-300">Chave da API do serviço OCR (Google AI Studio)<input id="set-key" type="password" autocomplete="off" value="${escHtml(geminiKey())}" class="${field}" placeholder="AIza…"></label>
+                <label class="block text-xs text-slate-300">Modelo OCR<input id="set-model" required value="${escHtml(s.geminiModel || 'gemini-3.8-flash')}" class="${field}"></label>
+                <label class="block text-xs text-slate-300">Alertar artigos sem saídas há (dias)<input id="set-idle" type="number" min="1" step="1" required value="${s.idleDays || 14}" class="${field}"></label>
                 <p class="text-xs text-amber-200 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">A chave fica guardada só neste browser e não entra na cópia exportada. As faturas são enviadas diretamente para a Google. Use uma chave restrita a este fim e não a configure num computador partilhado. Crie a chave em aistudio.google.com.</p>
                 <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
                 <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar</button></div></form>`);
@@ -2161,7 +2383,7 @@ html.gloss-off .gloss-term::after{content:none}
             e.preventDefault();
             const nif = normalizeNif(document.getElementById('set-nif').value);
             if (nif.length !== 9) { showToast('NIF inválido', 'O NIF tem 9 dígitos.', 'warning'); return; }
-            appState.settings = { ...(appState.settings || {}), restaurantNif: nif, geminiModel: document.getElementById('set-model').value.trim() };
+            appState.settings = { ...(appState.settings || {}), restaurantNif: nif, geminiModel: document.getElementById('set-model').value.trim(), idleDays: Math.max(1, Math.round(Number(document.getElementById('set-idle').value) || 14)) };
             try {
                 const key = document.getElementById('set-key').value.trim();
                 key ? localStorage.setItem(GEMINI_KEY_STORAGE, key) : localStorage.removeItem(GEMINI_KEY_STORAGE);
@@ -2170,7 +2392,7 @@ html.gloss-off .gloss-term::after{content:none}
         }
         function pickInvoiceFile() {
             if (!appState.roles[appState.activeRole].canApproveInvoices) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não tem permissão para importar faturas.', 'warning'); return; }
-            if (!geminiKey() || !restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante e a chave Gemini.', 'info'); openSettingsModal(); return; }
+            if (!geminiKey() || !restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante e a chave do OCR.', 'info'); openSettingsModal(); return; }
             document.getElementById('invoice-file')?.click();
         }
         const INVOICE_MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
@@ -2237,7 +2459,7 @@ html.gloss-off .gloss-term::after{content:none}
                     const local = await pdfTextRows(file).then(rows => parseInvoiceText(rows, restaurantNif())).catch(e => ({ ok: false, reason: e.message }));
                     if (local.ok) {
                         openOcrReview(local.ex, file.name, 'PDF (leitura local)');
-                        showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem Gemini: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
+                        showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem OCR: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
                         return;
                     }
                     console.info('Leitura local do PDF não serviu, a usar o Gemini:', local.reason);
@@ -2249,7 +2471,7 @@ html.gloss-off .gloss-term::after{content:none}
                 const prepared = performance.now();
                 let model = appState.settings?.geminiModel || 'gemini-3.8-flash';
                 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
-                setStage('Enviar ao Gemini', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao Gemini (${model})`);
+                setStage('Enviar ao OCR', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao OCR`);
                 // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
                 // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
                 const call = async generationConfig => {
@@ -2264,7 +2486,7 @@ html.gloss-off .gloss-term::after{content:none}
                             })
                         });
                     } catch (e) {
-                        throw Error(e.name === 'AbortError' ? 'O Gemini não respondeu em 120 s.' : 'Sem ligação ao Gemini (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear generativelanguage.googleapis.com.');
+                        throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear generativelanguage.googleapis.com.');
                     } finally { clearTimeout(timer); }
                 };
                 const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, maxOutputTokens: 32768 };
@@ -2277,18 +2499,18 @@ html.gloss-off .gloss-term::after{content:none}
                     // Gemini sobrecarregado: espera 2, 4 e 8 s; se continuar, passa uma vez para o modelo mais leve.
                     if (attempt < 4) {
                         const wait = 2 ** attempt;
-                        setStage('Enviar ao Gemini', `${model} ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
+                        setStage('Enviar ao OCR', `Serviço OCR ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
                         await new Promise(r => setTimeout(r, wait * 1000));
                     } else if (!fellBack && model !== FALLBACK_MODEL) {
                         fellBack = true; attempt = 0; model = FALLBACK_MODEL; config = { ...base, thinkingConfig: { thinkingLevel: 'low' } };
-                        setStage('Enviar ao Gemini', `Modelo principal ocupado, a tentar com ${model}`);
+                        setStage('Enviar ao OCR', 'Modelo principal ocupado, a tentar com o modelo de reserva');
                     } else break;
                 }
-                if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? `\n\nTentado 4 vezes com ${appState.settings?.geminiModel || 'gemini-3.8-flash'} e com ${FALLBACK_MODEL}. A Google está sobrecarregada: tente daqui a uns minutos.` : ''));
-                stage = 'Ler a resposta do Gemini';
+                if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? '\n\nTentado 4 vezes com o modelo principal e com o de reserva. O serviço OCR está sobrecarregado: tente daqui a uns minutos.' : ''));
+                stage = 'Ler a resposta do OCR';
                 const cand = body.candidates?.[0], finish = cand?.finishReason;
                 const text = cand?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
-                if (!text) throw Error('O Gemini não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
+                if (!text) throw Error('O OCR não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
                 let ex;
                 try { ex = JSON.parse(text); } catch (e) {
                     throw Error((finish === 'MAX_TOKENS' ? 'A resposta foi cortada a meio (MAX_TOKENS).' : 'A resposta não é JSON válido (' + e.message + ', fim: ' + (finish || '?') + ').') + '\n\nInício da resposta:\n' + text.slice(0, 400));
@@ -2297,7 +2519,7 @@ html.gloss-off .gloss-term::after{content:none}
                 const done = performance.now(), usage = body.usageMetadata || {};
                 console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
-                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com ' + model + ' porque o modelo principal estava ocupado. Confira bem as linhas. · ' : '') + 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
+                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com o modelo de reserva porque o principal estava ocupado. Confira bem as linhas. · ' : '') + 'OCR ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
             } catch (error) {
                 ocrFailure(file.name, stage, error.message);
             } finally { clearInterval(ticker); }
@@ -2325,7 +2547,7 @@ html.gloss-off .gloss-term::after{content:none}
                 return blob && blob.size < file.size ? blob : file;
             } catch { return file; }
         }
-        function openOcrReview(ex, fileName, via = 'Gemini') {
+        function openOcrReview(ex, fileName, via = 'OCR') {
             ocrDraft = { ex, fileName, via };
             const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
             const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
@@ -2345,16 +2567,21 @@ html.gloss-off .gloss-term::after{content:none}
                 return `<div class="ocr-row p-3 rounded-xl border border-[#1E293B] space-y-2" data-total="${total}">
                     <div class="text-xs text-slate-400">Linha ${idx + 1}: «${escHtml(l.description)}» · ${fmtNum(l.qty, 3)} ${escHtml(l.unit || '')} × ${fmtEur(l.unit_price_net, 4)} = <strong class="text-white">${fmtEur(total)}</strong> · IVA ${fmtNum(l.vat_rate, 0)}%</div>
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                        <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option>${ingOptions(ing?.id)}</select></label>
+                        <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option><option value="__new">+ Criar artigo novo no catálogo</option>${ingOptions(ing?.id)}</select></label>
                         <label class="text-xs text-slate-300">Qtd. em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
                         <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
+                    </div>
+                    <div class="ocr-new hidden grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 rounded-lg border border-sky-400/30 bg-sky-500/5">
+                        <label class="text-xs text-slate-300">Nome do artigo<input class="ocr-new-name ${field} font-sans" value="${escHtml(l.description || '')}"></label>
+                        <label class="text-xs text-slate-300">Unidade base<select class="ocr-new-unit ${field}" onchange="ocrRowChanged(this)">${['kg', 'L', 'un'].map(u => `<option ${u === guessBaseUnit(l.unit).unit ? 'selected' : ''}>${u}</option>`).join('')}</select></label>
+                        <label class="text-xs text-slate-300">Categoria<select class="ocr-new-cat ${field} font-sans">${ING_CATEGORIES.map(c => `<option>${c}</option>`).join('')}</select></label>
                     </div>
                     <div class="ocr-price text-[11px] font-mono ${ing && !base ? 'text-amber-300' : 'text-slate-400'}">${ing && !base ? 'Unidade «' + escHtml(l.unit || '?') + '» não convertível: indique a quantidade em ' + escHtml(ing.baseUnit) + '.' : ''}</div>
                 </div>`;
             }).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal(via === 'Gemini' ? 'Rever fatura lida pelo Gemini' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
+            openModal(via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -2373,11 +2600,18 @@ html.gloss-off .gloss-term::after{content:none}
             document.querySelectorAll('.ocr-row .ocr-ing').forEach(s => ocrRowChanged(s, true));
         }
         function ocrRowChanged(el, keepHint = false) {
-            const row = el.closest('.ocr-row'), ing = getIngredient(row.querySelector('.ocr-ing').value);
+            const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
+            row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
+            if (choice === '__new' && el.classList.contains('ocr-ing')) {
+                const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)], guess = guessBaseUnit(l.unit);
+                row.querySelector('.ocr-new-unit').value = guess.unit;
+                row.querySelector('.ocr-qty').value = +(Number(l.qty) * guess.factor).toFixed(4);
+            }
             const qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
             const out = row.querySelector('.ocr-price');
             if (keepHint && out.textContent) return;
             out.className = 'ocr-price text-[11px] font-mono text-slate-400';
+            if (choice === '__new') { const u = row.querySelector('.ocr-new-unit').value; out.textContent = qty > 0 ? `Artigo novo · ${fmtEur(total / qty, 4)}/${u} passa a ser o custo inicial.` : 'Indique a quantidade.'; return; }
             if (!ing) { out.textContent = 'Lançada como despesa, sem movimento de stock.'; return; }
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
@@ -2389,25 +2623,34 @@ html.gloss-off .gloss-term::after{content:none}
             if (document.getElementById('ocr-nif-ok') && !document.getElementById('ocr-nif-ok').checked) { showToast('NIF por confirmar', 'Marque a confirmação ou cancele e peça uma fatura corrigida.', 'warning'); return; }
             const number = document.getElementById('ocr-number').value.trim();
             if (!number) { showToast('Falta o número', 'Indique o número do documento.', 'warning'); return; }
-            const lines = [...document.querySelectorAll('.ocr-row')].map((row, idx) => {
+            const rows = [...document.querySelectorAll('.ocr-row')];
+            const lines = rows.map((row, idx) => {
                 const ing = row.querySelector('.ocr-ing').value, qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
                 const vat = Number(row.querySelector('.ocr-vat').value);
                 return ing ? { ing, qty, price: total / qty, vat } : { service: true, label: ex.lines[idx].description, qty: 1, price: total, vat };
             });
             if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
+            if (rows.some(r => r.querySelector('.ocr-ing').value === '__new' && !r.querySelector('.ocr-new-name').value.trim())) { showToast('Falta o nome', 'Dê um nome ao artigo novo.', 'warning'); return; }
             const before = structuredClone(appState);
             let supplierId = document.getElementById('ocr-supplier').value;
             if (supplierId === '__new') {
                 supplierId = 'sup_' + Date.now();
                 appState.suppliers.unshift({ id: supplierId, name: ex.supplier_name || 'Fornecedor ' + ex.supplier_nif, nif: ex.supplier_nif || '', category: 'Por classificar', email: '', phone: '', terms: '30 dias' });
             }
+            rows.forEach((row, idx) => {
+                if (lines[idx].ing !== '__new') return;
+                lines[idx].ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
+                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ex.lines[idx].sku || '' }).id;
+            });
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
             const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
-                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: (ocrDraft.via || 'Gemini') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
+                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: (ocrDraft.via || 'OCR') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
             try { postReceipt(inv); } catch (error) { appState = before; showToast('Compra pendente', error.message, 'warning'); return; }
             ocrDraft = null;
             persistState(); closeModal(); updateChrome(); renderActiveView();
-            showToast('Fatura lançada', `${number} · ${fmtEur(inv.total)} · stock e CMP atualizados`, 'success');
+            refreshStockCheckAlerts();
+            const created = rows.filter(r => r.querySelector('.ocr-ing').value === '__new').length;
+            showToast('Fatura lançada', `${number} · ${fmtEur(inv.total)} · stock e CMP atualizados` + (created ? ` · ${created} artigo(s) novo(s) no catálogo` : ''), 'success');
         }
         // --------------------------------------------------------------------
         // PAINEL 3: FORNECEDORES, CATÁLOGO DE INSUMOS POR LOJA & ENCOMENDAS
@@ -2490,6 +2733,7 @@ html.gloss-off .gloss-term::after{content:none}
                                                     ${buildSparklineSvg(trend.history, isHigh ? '#F59E0B' : '#10B981')}
                                                 </td>
                                                 <td class="py-4 px-5 text-right">
+                                                    ${role.canEditIngredients ? `<button onclick="openSupplierPrices('${s.id}')" class="mb-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600/15 hover:bg-blue-600/25 border border-sky-400/30 text-sky-300">Preços</button>` : ''}
                                                     ${role.canEditSuppliers ? `
                                                         <div class="inline-flex items-center gap-1.5">
                                                             <button onclick="openSupplierModal('${s.id}')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-sky-400">
@@ -2731,7 +2975,7 @@ html.gloss-off .gloss-term::after{content:none}
             const lossPct = ing ? Math.round((1 - ing.yieldFactor) * 100) : 0;
             const supOpts = appState.suppliers.map(s => `<option value="${s.id}" ${ing && ing.supplierId === s.id ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('');
             const zones = ['Câmara Fria', 'Congelador', 'Despensa Seca', 'Bar'];
-            const cats = ['Proteínas', 'Hortícolas', 'Laticínios', 'Secos', 'Bebidas', 'Embalagens'];
+            const cats = ING_CATEGORIES;
             const units = ['kg', 'L', 'un'];
 
             const html = `
@@ -2796,6 +3040,10 @@ html.gloss-off .gloss-term::after{content:none}
                             <div>
                                 <label class="block text-xs font-medium text-amber-300 mb-1.5">Margem de Perda (%)</label>
                                 <input id="ing-loss" type="number" step="1" min="0" max="80" value="${lossPct}" oninput="updateYieldPreview(this.value)" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-amber-500/35 text-sm font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-300 mb-1.5">Validade após receção (dias)</label>
+                                <input id="ing-shelf" type="number" step="1" min="0" value="${ing?.shelfLifeDays || ''}" placeholder="Sem prazo" class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Stock Mínimo (Alerta)</label>
@@ -2866,7 +3114,8 @@ html.gloss-off .gloss-term::after{content:none}
                 supplierId: document.getElementById('ing-sup').value,
                 packLabel: document.getElementById('ing-pack').value.trim(),
                 yieldFactor,
-                allergens: [...document.querySelectorAll('.ing-allergen:checked')].map(c => c.value)
+                allergens: [...document.querySelectorAll('.ing-allergen:checked')].map(c => c.value),
+                shelfLifeDays: Math.max(0, Math.round(Number(document.getElementById('ing-shelf').value) || 0)) || null
             };
             const previousQuotes = getIngredient(ingId)?.supplierPrices || {};
             baseMeta.supplierPrices = Object.fromEntries([...document.querySelectorAll('.ing-quote')].filter(q => Number(q.value) > 0).map(q => {
@@ -3589,7 +3838,7 @@ html.gloss-off .gloss-term::after{content:none}
             const statusEl = document.getElementById('recipe-ocr-status');
             if (statusEl) {
                 statusEl.classList.remove('hidden');
-                statusEl.textContent = `⏳ A processar "${file.name}" com Google Gemini Vision / Parser...`;
+                statusEl.textContent = `⏳ A processar "${file.name}" com OCR...`;
             }
 
             setTimeout(() => applyRecipeOcrPreset(mode, file.name), 450);
@@ -4423,6 +4672,21 @@ html.gloss-off .gloss-term::after{content:none}
                 </div>
 
                 </details>
+                ${(()=>{
+                    const today = new Date().toLocaleDateString('sv-SE'), idleDays = appState.settings?.idleDays || 14;
+                    const checks = stockCheckList(appState.ingredients, appState.movements, RESTAURANT, today, idleDays);
+                    const lastOut = id => appState.movements.filter(mv => mv.ingredient === id && mv.store === RESTAURANT && mv.qty < 0 && mv.date && mv.type !== 'correcao').reduce((d, mv) => mv.date > d ? mv.date : d, '');
+                    const items = appState.ingredients.filter(i => i.byStore[RESTAURANT]?.stockTheoretical > 0)
+                        .map(i => ({ i, m: i.byStore[RESTAURANT], c: checks.filter(c => c.ingId === i.id) }))
+                        .sort((a, b) => (b.c.length - a.c.length) || String(a.m.expiry || '9999').localeCompare(String(b.m.expiry || '9999')));
+                    const badge = c => ({ expired: '<span class="text-rose-400">Validade passada</span>', expiring: '<span class="text-amber-300">A terminar</span>', idle: `<span class="text-amber-300">Parado há ${c.days} dias</span>` })[c.kind];
+                    return `<section class="work-panel"><h2>Validades e artigos parados</h2>
+                    <p class="work-muted">A validade é preenchida ao receber mercadoria quando o artigo tem dias de validade no catálogo, e pode ser corrigida aqui. Artigos sem saídas há ${idleDays} dias ou mais geram um alerta para verificar a validade (altere o prazo em Definições).</p>
+                    <div class="overflow-x-auto"><table class="w-full text-left text-xs sm:text-sm"><thead><tr class="text-[11px] font-mono uppercase text-slate-400 border-b border-[#1E293B]"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Stock</th><th class="py-2 px-3">Validade</th><th class="py-2 px-3">Última saída</th><th class="py-2 px-3">Estado</th></tr></thead>
+                    <tbody class="divide-y divide-[#1E293B]/60">${items.map(({ i, m, c }) => `<tr><td class="py-2 px-3 text-white">${escHtml(i.name)}</td><td class="py-2 px-3 text-right font-mono">${fmtNum(m.stockTheoretical, 2)} ${escHtml(i.baseUnit)}</td>
+                        <td class="py-2 px-3"><input type="date" aria-label="Validade de ${escHtml(i.name)}" value="${escHtml(m.expiry || '')}" ${canEditCount ? '' : 'disabled'} onchange="setExpiry('${i.id}', this.value)" class="px-2 py-1 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white"></td>
+                        <td class="py-2 px-3 font-mono text-slate-400">${lastOut(i.id) ? escHtml(lastOut(i.id).slice(0, 10)) : '—'}</td><td class="py-2 px-3">${c.map(badge).join(' · ') || '<span class="text-emerald-400">OK</span>'}</td></tr>`).join('')}</tbody></table></div></section>`;
+                })()}
                 ${(()=>{const preps=appState.recipes.filter(r=>r.recipeType==='sub_recipe');return preps.length?`<section class="work-panel"><h2>Preparações</h2>
                     <p class="work-muted">Produza lotes de preparações para abater a matéria-prima no momento em que é transformada.</p>
                     <div class="work-list">${preps.map(r=>`<div class="work-row"><strong>${escHtml(r.name)}</strong>Em stock: ${fmtNum(r.prepStock?.[RESTAURANT] || 0,3)} ${escHtml(r.yieldUnit)} · ${fmtEur((r.prepStock?.[RESTAURANT] || 0)*calculateRecipeCost(r).unitCost)}
@@ -4452,13 +4716,14 @@ html.gloss-off .gloss-term::after{content:none}
         // 7. INICIALIZAÇÃO
         // ====================================================================
         window.addEventListener('DOMContentLoaded', () => {
+            if (refreshStockCheckAlerts()) persistState();
             updateChrome();
             renderActiveView();
         });
     </script>
 <script>
 (() => {
-    const definitions = [[["COGS teórico", "CMV teórico", "Food Cost Teórico"], "Custo previsto dos ingredientes consumidos, calculado a partir das quantidades vendidas e das fichas técnicas."], [["COGS real", "CMV real", "Food Cost real"], "Custo do consumo apurado pelo inventário. Num período simples, corresponde ao stock inicial mais as compras, menos o stock final."], [["COGS", "CMV"], "Custo das mercadorias vendidas. Mede o custo dos ingredientes e bebidas consumidos para produzir as vendas do período."], [["Food Cost", "FC"], "Percentagem das vendas líquidas absorvida pelo custo. Numa ficha, divide-se o custo por dose pelo preço de venda sem IVA e multiplica-se por 100."], [["Vendas líquidas", "PVP líquido", "PVP líq.", "PVP s/ IVA", "PVP sem IVA"], "Preço ou receita de venda depois de retirar o IVA. Um preço de 16,39 € com IVA de 13% corresponde a 14,50 € líquidos."], [["PVP c/ IVA", "PVP com IVA", "PVP"], "Preço de venda ao público. Quando indicado «com IVA», é o valor final pago pelo cliente."], [["Taxa de IVA", "Taxas de IVA", "IVA"], "Imposto sobre o Valor Acrescentado. Para obter o preço líquido, divide-se o preço com imposto por 1 mais a taxa em forma decimal."], [["Margem bruta"], "Valor das vendas sem IVA que sobra depois de deduzir o custo das mercadorias vendidas. Ajuda a pagar pessoal e restantes gastos."], [["Margem líquida por canal", "Margens por canal", "Margem por canal", "Margem", "Margens"], "No comparativo de canais, é o preço sem IVA menos o custo da receita, a embalagem e a comissão. Em percentagem, divide-se a margem pelo preço sem IVA."], [["Prime Cost", "Custo Primo"], "Soma do custo das mercadorias vendidas com salários e encargos de pessoal."], [["EBITDA Operacional", "EBITDA"], "Resultado operacional antes de juros, impostos, depreciações e amortizações. Resume o resultado depois dos custos operacionais considerados na DRE."], [["DRE Operacional", "Demonstração de Resultados", "DRE"], "Relatório que parte das vendas e deduz mercadorias, pessoal e outros custos para mostrar o resultado da operação."], [["KPI", "KPIs"], "Indicador-chave de desempenho. Por exemplo, o food cost e o desvio de inventário ajudam a acompanhar a operação."], [["Benchmark", "Benchmarks"], "Valor de referência usado para comparar um indicador do restaurante com uma meta ou com o setor."], [["SKU"], "Código interno único de um artigo do catálogo. Permite reconhecer o mesmo ingrediente mesmo que a descrição comercial varie."], [["Unidade base", "Unidades base", "Unid. base"], "Unidade usada para registar e valorizar o ingrediente em stock, por exemplo quilograma, litro ou unidade."], [["Conversão de embalagens", "unidades de compra", "unidade de compra"], "Transforma embalagens de compra em unidades de stock. Uma caixa de seis garrafas de 0,75 L corresponde a 4,5 L."], [["Conversão multi-dimensão", "Multi-Dimensão"], "Conversão entre grandezas diferentes com um fator próprio do artigo, como o peso médio de um ovo."], [["Custo Médio Ponderado", "Custo médio atual", "CMP"], "Custo médio por unidade, ponderado pelas quantidades. Soma-se o valor do stock existente ao da nova entrada e divide-se pela quantidade total."], [["Último custo de compra", "Último custo", "Último preço"], "Preço unitário da compra mais recente do artigo."], [["Ficha técnica dinâmica", "Fichas técnicas", "Ficha técnica"], "Lista de ingredientes, quantidades, perdas e rendimento de uma receita que permite calcular o custo do lote e de cada dose."], [["Sub-receitas", "Sub-receita", "Preparações intermédias", "Preparação intermédia"], "Receita intermédia, como um caldo ou um molho, usada como componente de outro prato."], [["Yield Factor", "Yield", "Fator de aproveitamento", "Aproveitamento"], "Percentagem aproveitável do ingrediente após limpeza. Com 82% de aproveitamento, 180 g limpos exigem cerca de 220 g brutos."], [["Margem de perda", "Quebra técnica", "Quebras técnicas"], "Percentagem prevista que se perde ao limpar ou preparar um ingrediente, como pele, cascas ou espinhas."], [["Quebra de cocção", "Quebra cocção"], "Perda de peso ou volume durante a confeção, por exemplo quando um molho reduz ao lume."], [["Quantidade líquida", "Quantidades líquidas"], "Quantidade aproveitável que entra na receita depois das perdas de preparação."], [["Quebra operacional", "Quebras operacionais", "Desperdício", "Desperdícios", "Wastage", "Quebras", "Quebra"], "Saída de stock registada por motivos como validade, erro de cozinha ou dano. Registar o motivo ajuda a explicar os desvios no inventário."], [["Staff Meal", "Refeição de equipa", "Refeições de equipa"], "Consumo de ingredientes em refeições do pessoal, registado para distinguir esse consumo das vendas."], [["Stock mínimo", "Ponto de encomenda"], "Quantidade de segurança definida para um artigo. Abaixo deste nível, o sistema pode sugerir reposição."], [["Rutura de stock", "Ruturas de stock", "Rutura iminente", "Ruturas"], "Risco de o artigo se esgotar antes da próxima reposição. O aviso de rutura iminente indica que o stock baixou do mínimo."], [["Cobertura de stock", "Cobertura"], "Número de dias que o stock disponível deverá durar ao ritmo médio de consumo."], [["Detetor de inflação", "Inflação", "Inflação (90d)"], "Variação percentual do preço de compra. O alerta do ingrediente compara o novo preço com o último e dispara acima de 5%. A percentagem de 90 dias do fornecedor é demonstrativa."], [["Tendência"], "Gráfico da evolução dos valores no histórico. No catálogo acompanha os preços registados do ingrediente. Na lista de fornecedores usa dados de demonstração."], [["Variância de inventário", "Variância", "Desvio de inventário", "Desvios de inventário", "Desvios de stock", "Teórico vs Real"], "Diferença entre quantidade contada e stock teórico à contagem. Multiplicar a diferença pelo custo unitário dá o impacto em euros."], [["Stock teórico"], "Quantidade que deveria existir segundo as entradas, vendas, quebras e acertos registados."], [["Contagem física", "Inventário físico"], "Verificação presencial das quantidades existentes nas prateleiras, câmaras e restantes zonas."], [["Ledger imutável de stock", "Ledger"], "Livro de movimentos de stock. Regista entradas, consumos, quebras e acertos para se poder seguir a origem de cada alteração."], [["Guias de remessa", "Guia de remessa", "GR"], "Documento que acompanha a entrega da mercadoria. Pode registar a receção antes da fatura do fornecedor."], [["Faturas", "Fatura", "FT"], "Documento de cobrança do fornecedor. Uma fatura ligada a uma guia já recebida permite conferir a compra sem duplicar a entrada em stock."], [["Notas de crédito", "Nota de crédito", "NC"], "Documento emitido pelo fornecedor para creditar um valor. No protótipo, a entrada manual deste tipo corresponde a uma devolução física."], [["Matriz BCG da restauração", "Matriz BCG", "BCG", "Engenharia de menu"], "Classificação dos pratos pela margem por unidade e pela popularidade, medida através do volume de vendas."], [["Estrelas", "Estrela"], "Pratos com margem e volume de vendas elevados em relação à referência da carta."], [["Vacas leiteiras", "Vaca leiteira", "Cavalos de batalha", "Cavalo de batalha"], "Pratos muito vendidos com margem por unidade inferior à referência da carta."], [["Questionamento", "Questionamentos", "Quebra-cabeças"], "Pratos com boa margem por unidade, mas com poucas vendas."], [["Cão de estimação", "Cães de estimação", "Cães", "Abacaxi"], "Quadrante de pratos com baixa margem e poucas vendas em relação à referência da carta."], [["Mapeamento POS", "1-para-N", "Combos", "Combo", "Explosão de receitas"], "Associação de um código de caixa a uma ou mais receitas. Um menu pode consumir os ingredientes da sopa, do prato e da bebida na mesma venda."], [["Dark kitchen", "Cloud kitchen"], "Cozinha dedicada à produção de refeições para entrega ao domicílio."], [["Catering"], "Produção de refeições para eventos, planeada com base no número de convidados."], [["Cozinha central"], "Unidade que prepara bases ou refeições para abastecer outros estabelecimentos."], [["MVP"], "Produto mínimo viável. Primeira versão com as funcionalidades essenciais para testar o serviço."], [["CRUD"], "Operações básicas de gestão de um registo: criar, consultar, editar e eliminar."], [["Multi-tenant"], "Arquitetura que permite a várias organizações usarem o mesmo software com os seus dados isolados."], [["Multi-estabelecimento"], "Gestão de vários espaços de uma organização, com informação individual ou consolidada."], [["RBAC"], "Controlo de acesso por perfil. As ações disponíveis dependem da função, como gerente, chefe de cozinha ou contabilista."], [["RLS"], "Controlo de acesso ao nível de cada linha da base de dados."], [["DAG"], "Grafo dirigido sem ciclos. Representa as ligações de dependência entre ingredientes, preparações e pratos."], [["Recálculo em cascata", "Cascata DAG"], "Atualização das preparações e pratos dependentes quando muda o custo de um ingrediente."], [["Transação ACID", "ACID"], "Conjunto de garantias da base de dados que permitem executar uma operação completa de forma consistente, mesmo perante falhas ou acessos simultâneos."], [["Base de dados relacional", "PostgreSQL"], "Sistema que organiza dados em tabelas relacionadas, como faturas, fornecedores e ingredientes."], [["Supabase"], "Plataforma que disponibiliza uma base de dados PostgreSQL e serviços para aplicações."], [["API"], "Interface que permite a dois sistemas trocarem dados ou pedirem operações de forma definida."], [["JSON"], "Formato de texto estruturado por campos e valores, usado para trocar dados entre sistemas."], [["Structured Outputs", "Structured Output"], "Extração em que a resposta segue um formato de dados definido, como campos para fornecedor, artigo e quantidade."], [["OCR"], "Reconhecimento ótico de caracteres. Converte texto visível numa fotografia ou num documento digitalizado em texto que pode ser processado."], [["IA", "Google Gemini", "Gemini"], "Inteligência artificial usada, por exemplo, para interpretar uma fatura e identificar os seus campos. O ecrã de exemplo do Kareca usa uma amostra local."], [["Human-in-the-loop"], "Validação humana da extração. A pessoa confere e corrige os dados antes de aprovar a entrada em stock."], [["POS"], "Sistema de caixa e faturação que regista as vendas do restaurante."], [["Webhooks", "Webhook"], "Notificação automática enviada por um sistema a outro quando ocorre um evento, como uma venda."], [["Idempotência"], "Propriedade que permite repetir uma operação, como importar o mesmo lote de vendas, sem duplicar o resultado."], [["SAF-T PT", "SAF-T (PT)", "SAF-T"], "Ficheiro de auditoria fiscal em formato XML que pode conter os documentos de faturação do restaurante."], [["NIF"], "Número de Identificação Fiscal. Identifica o contribuinte, por exemplo o fornecedor de uma fatura."], [["ATCUD"], "Código Único de Documento que identifica um documento fiscal."]];
+    const definitions = [[["COGS teórico", "CMV teórico", "Food Cost Teórico"], "Custo previsto dos ingredientes consumidos, calculado a partir das quantidades vendidas e das fichas técnicas."], [["COGS real", "CMV real", "Food Cost real"], "Custo do consumo apurado pelo inventário. Num período simples, corresponde ao stock inicial mais as compras, menos o stock final."], [["COGS", "CMV"], "Custo das mercadorias vendidas. Mede o custo dos ingredientes e bebidas consumidos para produzir as vendas do período."], [["Food Cost", "FC"], "Percentagem das vendas líquidas absorvida pelo custo. Numa ficha, divide-se o custo por dose pelo preço de venda sem IVA e multiplica-se por 100."], [["Vendas líquidas", "PVP líquido", "PVP líq.", "PVP s/ IVA", "PVP sem IVA"], "Preço ou receita de venda depois de retirar o IVA. Um preço de 16,39 € com IVA de 13% corresponde a 14,50 € líquidos."], [["PVP c/ IVA", "PVP com IVA", "PVP"], "Preço de venda ao público. Quando indicado «com IVA», é o valor final pago pelo cliente."], [["Taxa de IVA", "Taxas de IVA", "IVA"], "Imposto sobre o Valor Acrescentado. Para obter o preço líquido, divide-se o preço com imposto por 1 mais a taxa em forma decimal."], [["Margem bruta"], "Valor das vendas sem IVA que sobra depois de deduzir o custo das mercadorias vendidas. Ajuda a pagar pessoal e restantes gastos."], [["Margem líquida por canal", "Margens por canal", "Margem por canal", "Margem", "Margens"], "No comparativo de canais, é o preço sem IVA menos o custo da receita, a embalagem e a comissão. Em percentagem, divide-se a margem pelo preço sem IVA."], [["Prime Cost", "Custo Primo"], "Soma do custo das mercadorias vendidas com salários e encargos de pessoal."], [["EBITDA Operacional", "EBITDA"], "Resultado operacional antes de juros, impostos, depreciações e amortizações. Resume o resultado depois dos custos operacionais considerados na DRE."], [["DRE Operacional", "Demonstração de Resultados", "DRE"], "Relatório que parte das vendas e deduz mercadorias, pessoal e outros custos para mostrar o resultado da operação."], [["KPI", "KPIs"], "Indicador-chave de desempenho. Por exemplo, o food cost e o desvio de inventário ajudam a acompanhar a operação."], [["Benchmark", "Benchmarks"], "Valor de referência usado para comparar um indicador do restaurante com uma meta ou com o setor."], [["SKU"], "Código interno único de um artigo do catálogo. Permite reconhecer o mesmo ingrediente mesmo que a descrição comercial varie."], [["Unidade base", "Unidades base", "Unid. base"], "Unidade usada para registar e valorizar o ingrediente em stock, por exemplo quilograma, litro ou unidade."], [["Conversão de embalagens", "unidades de compra", "unidade de compra"], "Transforma embalagens de compra em unidades de stock. Uma caixa de seis garrafas de 0,75 L corresponde a 4,5 L."], [["Conversão multi-dimensão", "Multi-Dimensão"], "Conversão entre grandezas diferentes com um fator próprio do artigo, como o peso médio de um ovo."], [["Custo Médio Ponderado", "Custo médio atual", "CMP"], "Custo médio por unidade, ponderado pelas quantidades. Soma-se o valor do stock existente ao da nova entrada e divide-se pela quantidade total."], [["Último custo de compra", "Último custo", "Último preço"], "Preço unitário da compra mais recente do artigo."], [["Ficha técnica dinâmica", "Fichas técnicas", "Ficha técnica"], "Lista de ingredientes, quantidades, perdas e rendimento de uma receita que permite calcular o custo do lote e de cada dose."], [["Sub-receitas", "Sub-receita", "Preparações intermédias", "Preparação intermédia"], "Receita intermédia, como um caldo ou um molho, usada como componente de outro prato."], [["Yield Factor", "Yield", "Fator de aproveitamento", "Aproveitamento"], "Percentagem aproveitável do ingrediente após limpeza. Com 82% de aproveitamento, 180 g limpos exigem cerca de 220 g brutos."], [["Margem de perda", "Quebra técnica", "Quebras técnicas"], "Percentagem prevista que se perde ao limpar ou preparar um ingrediente, como pele, cascas ou espinhas."], [["Quebra de cocção", "Quebra cocção"], "Perda de peso ou volume durante a confeção, por exemplo quando um molho reduz ao lume."], [["Quantidade líquida", "Quantidades líquidas"], "Quantidade aproveitável que entra na receita depois das perdas de preparação."], [["Quebra operacional", "Quebras operacionais", "Desperdício", "Desperdícios", "Wastage", "Quebras", "Quebra"], "Saída de stock registada por motivos como validade, erro de cozinha ou dano. Registar o motivo ajuda a explicar os desvios no inventário."], [["Staff Meal", "Refeição de equipa", "Refeições de equipa"], "Consumo de ingredientes em refeições do pessoal, registado para distinguir esse consumo das vendas."], [["Stock mínimo", "Ponto de encomenda"], "Quantidade de segurança definida para um artigo. Abaixo deste nível, o sistema pode sugerir reposição."], [["Rutura de stock", "Ruturas de stock", "Rutura iminente", "Ruturas"], "Risco de o artigo se esgotar antes da próxima reposição. O aviso de rutura iminente indica que o stock baixou do mínimo."], [["Cobertura de stock", "Cobertura"], "Número de dias que o stock disponível deverá durar ao ritmo médio de consumo."], [["Detetor de inflação", "Inflação", "Inflação (90d)"], "Variação percentual do preço de compra. O alerta do ingrediente compara o novo preço com o último e dispara acima de 5%. A percentagem de 90 dias do fornecedor é demonstrativa."], [["Tendência"], "Gráfico da evolução dos valores no histórico. No catálogo acompanha os preços registados do ingrediente. Na lista de fornecedores usa dados de demonstração."], [["Variância de inventário", "Variância", "Desvio de inventário", "Desvios de inventário", "Desvios de stock", "Teórico vs Real"], "Diferença entre quantidade contada e stock teórico à contagem. Multiplicar a diferença pelo custo unitário dá o impacto em euros."], [["Stock teórico"], "Quantidade que deveria existir segundo as entradas, vendas, quebras e acertos registados."], [["Contagem física", "Inventário físico"], "Verificação presencial das quantidades existentes nas prateleiras, câmaras e restantes zonas."], [["Ledger imutável de stock", "Ledger"], "Livro de movimentos de stock. Regista entradas, consumos, quebras e acertos para se poder seguir a origem de cada alteração."], [["Guias de remessa", "Guia de remessa", "GR"], "Documento que acompanha a entrega da mercadoria. Pode registar a receção antes da fatura do fornecedor."], [["Faturas", "Fatura", "FT"], "Documento de cobrança do fornecedor. Uma fatura ligada a uma guia já recebida permite conferir a compra sem duplicar a entrada em stock."], [["Notas de crédito", "Nota de crédito", "NC"], "Documento emitido pelo fornecedor para creditar um valor. No protótipo, a entrada manual deste tipo corresponde a uma devolução física."], [["Matriz BCG da restauração", "Matriz BCG", "BCG", "Engenharia de menu"], "Classificação dos pratos pela margem por unidade e pela popularidade, medida através do volume de vendas."], [["Estrelas", "Estrela"], "Pratos com margem e volume de vendas elevados em relação à referência da carta."], [["Vacas leiteiras", "Vaca leiteira", "Cavalos de batalha", "Cavalo de batalha"], "Pratos muito vendidos com margem por unidade inferior à referência da carta."], [["Questionamento", "Questionamentos", "Quebra-cabeças"], "Pratos com boa margem por unidade, mas com poucas vendas."], [["Cão de estimação", "Cães de estimação", "Cães", "Abacaxi"], "Quadrante de pratos com baixa margem e poucas vendas em relação à referência da carta."], [["Mapeamento POS", "1-para-N", "Combos", "Combo", "Explosão de receitas"], "Associação de um código de caixa a uma ou mais receitas. Um menu pode consumir os ingredientes da sopa, do prato e da bebida na mesma venda."], [["Dark kitchen", "Cloud kitchen"], "Cozinha dedicada à produção de refeições para entrega ao domicílio."], [["Catering"], "Produção de refeições para eventos, planeada com base no número de convidados."], [["Cozinha central"], "Unidade que prepara bases ou refeições para abastecer outros estabelecimentos."], [["MVP"], "Produto mínimo viável. Primeira versão com as funcionalidades essenciais para testar o serviço."], [["CRUD"], "Operações básicas de gestão de um registo: criar, consultar, editar e eliminar."], [["Multi-tenant"], "Arquitetura que permite a várias organizações usarem o mesmo software com os seus dados isolados."], [["Multi-estabelecimento"], "Gestão de vários espaços de uma organização, com informação individual ou consolidada."], [["RBAC"], "Controlo de acesso por perfil. As ações disponíveis dependem da função, como gerente, chefe de cozinha ou contabilista."], [["RLS"], "Controlo de acesso ao nível de cada linha da base de dados."], [["DAG"], "Grafo dirigido sem ciclos. Representa as ligações de dependência entre ingredientes, preparações e pratos."], [["Recálculo em cascata", "Cascata DAG"], "Atualização das preparações e pratos dependentes quando muda o custo de um ingrediente."], [["Transação ACID", "ACID"], "Conjunto de garantias da base de dados que permitem executar uma operação completa de forma consistente, mesmo perante falhas ou acessos simultâneos."], [["Base de dados relacional", "PostgreSQL"], "Sistema que organiza dados em tabelas relacionadas, como faturas, fornecedores e ingredientes."], [["Supabase"], "Plataforma que disponibiliza uma base de dados PostgreSQL e serviços para aplicações."], [["API"], "Interface que permite a dois sistemas trocarem dados ou pedirem operações de forma definida."], [["JSON"], "Formato de texto estruturado por campos e valores, usado para trocar dados entre sistemas."], [["Structured Outputs", "Structured Output"], "Extração em que a resposta segue um formato de dados definido, como campos para fornecedor, artigo e quantidade."], [["OCR"], "Reconhecimento ótico de caracteres. Converte texto visível numa fotografia ou num documento digitalizado em texto que pode ser processado."], [["IA"], "Inteligência artificial usada, por exemplo, para interpretar uma fatura e identificar os seus campos. O ecrã de exemplo do Kareca usa uma amostra local."], [["Human-in-the-loop"], "Validação humana da extração. A pessoa confere e corrige os dados antes de aprovar a entrada em stock."], [["POS"], "Sistema de caixa e faturação que regista as vendas do restaurante."], [["Webhooks", "Webhook"], "Notificação automática enviada por um sistema a outro quando ocorre um evento, como uma venda."], [["Idempotência"], "Propriedade que permite repetir uma operação, como importar o mesmo lote de vendas, sem duplicar o resultado."], [["SAF-T PT", "SAF-T (PT)", "SAF-T"], "Ficheiro de auditoria fiscal em formato XML que pode conter os documentos de faturação do restaurante."], [["NIF"], "Número de Identificação Fiscal. Identifica o contribuinte, por exemplo o fornecedor de uma fatura."], [["ATCUD"], "Código Único de Documento que identifica um documento fiscal."]];
     const aliases = new Map();
     for (const [names, definition] of definitions) {
         for (const alias of names) aliases.set(alias.toLocaleLowerCase('pt'), definition);
