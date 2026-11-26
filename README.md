@@ -17,4 +17,6 @@ Tudo fica guardado no `localStorage` do browser. Use **Exportar cópia** / **Imp
 
 Em **Definições** (barra lateral), indique o NIF do restaurante e uma chave da API Gemini (aistudio.google.com). Depois use **Ler fatura com Gemini** em Compras & Faturas.
 
+PDFs com texto (faturas emitidas por software, não digitalizadas) são lidos primeiro no browser com pdf.js, sem gastar tokens. A leitura local só é aceite se o NIF do fornecedor for válido, houver linhas de artigos e a soma das linhas com IVA coincidir, ao cêntimo, com um total impresso no documento. Caso contrário, o ficheiro segue para o Gemini.
+
 A chave fica apenas no `localStorage` deste browser e não entra na cópia exportada. Como o pedido sai do browser, quem usar o computador consegue ver a chave. Ao passar para online, a chamada ao Gemini deve passar a ser feita no servidor.

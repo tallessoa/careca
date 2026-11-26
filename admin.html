@@ -2173,55 +2173,139 @@ html.gloss-off .gloss-term::after{content:none}
             if (!geminiKey() || !restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante e a chave Gemini.', 'info'); openSettingsModal(); return; }
             document.getElementById('invoice-file')?.click();
         }
+        const INVOICE_MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
+        // Telemóveis às vezes não dão o tipo do ficheiro (ou dão image/jpg): deduz pela extensão.
+        function invoiceMime(file) {
+            const t = (file.type || '').toLowerCase().replace('image/jpg', 'image/jpeg');
+            return Object.values(INVOICE_MIME).includes(t) ? t : INVOICE_MIME[(file.name.split('.').pop() || '').toLowerCase()] || '';
+        }
+        function ocrFailure(fileName, stage, detail) {
+            console.error('Leitura de fatura falhou', { stage, detail });
+            openModal('Leitura falhou', fileName, `<div class="space-y-3 text-sm"><p class="text-slate-300">Passo: <strong class="text-white">${escHtml(stage)}</strong></p>
+                <pre class="p-3 rounded-xl bg-[#050814] border border-rose-500/40 text-xs text-rose-200 whitespace-pre-wrap break-words">${escHtml(detail)}</pre>
+                <div class="flex justify-end gap-3"><button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Fechar</button>
+                <button onclick="closeModal(); pickInvoiceFile()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Tentar outra vez</button></div></div>`);
+        }
+        const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+        let pdfJsLoading = null;
+        function loadPdfJs() {
+            pdfJsLoading ||= new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = PDFJS_URL + 'pdf.min.js';
+                s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_URL + 'pdf.worker.min.js'; resolve(pdfjsLib); };
+                s.onerror = () => { pdfJsLoading = null; reject(Error('pdf.js não carregou')); };
+                document.head.appendChild(s);
+            });
+            return pdfJsLoading;
+        }
+        // Linhas de texto do PDF (até 5 páginas), agrupando os pedaços pela altura na página e ordenando da esquerda para a direita.
+        async function pdfTextRows(file) {
+            const lib = await loadPdfJs();
+            // isEvalSupported false: só extraímos texto, e assim um PDF malicioso não consegue correr código (CVE-2024-4367).
+            const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+            const rows = [];
+            for (let n = 1; n <= Math.min(pdf.numPages, 5); n++) {
+                const items = (await (await pdf.getPage(n)).getTextContent()).items.filter(i => i.str.trim());
+                const byY = [];
+                for (const i of items) {
+                    const y = i.transform[5];
+                    const row = byY.find(r => Math.abs(r.y - y) < 3);
+                    row ? row.items.push(i) : byY.push({ y, items: [i] });
+                }
+                byY.sort((a, b) => b.y - a.y).forEach(r => rows.push(r.items.sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str.trim()).join(' ')));
+            }
+            pdf.destroy();
+            return rows;
+        }
         async function readInvoiceFile(input) {
             const file = input.files[0];
             input.value = '';
             if (!file) return;
-            if (!/^(application\/pdf|image\/(jpeg|png|webp|heic|heif))$/.test(file.type)) { showToast('Formato não suportado', 'Use PDF, JPG, PNG, WEBP ou HEIC.', 'warning'); return; }
-            if (file.size > 15 * 1024 * 1024) { showToast('Ficheiro grande demais', 'Máximo 15 MB.', 'warning'); return; }
-            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300">O Gemini está a extrair os dados… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
+            const mime = invoiceMime(file);
+            if (!mime) { showToast('Formato não suportado', `«${file.name}» (${file.type || 'tipo desconhecido'}). Use PDF, JPG, PNG, WEBP ou HEIC.`, 'warning'); return; }
+            // O pedido ao Gemini aceita até 20 MB e o base64 aumenta o ficheiro em 1/3.
+            if (file.size > 14 * 1024 * 1024) { showToast('Ficheiro grande demais', `${fmtNum(file.size / 1048576, 1)} MB. Máximo 14 MB.`, 'warning'); return; }
+            openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300"><span id="ocr-stage">A preparar o ficheiro</span>… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
             const started = performance.now();
             const ticker = setInterval(() => { const el = document.getElementById('ocr-elapsed'); if (el) el.textContent = Math.round((performance.now() - started) / 1000) + ' s'; }, 500);
+            let stage = 'Preparar o ficheiro';
+            const setStage = (label, text) => { stage = label; const el = document.getElementById('ocr-stage'); if (el) el.textContent = text; };
             try {
-                const upload = await prepareInvoiceImage(file);
+                // PDFs com texto: tenta ler localmente; só vai ao Gemini se a leitura não validar (NIF, linhas e total).
+                if (mime === 'application/pdf') {
+                    setStage('Ler o PDF localmente', 'A ler o texto do PDF');
+                    const local = await pdfTextRows(file).then(rows => parseInvoiceText(rows, restaurantNif())).catch(e => ({ ok: false, reason: e.message }));
+                    if (local.ok) {
+                        openOcrReview(local.ex, file.name, 'PDF (leitura local)');
+                        showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem Gemini: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
+                        return;
+                    }
+                    console.info('Leitura local do PDF não serviu, a usar o Gemini:', local.reason);
+                    setStage('Preparar o ficheiro', 'A preparar o ficheiro');
+                }
+                const upload = await prepareInvoiceImage(file, mime);
+                const uploadType = upload === file ? mime : upload.type;
+                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro: ' + (r.error?.message || 'erro desconhecido'))); r.readAsDataURL(upload); });
                 const prepared = performance.now();
-                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(upload); });
-                const model = appState.settings?.geminiModel || 'gemini-3.8-flash';
+                let model = appState.settings?.geminiModel || 'gemini-3.8-flash';
+                const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
+                setStage('Enviar ao Gemini', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao Gemini (${model})`);
                 // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
                 // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
-                const call = generationConfig => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ inline_data: { mime_type: upload.type, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
-                        generationConfig
-                    })
-                });
-                const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA };
-                let res = await call({ ...base, thinkingConfig: { thinkingLevel: 'low' } });
-                if (res.status === 400) {
-                    const err = await res.clone().json().catch(() => ({}));
-                    if (/thinking/i.test(err.error?.message || '')) res = await call(base); // modelo que não aceita thinkingLevel
+                const call = async generationConfig => {
+                    const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 120000);
+                    try {
+                        return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+                            method: 'POST', signal: ctrl.signal,
+                            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ inline_data: { mime_type: uploadType, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
+                                generationConfig
+                            })
+                        });
+                    } catch (e) {
+                        throw Error(e.name === 'AbortError' ? 'O Gemini não respondeu em 120 s.' : 'Sem ligação ao Gemini (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear generativelanguage.googleapis.com.');
+                    } finally { clearTimeout(timer); }
+                };
+                const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, maxOutputTokens: 32768 };
+                let config = { ...base, thinkingConfig: { thinkingLevel: 'low' } }, res, body, fellBack = false;
+                for (let attempt = 1; ; attempt++) {
+                    res = await call(config);
+                    body = await res.json().catch(() => ({}));
+                    if (res.status === 400 && config.thinkingConfig && /thinking/i.test(body.error?.message || '')) { config = base; continue; } // modelo que não aceita thinkingLevel
+                    if (![429, 500, 503].includes(res.status)) break;
+                    // Gemini sobrecarregado: espera 2, 4 e 8 s; se continuar, passa uma vez para o modelo mais leve.
+                    if (attempt < 4) {
+                        const wait = 2 ** attempt;
+                        setStage('Enviar ao Gemini', `${model} ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
+                        await new Promise(r => setTimeout(r, wait * 1000));
+                    } else if (!fellBack && model !== FALLBACK_MODEL) {
+                        fellBack = true; attempt = 0; model = FALLBACK_MODEL; config = { ...base, thinkingConfig: { thinkingLevel: 'low' } };
+                        setStage('Enviar ao Gemini', `Modelo principal ocupado, a tentar com ${model}`);
+                    } else break;
                 }
-                const body = await res.json().catch(() => ({}));
-                if (!res.ok) throw Error(body.error?.message || 'Erro ' + res.status + ' do Gemini.');
-                const text = body.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
-                if (!text) throw Error('O Gemini não devolveu dados (' + (body.candidates?.[0]?.finishReason || body.promptFeedback?.blockReason || 'sem resposta') + ').');
-                const ex = JSON.parse(text);
-                if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos.');
+                if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? `\n\nTentado 4 vezes com ${appState.settings?.geminiModel || 'gemini-3.8-flash'} e com ${FALLBACK_MODEL}. A Google está sobrecarregada: tente daqui a uns minutos.` : ''));
+                stage = 'Ler a resposta do Gemini';
+                const cand = body.candidates?.[0], finish = cand?.finishReason;
+                const text = cand?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
+                if (!text) throw Error('O Gemini não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
+                let ex;
+                try { ex = JSON.parse(text); } catch (e) {
+                    throw Error((finish === 'MAX_TOKENS' ? 'A resposta foi cortada a meio (MAX_TOKENS).' : 'A resposta não é JSON válido (' + e.message + ', fim: ' + (finish || '?') + ').') + '\n\nInício da resposta:\n' + text.slice(0, 400));
+                }
+                if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos. O documento está legível e é uma fatura?');
                 const done = performance.now(), usage = body.usageMetadata || {};
                 console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
-                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', 'info');
+                showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com ' + model + ' porque o modelo principal estava ocupado. Confira bem as linhas. · ' : '') + 'Gemini ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
             } catch (error) {
-                closeModal();
-                showToast('Leitura falhou', error.message, 'warning');
+                ocrFailure(file.name, stage, error.message);
             } finally { clearInterval(ticker); }
         }
         // Fotos: reduz para 1600 px no lado maior, passa a cinzento e estica o contraste, para gastar menos tokens no Gemini.
         // O ficheiro original não é alterado. PDFs seguem como estão; se o browser não souber abrir a imagem (ex.: HEIC), envia o original.
-        async function prepareInvoiceImage(file) {
-            if (!file.type.startsWith('image/')) return file;
+        async function prepareInvoiceImage(file, mime = file.type) {
+            if (!mime.startsWith('image/')) return file;
             try {
                 const img = await createImageBitmap(file);
                 const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
@@ -2241,8 +2325,8 @@ html.gloss-off .gloss-term::after{content:none}
                 return blob && blob.size < file.size ? blob : file;
             } catch { return file; }
         }
-        function openOcrReview(ex, fileName) {
-            ocrDraft = { ex, fileName };
+        function openOcrReview(ex, fileName, via = 'Gemini') {
+            ocrDraft = { ex, fileName, via };
             const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
             const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
                 : docNif !== ownNif ? `A fatura foi emitida para o NIF ${docNif}${ex.customer_name ? ' (' + ex.customer_name + ')' : ''}, que não é o do restaurante (${ownNif}).` : '';
@@ -2270,7 +2354,7 @@ html.gloss-off .gloss-term::after{content:none}
             }).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
-            openModal('Rever fatura lida pelo Gemini', fileName, `<div class="space-y-4 text-sm">
+            openModal(via === 'Gemini' ? 'Rever fatura lida pelo Gemini' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
                 ${nifIssue ? `<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200"><strong>Alerta de NIF.</strong> ${escHtml(nifIssue)} Foi criado um alerta.</div>` : `<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">NIF do adquirente confere com o restaurante (${escHtml(ownNif)}).</div>`}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <label class="text-slate-300">Tipo<select id="ocr-type" class="${field} font-sans">${['Fatura', 'Guia de Remessa', 'Nota de Crédito'].map(t => `<option ${t === (/cr[eé]dito/i.test(ex.doc_type) ? 'Nota de Crédito' : /guia/i.test(ex.doc_type) ? 'Guia de Remessa' : 'Fatura') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -2319,7 +2403,7 @@ html.gloss-off .gloss-term::after{content:none}
             }
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
             const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
-                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: 'Gemini · ' + ocrDraft.fileName, itemsSummary: summary, lines };
+                atcud: document.getElementById('ocr-atcud').value.trim(), customerNif: normalizeNif(ex.customer_nif), source: (ocrDraft.via || 'Gemini') + ' · ' + ocrDraft.fileName, itemsSummary: summary, lines };
             try { postReceipt(inv); } catch (error) { appState = before; showToast('Compra pendente', error.message, 'warning'); return; }
             ocrDraft = null;
             persistState(); closeModal(); updateChrome(); renderActiveView();

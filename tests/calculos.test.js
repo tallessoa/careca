@@ -291,3 +291,48 @@ test('contrastLimits: corta 1% em cada ponta; imagem lisa fica igual', () => {
     const flat = new Array(256).fill(0); flat[128] = 10;
     assert.deepEqual([...ctx.contrastLimits(flat)], [0, 255]);
 });
+
+test('validNif: dígito de controlo', () => {
+    const ctx = load({});
+    assert.equal(ctx.validNif('PT 509 412 882'), true);
+    assert.equal(ctx.validNif('509412883'), false);
+    assert.equal(ctx.validNif('012345678'), false);
+});
+
+test('parsePtNumber: vírgula decimal, milhares e ponto decimal', () => {
+    const ctx = load({});
+    assert.equal(ctx.parsePtNumber('1.234,56'), 1234.56);
+    assert.equal(ctx.parsePtNumber('12.80'), 12.8);
+    assert.equal(ctx.parsePtNumber('1.500'), 1500);
+    assert.equal(ctx.parsePtNumber('23%'), 23);
+    assert.ok(Number.isNaN(ctx.parsePtNumber('kg')));
+});
+
+const pdfRows = [
+    'Pescados Atlântico, Lda.', 'Rua do Porto 12, Matosinhos NIF: 509 412 882', 'FATURA FT A2026/1842 Data: 24-11-2026', 'ATCUD: JFX3K9-1842',
+    'Cliente: Restaurante Chiado NIF 516234870', 'Ref Descrição Qtd Un Preço Desc IVA Total',
+    'SAL01 Lombo de Salmão Fresco 25,000 kg 12,80 0,00 6% 320,00', 'POL02 Polvo cozido 10 kg 16,50 10% 6% 148,50', 'TR Transporte 1 un 5,00 23% 5,00',
+    'Total Ilíquido 473,50', 'Total IVA 29,26', 'Total (EUR) 502,76'
+];
+
+test('parseInvoiceText: lê cabeçalho, linhas (com desconto) e valida o total', () => {
+    const ctx = load({});
+    const r = ctx.parseInvoiceText(pdfRows, '516234870');
+    assert.equal(r.ok, true, r.reason);
+    assert.equal(r.ex.supplier_nif, '509412882');
+    assert.equal(r.ex.customer_nif, '516234870');
+    assert.equal(r.ex.invoice_number, 'FT A2026/1842');
+    assert.equal(r.ex.date, '2026-11-24');
+    assert.equal(r.ex.atcud, 'JFX3K9-1842');
+    assert.equal(r.ex.lines.length, 3);
+    near(r.ex.lines[1].unit_price_net, 14.85);
+    assert.equal(r.ex.lines[2].vat_rate, 23);
+    assert.deepEqual({ ...r.ex.totals }, { net: 473.5, vat: 29.26, gross: 502.76 });
+});
+
+test('parseInvoiceText: recusa quando o total impresso não bate ou falta o NIF', () => {
+    const ctx = load({});
+    assert.equal(ctx.parseInvoiceText(pdfRows.map(r => r.replace('502,76', '510,00')), '516234870').ok, false);
+    assert.equal(ctx.parseInvoiceText(pdfRows.map(r => r.replace('509 412 882', '509 412 883')), '516234870').ok, false);
+    assert.equal(ctx.parseInvoiceText(['Documento digitalizado'], '').ok, false);
+});
