@@ -377,3 +377,14 @@ test('invoiceLineBase / invoiceLineToBase: embalagens multiplicam pelo tamanho d
     near(ctx.invoiceLineToBase(line('Salmão', 2, 'kg', 13), { baseUnit: 'kg' }).price, 13);
     assert.equal(ctx.packSize('Lombo de salmão 2 lombos'), null);
 });
+
+test('cleanItemName dá um nome curto sem embalagem nem texto comercial', () => {
+    const ctx = load({});
+    assert.equal(ctx.cleanItemName('Molho de Soja Tradicional Fermentado (Bidão 5 L) Fermentação natural para cozinha e preparação de molhos'), 'Molho de Soja Tradicional Fermentado');
+    assert.equal(ctx.cleanItemName('Farinha T65 saco 25kg'), 'Farinha T65');
+    assert.equal(ctx.cleanItemName('Arroz carolino 3 x 1 kg'), 'Arroz carolino');
+    assert.equal(ctx.cleanItemName('Ovos M - categoria A'), 'Ovos M');
+    assert.equal(ctx.cleanItemName('Salmão fresco'), 'Salmão fresco');
+    assert.equal(ctx.cleanItemName('5 kg'), '5 kg');
+    assert.equal(ctx.cleanItemName(undefined), '');
+});
