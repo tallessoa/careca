@@ -507,6 +507,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .kd-opt[aria-selected=true]::after{content:"✓";margin-left:auto;color:#38BDF8}
 .kd-opt.kd-active{background:#1E293B}
 .kd-opt[aria-disabled=true]{opacity:.4;cursor:not-allowed}
+.kd-search{position:sticky;top:-.25rem;z-index:1;display:block;width:100%;margin:-.25rem 0 .25rem;padding:.6rem .75rem;border:0;border-bottom:1px solid #1E293B;background:#0B1120;color:#F1F5F9;font-size:.875rem;outline:none}
+.kd-search:focus{border-bottom-color:#38BDF8}.kd-empty{padding:.6rem .75rem;font-size:.8rem;color:#94A3B8}.kd-opt[hidden],.kd-empty[hidden]{display:none}
 @media (pointer:coarse){.kd-opt{padding:.85rem .9rem;font-size:1rem}}
 </style>
 <style>
@@ -954,6 +956,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
     // por isso o código existente (value, onchange) não muda. Os selects criados depois são apanhados pelo MutationObserver.
     (() => {
         let current = null;
+        const SEARCH_MIN = 8; // a partir de quantas opções a lista ganha pesquisa
         const sync = sel => {
             const btn = sel?._kd;
             if (!btn) return;
@@ -1026,6 +1029,27 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 it.textContent = o.text;
                 list.append(it);
             });
+            // Listas grandes: campo de pesquisa no topo que filtra as opções enquanto se escreve.
+            const search = sel.options.length > SEARCH_MIN && document.createElement('input');
+            if (search) {
+                const norm = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                const empty = document.createElement('div');
+                Object.assign(empty, { className: 'kd-empty', hidden: true, textContent: 'Sem resultados.' });
+                Object.assign(search, { type: 'search', className: 'kd-search', placeholder: 'Pesquisar…', autocomplete: 'off' });
+                search.setAttribute('aria-label', 'Pesquisar ' + (sel.getAttribute('aria-label') || 'opções'));
+                search.addEventListener('input', () => {
+                    const q = norm(search.value.trim());
+                    let first = null;
+                    for (const it of list.querySelectorAll('.kd-opt')) {
+                        it.hidden = Boolean(q) && (it.hasAttribute('aria-disabled') || !norm(it.textContent).includes(q));
+                        if (!it.hidden && first == null && !it.hasAttribute('aria-disabled')) first = +it.dataset.i;
+                    }
+                    empty.hidden = first != null;
+                    if (first != null) highlight(first); else current.active = -1;
+                });
+                list.prepend(search);
+                list.append(empty);
+            }
             document.body.append(list);
             const r = btn.getBoundingClientRect(), width = Math.min(Math.max(r.width, 200), innerWidth - 16);
             const below = innerHeight - r.bottom - 8, above = r.top - 8, up = below < Math.min(list.scrollHeight, 240) && above > below;
@@ -1036,26 +1060,29 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             highlight(Math.max(0, sel.selectedIndex));
             list.addEventListener('click', e => { const it = e.target.closest('.kd-opt'); if (it && !it.hasAttribute('aria-disabled')) choose(+it.dataset.i); });
             list.addEventListener('keydown', e => {
-                const items = [...list.querySelectorAll('.kd-opt:not([aria-disabled])')].map(it => +it.dataset.i);
+                const items = [...list.querySelectorAll('.kd-opt:not([aria-disabled]):not([hidden])')].map(it => +it.dataset.i);
+                const typing = e.target === search;
                 const pos = items.indexOf(current.active);
                 const go = n => { e.preventDefault(); highlight(items[Math.max(0, Math.min(items.length - 1, n))]); };
                 if (e.key === 'ArrowDown') go(pos + 1);
                 else if (e.key === 'ArrowUp') go(pos - 1);
                 else if (e.key === 'Home') go(0);
                 else if (e.key === 'End') go(items.length - 1);
+                else if (typing && ['Home', 'End', ' '].includes(e.key)) return;
                 else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (current.active >= 0) choose(current.active); }
                 else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
                 else if (e.key === 'Tab') close(false);
-                else if (e.key.length === 1) {
+                else if (e.key.length === 1 && !typing) {
                     const k = e.key.toLowerCase(), next = items.slice(pos + 1).concat(items.slice(0, pos + 1)).find(i => sel.options[i].text.trim().toLowerCase().startsWith(k));
                     if (next != null) highlight(next);
                 }
             });
-            list.focus({ preventScroll: true });
+            (search || list).focus({ preventScroll: true });
         }
         document.addEventListener('pointerdown', e => { if (current && !current.list.contains(e.target) && !current.sel._kd.contains(e.target)) close(false); }, true);
         document.addEventListener('scroll', e => { if (current && !current.list.contains(e.target)) close(false); }, true);
-        addEventListener('resize', () => close(false));
+        // No telemóvel o teclado da pesquisa redimensiona a janela: não fechar a lista por isso.
+        addEventListener('resize', () => { if (!current?.list.contains(document.activeElement)) close(false); });
         new MutationObserver(records => {
             for (const r of records) {
                 if (r.type === 'attributes') { sync(r.target); continue; }
@@ -3359,7 +3386,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <p class="text-sm text-slate-400 mt-0.5">Stock, custos e reposição (${escHtml(storeName)}).</p>
                     </div>
                     <div class="flex flex-wrap gap-2 p-1 rounded-xl bg-[#0B1120] border border-[#1E293B]">
-                        <button onclick="setSupplierSubTab('catalog')" class="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sub === 'catalog' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}">Insumos &amp; Perdas (${appState.ingredients.length})</button>
+                        <button onclick="setSupplierSubTab('catalog')" class="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sub === 'catalog' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}">Insumos &amp; Aproveitamento (${appState.ingredients.length})</button>
                         <button onclick="setSupplierSubTab('suppliers')" class="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sub === 'suppliers' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}">Fornecedores (${appState.suppliers.length})</button>
                         <button onclick="setSupplierSubTab('orders')" class="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sub === 'orders' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}">Encomendas (${suggestedItems.length})</button>
                     </div>
