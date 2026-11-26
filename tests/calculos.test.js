@@ -409,3 +409,61 @@ test('splitInvoiceLine divide um kit em partes com a embalagem de cada uma', () 
     assert.equal(ctx.splitInvoiceLine({ description: 'Sushi mix (salmão, atum)', qty: 2, unit: 'cx' })[1].description, 'Sushi mix (salmão, atum)');
     assert.equal(ctx.splitInvoiceLine({ description: 'Nori + Arroz + Vinagre', qty: 1, unit: 'un' }).length, 3);
 });
+
+test('packSize / invoiceLineToBase: dúzias e embalagem do catálogo', () => {
+    const ctx = load({ ingredients: [] });
+    assert.deepEqual({ ...ctx.packSize('Ovos Classe M Cx 15 dz') }, { unit: 'un', qty: 180 });
+    // Fatura diz 2 un a 31,80 €, mas cada «un» é uma caixa de 15 dz.
+    const ovos = { description: 'OVOS CLASSE M', qty: 2, unit: 'un', unit_price_net: 31.8, line_total_net: 63.6 };
+    const r = ctx.invoiceLineToBase(ovos, { baseUnit: 'un', packLabel: 'Caixa 15 dz → 180 un' });
+    near(r.qty, 360); near(r.price, 63.6 / 360);
+    // Sem embalagem no catálogo, fica como estava (2 un).
+    near(ctx.invoiceLineToBase(ovos, { baseUnit: 'un', packLabel: '' }).qty, 2);
+    // Natas: garrafa de 2 L ou caixa de 200 ml, pelo catálogo ou pela descrição.
+    near(ctx.invoiceLineToBase({ description: 'NATAS CULINARIA', qty: 6, unit: 'un', line_total_net: 30 }, { baseUnit: 'L', packLabel: 'Garrafa 2 L' }).qty, 12);
+    near(ctx.invoiceLineToBase({ description: 'Natas 200ml', qty: 10, unit: 'un', line_total_net: 9 }, { baseUnit: 'L', packLabel: 'Garrafa 2 L' }).qty, 2);
+    // Peso na fatura ganha à embalagem do catálogo.
+    near(ctx.invoiceLineToBase({ description: 'Farinha', qty: 25, unit: 'kg', line_total_net: 20 }, { baseUnit: 'kg', packLabel: 'Saco 5 kg' }).qty, 25);
+});
+
+test('lotAndExpiry: lê lote e validade da descrição', () => {
+    const ctx = load({ ingredients: [] });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Natas 2L Lote: L2611A Val: 05/12/2026') }, { lot: 'L2611A', expiry: '2026-12-05' });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Ovos M lote 4471 validade 2026-12-20') }, { lot: '4471', expiry: '2026-12-20' });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Iogurte grego V. 3/1/27') }, { lot: '', expiry: '2027-01-03' });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Salmão fresco lombo') }, { lot: '', expiry: '' });
+});
+
+test('lotExpiryRisks: lote que não sai a tempo da validade', () => {
+    const ctx = load({ ingredients: [] });
+    const ovos = { id: 'ovos', byStore: { chiado: { stockTheoretical: 300 } } };
+    const mv = [
+        { store: 'chiado', ingredient: 'ovos', document: 'FT 1', qty: 360, date: '2026-11-20', lot: 'L1', expiry: '2026-11-30' },
+        { store: 'chiado', ingredient: 'ovos', document: 'V1', qty: -60, date: '2026-11-24' }
+    ];
+    // Saíram 60 em 6 dias (10/dia); faltam 4 dias → só saem 40 dos 300.
+    let r = ctx.lotExpiryRisks([ovos], mv, 'chiado', '2026-11-26');
+    assert.equal(r.length, 1);
+    assert.equal(r[0].lot, 'L1'); near(r[0].remaining, 300); near(r[0].projected, 40);
+    // Ritmo suficiente: sem alerta.
+    ovos.byStore.chiado.stockTheoretical = 30;
+    mv[1].qty = -330;
+    assert.equal(ctx.lotExpiryRisks([ovos], mv, 'chiado', '2026-11-26').length, 0);
+    // No dia da entrega não alerta (ainda não há ritmo), salvo se a validade estiver a 2 dias.
+    const novo = { id: 'natas', byStore: { chiado: { stockTheoretical: 4 } } };
+    const mv2 = [{ store: 'chiado', ingredient: 'natas', document: 'FT 2', qty: 4, date: '2026-11-26', expiry: '2026-12-10' }];
+    assert.equal(ctx.lotExpiryRisks([novo], mv2, 'chiado', '2026-11-26').length, 0);
+    mv2[0].expiry = '2026-11-27';
+    assert.equal(ctx.lotExpiryRisks([novo], mv2, 'chiado', '2026-11-26').length, 1);
+    // Fatura anulada (correção) deixa de contar como lote.
+    mv2.push({ store: 'chiado', ingredient: 'natas', document: 'FT 2', qty: -4, date: '2026-11-26T10:00:00Z', type: 'correcao' });
+    assert.equal(ctx.lotExpiryRisks([novo], mv2, 'chiado', '2026-11-26').length, 0);
+    // O stock vai primeiro para o lote mais recente: o lote antigo já saiu todo.
+    const mv3 = [
+        { store: 'chiado', ingredient: 'ovos', document: 'FT A', qty: 180, date: '2026-11-10', expiry: '2026-11-28' },
+        { store: 'chiado', ingredient: 'ovos', document: 'FT B', qty: 180, date: '2026-11-24', expiry: '2026-12-20' },
+        { store: 'chiado', ingredient: 'ovos', document: 'V', qty: -200, date: '2026-11-25' }
+    ];
+    ovos.byStore.chiado.stockTheoretical = 160;
+    assert.equal(ctx.lotExpiryRisks([ovos], mv3, 'chiado', '2026-11-26').length, 0);
+});
