@@ -515,7 +515,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .ft-title span{display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#7dd3fc;font-weight:700}
 .ft-title input{width:100%;margin-top:4px;padding:6px 0;background:transparent;border:0;border-bottom:1px solid #354862;color:#fff;font-size:1.25rem;font-weight:700}
 .ft-title input:focus{outline:none;border-color:#38bdf8}
-.ft-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 14px}
+.ft-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;align-items:stretch}
+.ft-sheet .ft-meta>label{display:flex;flex-direction:column;justify-content:flex-end}
+/* 6 colunas: Código, Versão, Data, Responsável (2), Dose | Tipo (2), Categoria (2), Food cost, Quebra */
+@media(min-width:720px){.ft-meta{grid-template-columns:repeat(6,minmax(0,1fr))}.ft-meta>label:nth-child(4),.ft-meta>label:nth-child(6),.ft-meta>label:nth-child(7){grid-column:span 2}}
+.ft-meta>label>input,.ft-meta>label>select,.ft-meta>label>.kd-btn,.ft-meta>label>.ft-pair>input,.ft-meta>label>.ft-pair>select{height:2.5rem;box-sizing:border-box;margin-top:4px;padding-top:0;padding-bottom:0}
+.ft-meta>label>.kd-btn{display:flex;width:100%;align-items:center}
+.ft-meta>label>.ft-pair{height:2.5rem;margin-top:4px}
+.ft-meta>label>.ft-pair>input,.ft-meta>label>.ft-pair>select{margin-top:0}
 .ft-sheet label{display:block;min-width:0;color:#b9c9de;font-size:.8rem}
 .ft-sheet input:not([type=checkbox]),.ft-sheet textarea{box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:8px 10px;border:1px solid #354862;border-radius:8px;background:#080f1e;color:#f1f5f9;font:inherit;font-size:.875rem}
 .ft-sheet .kd-btn{width:100%;margin-top:4px;font-size:.875rem;border-color:#354862;border-radius:8px;background-color:#080f1e}
