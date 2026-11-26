@@ -1463,12 +1463,8 @@
         function handleModalSubmit(event) {
             event.preventDefault();
             if (document.getElementById('kareca-modal').dataset.type === 'login') {
-                // shortcut: o mesmo login fixo do admin.html (admin/admin), visível no código-fonte; ao passar para online, autenticar no servidor.
-                if (document.getElementById('modal-user').value.trim() !== 'admin' || document.getElementById('modal-pass').value !== 'admin') {
-                    document.getElementById('modal-login-error').classList.remove('hidden');
-                    return;
-                }
-                try { sessionStorage.setItem('kareca_admin_sessao', '1'); } catch {}
+                // O admin.html confirma utilizador e palavra-passe no Supabase e volta a pedi-los se estiverem errados.
+                try { sessionStorage.setItem('kareca_admin_sessao', JSON.stringify({ u: document.getElementById('modal-user').value.trim(), p: document.getElementById('modal-pass').value })); } catch {}
                 location.href = 'admin.html';
                 return;
             }

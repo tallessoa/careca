@@ -11,7 +11,9 @@ Requer Node 18 ou mais recente. Não há dependências para instalar.
 
 ## Dados
 
-Tudo fica guardado no `localStorage` do browser. Use **Exportar cópia** / **Importar cópia** (barra lateral) para guardar ou mudar de computador.
+Os dados do backoffice (fornecedores, artigos, fichas técnicas, faturas, vendas, quebras, alertas, definições…) ficam no Supabase, no esquema `careca` (`supabase/migrations/20261126160000_careca_backoffice.sql`): uma linha por área em `careca.backoffice_dados`, com uma versão em `careca.backoffice_versao`. O `admin.html` só lhes chega pelas funções `public.careca_backoffice_ler` e `public.careca_backoffice_gravar`, que confirmam utilizador e palavra-passe em `careca.backoffice_acesso` (por omissão admin/admin). Para mudar a palavra-passe: `update careca.backoffice_acesso set senha_hash = extensions.crypt('nova', extensions.gen_salt('bf')) where utilizador = 'admin';`
+
+O browser guarda uma cópia no `localStorage` e envia para o Supabase só as áreas que mudaram. Na primeira entrada, se o Supabase estiver vazio, os dados que já estavam no browser são enviados. Se outro browser gravou entretanto, a página recarrega com a versão do Supabase. A chave do Gemini e as preferências de ecrã ficam só no browser. **Exportar cópia** / **Importar cópia** continuam a funcionar (a cópia importada é enviada para o Supabase).
 
 ## Leitura de faturas (OCR)
 
