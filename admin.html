@@ -2709,25 +2709,23 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 return blob && blob.size < file.size ? blob : file;
             } catch { return file; }
         }
-        function openOcrReview(ex, fileName, via = 'OCR') {
-            ocrDraft = { ex, fileName, via };
-            const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
-            const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
-                : docNif !== ownNif ? `A fatura foi emitida para o NIF ${docNif}${ex.customer_name ? ' (' + ex.customer_name + ')' : ''}, que não é o do restaurante (${ownNif}).` : '';
-            if (nifIssue && !appState.alerts.some(a => a.type === 'nif_mismatch' && a.document === ex.invoice_number)) {
-                appState.alerts.unshift({ id: crypto.randomUUID(), type: 'nif_mismatch', severity: 'critical', store: RESTAURANT, unread: true, time: new Date().toLocaleString('pt-PT'),
-                    document: ex.invoice_number, title: 'NIF errado na fatura ' + ex.invoice_number, message: nifIssue + ' Peça ao fornecedor ' + (ex.supplier_name || '') + ' uma fatura corrigida.' });
-                persistState(); updateChrome();
-            }
-            const supplier = appState.suppliers.find(s => normalizeNif(s.nif) === normalizeNif(ex.supplier_nif));
-            const field = 'w-full px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white';
+        const OCR_FIELD = 'w-full px-2 py-1.5 rounded-lg bg-[#050814] border border-[#1E293B] text-xs font-mono text-white';
+        // Uma linha da revisão. Com part, é uma parte de uma linha dividida: descrição, quantidade, unidade e valor editáveis.
+        function ocrRowHtml(l, idx, part = false) {
+            const field = OCR_FIELD;
             const ingOptions = sel => appState.ingredients.map(i => `<option value="${i.id}" ${sel === i.id ? 'selected' : ''}>${escHtml(i.name)} (${escHtml(i.baseUnit)})</option>`).join('');
-            const rows = ex.lines.map((l, idx) => {
-                const ing = matchIngredient(l.description, l.sku);
-                const base = ing && invoiceLineToBase(l, ing);
-                const total = Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net);
-                return `<div class="ocr-row p-3 rounded-xl border border-[#1E293B] space-y-2" data-total="${total}">
-                    <div class="text-xs text-slate-400">Linha ${idx + 1}: «${escHtml(l.description)}» · ${fmtNum(l.qty, 3)} ${escHtml(l.unit || '')} × ${fmtEur(l.unit_price_net, 4)} = <strong class="text-white">${fmtEur(total)}</strong> · IVA ${fmtNum(l.vat_rate, 0)}%</div>
+            const ing = matchIngredient(l.description, l.sku);
+            const base = ing && invoiceLineToBase(l, ing);
+            const total = Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net) || 0;
+            return `<div class="ocr-row p-3 rounded-xl border ${part ? 'border-sky-400/30 bg-sky-500/5' : 'border-[#1E293B]'} space-y-2" data-total="${total}" data-idx="${idx}">
+                    ${part ? `<div class="flex items-center justify-between text-xs text-sky-200 font-semibold">Parte<button type="button" onclick="removeOcrPart(this)" class="px-2 py-0.5 rounded-lg font-normal text-slate-300 border border-[#1E293B]">Remover</button></div>
+                    <label class="block text-xs text-slate-300">Descrição<input class="ocr-part-desc ${field} font-sans" value="${escHtml(l.description)}" oninput="ocrPartChanged(this)"></label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <label class="text-xs text-slate-300">Qtd.<input class="ocr-part-qty ${field}" type="number" step="any" min="0" value="${l.qty}" oninput="ocrPartChanged(this)"></label>
+                        <label class="text-xs text-slate-300">Unid.<input class="ocr-part-unit ${field}" value="${escHtml(l.unit || '')}" oninput="ocrPartChanged(this)"></label>
+                        <label class="text-xs text-slate-300">Valor líq. €<input class="ocr-part-total ${field}" type="number" step="0.01" min="0" value="${total || ''}" placeholder="0,00" oninput="ocrPartChanged(this)"></label>
+                    </div>` : `<div class="flex flex-wrap items-start justify-between gap-2"><div class="text-xs text-slate-400 flex-1 min-w-0">Linha ${idx + 1}: «${escHtml(l.description)}» · ${fmtNum(l.qty, 3)} ${escHtml(l.unit || '')} × ${fmtEur(l.unit_price_net, 4)} = <strong class="text-white">${fmtEur(total)}</strong> · IVA ${fmtNum(l.vat_rate, 0)}%</div>
+                    <button type="button" onclick="splitOcrRow(this.closest('.ocr-row'))" class="px-2.5 py-1 rounded-lg text-xs text-sky-300 border border-sky-400/30" title="Para uma linha com vários produtos, como um kit">Dividir linha</button></div>`}
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
                         <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option><option value="__new">+ Criar artigo novo no catálogo</option>${ingOptions(ing?.id)}</select></label>
                         <label class="text-xs text-slate-300">Qtd. total em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
@@ -2740,7 +2738,20 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                     <div class="ocr-price text-[11px] font-mono ${ing && !base ? 'text-amber-300' : 'text-slate-400'}">${ing && !base ? 'Unidade «' + escHtml(l.unit || '?') + '» não convertível: indique a quantidade em ' + escHtml(ing.baseUnit) + '.' : ''}</div>
                 </div>`;
-            }).join('');
+        }
+        function openOcrReview(ex, fileName, via = 'OCR') {
+            ocrDraft = { ex, fileName, via };
+            const ownNif = restaurantNif(), docNif = normalizeNif(ex.customer_nif);
+            const nifIssue = !ownNif ? '' : !docNif ? 'A fatura não tem NIF de adquirente. Para dedução do IVA e contabilidade deve ter o NIF do restaurante.'
+                : docNif !== ownNif ? `A fatura foi emitida para o NIF ${docNif}${ex.customer_name ? ' (' + ex.customer_name + ')' : ''}, que não é o do restaurante (${ownNif}).` : '';
+            if (nifIssue && !appState.alerts.some(a => a.type === 'nif_mismatch' && a.document === ex.invoice_number)) {
+                appState.alerts.unshift({ id: crypto.randomUUID(), type: 'nif_mismatch', severity: 'critical', store: RESTAURANT, unread: true, time: new Date().toLocaleString('pt-PT'),
+                    document: ex.invoice_number, title: 'NIF errado na fatura ' + ex.invoice_number, message: nifIssue + ' Peça ao fornecedor ' + (ex.supplier_name || '') + ' uma fatura corrigida.' });
+                persistState(); updateChrome();
+            }
+            const supplier = appState.suppliers.find(s => normalizeNif(s.nif) === normalizeNif(ex.supplier_nif));
+            const field = OCR_FIELD;
+            const rows = ex.lines.map((l, idx) => ocrRowHtml(l, idx)).join('');
             const net = ex.lines.reduce((n, l) => n + (Number(l.line_total_net) || Number(l.qty) * Number(l.unit_price_net)), 0);
             const diff = Math.abs(net - (Number(ex.totals?.net) || net));
             openModal(via === 'OCR' ? 'Rever fatura lida por OCR' : 'Rever fatura lida do PDF', fileName, `<div class="space-y-4 text-sm">
@@ -2761,9 +2772,74 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <button onclick="approveOcrInvoice()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Aprovar e atualizar stock</button></div></div>`, 'xl');
             document.querySelectorAll('.ocr-row .ocr-ing').forEach(s => ocrRowChanged(s, true));
         }
+        // A linha lida de uma linha da revisão: a da fatura, ou a parte em que foi dividida.
+        function ocrLine(row) { return row._part || ocrDraft.ex.lines[row.dataset.idx]; }
+        // Divide uma linha com vários produtos (ex.: um kit) em partes, cada uma com artigo, quantidade e valor próprios.
+        function splitOcrRow(row) {
+            const l = ocrLine(row);
+            row.classList.add('hidden', 'ocr-split-parent');
+            const box = document.createElement('div');
+            box.className = 'ocr-split space-y-2 p-3 rounded-xl border border-sky-400/40';
+            box.dataset.idx = row.dataset.idx; box.dataset.total = row.dataset.total;
+            box.innerHTML = `<div class="flex flex-wrap items-start justify-between gap-2 text-xs"><div class="text-slate-300 flex-1 min-w-0">Linha ${Number(row.dataset.idx) + 1} dividida: «${escHtml(l.description)}» · <strong class="text-white">${fmtEur(Number(row.dataset.total))}</strong>. Indique o valor líquido de cada parte.</div>
+                <button type="button" onclick="undoSplitOcrRow(this)" class="px-2.5 py-1 rounded-lg text-slate-300 border border-[#1E293B]">Desfazer divisão</button></div>
+                <div class="ocr-parts space-y-2"></div>
+                <div class="flex flex-wrap items-center justify-between gap-2"><span class="ocr-split-status text-xs font-mono"></span>
+                <button type="button" onclick="addOcrPart(this)" class="px-2.5 py-1 rounded-lg text-xs text-sky-300 border border-sky-400/30">+ Parte</button></div>`;
+            row.after(box);
+            splitInvoiceLine(l).forEach(p => addOcrPart(box, p));
+        }
+        function addOcrPart(el, part) {
+            const box = el.closest('.ocr-split'), l = ocrDraft.ex.lines[box.dataset.idx];
+            part = part || { description: '', qty: Number(l.qty) || 1, unit: l.unit || 'un', unit_price_net: 0, line_total_net: 0, vat_rate: l.vat_rate, sku: '' };
+            const list = box.querySelector('.ocr-parts');
+            list.insertAdjacentHTML('beforeend', ocrRowHtml(part, box.dataset.idx, true));
+            const row = list.lastElementChild;
+            row._part = part;
+            ocrRowChanged(row.querySelector('.ocr-ing'), true);
+            updateSplitStatus(box);
+            if (!part.description) row.querySelector('.ocr-part-desc').focus();
+        }
+        function removeOcrPart(el) {
+            const box = el.closest('.ocr-split');
+            if (box.querySelectorAll('.ocr-row').length <= 2) { showToast('Mínimo de duas partes', 'Para voltar à linha original use «Desfazer divisão».', 'warning'); return; }
+            el.closest('.ocr-row').remove();
+            updateSplitStatus(box);
+        }
+        function undoSplitOcrRow(el) {
+            const box = el.closest('.ocr-split');
+            box.previousElementSibling.classList.remove('hidden', 'ocr-split-parent');
+            box.remove();
+        }
+        function ocrPartChanged(el) {
+            const row = el.closest('.ocr-row'), l = row._part, f = c => row.querySelector('.ocr-part-' + c).value;
+            Object.assign(l, { description: f('desc').trim(), qty: Number(f('qty')) || 0, unit: f('unit').trim(), line_total_net: Number(f('total')) || 0 });
+            l.unit_price_net = l.qty ? l.line_total_net / l.qty : 0;
+            row.dataset.total = l.line_total_net;
+            const choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
+            if (!el.classList.contains('ocr-part-total')) {
+                const base = ing ? invoiceLineToBase(l, ing) : invoiceLineBase(l);
+                if (base) row.querySelector('.ocr-qty').value = +base.qty.toFixed(4);
+                if (choice === '__new') {
+                    row.querySelector('.ocr-new-unit').value = invoiceLineBase(l).unit;
+                    if (!row.dataset.named) row.querySelector('.ocr-new-name').value = cleanItemName(l.description);
+                    row.querySelector('.ocr-new-summary').textContent = `Artigo novo: ${row.querySelector('.ocr-new-name').value} · ${row.querySelector('.ocr-new-unit').value} · ${row.querySelector('.ocr-new-cat').value}`;
+                }
+            }
+            ocrRowChanged(row.querySelector('.ocr-qty'));
+            updateSplitStatus(row.closest('.ocr-split'));
+        }
+        // Mostra ao vivo se as partes somam o valor da linha. A aprovação fica bloqueada enquanto não somarem.
+        function updateSplitStatus(box) {
+            const d = splitDifference(box.dataset.total, [...box.querySelectorAll('.ocr-row')].map(r => r.dataset.total));
+            const out = box.querySelector('.ocr-split-status');
+            out.className = 'ocr-split-status text-xs font-mono ' + (d === 0 ? 'text-emerald-300' : 'text-amber-300');
+            out.textContent = d === 0 ? `✓ As partes somam ${fmtEur(Number(box.dataset.total))}` : d > 0 ? `Faltam distribuir ${fmtEur(d)} de ${fmtEur(Number(box.dataset.total))}` : `As partes passam ${fmtEur(-d)} do valor da linha (${fmtEur(Number(box.dataset.total))})`;
+            return d;
+        }
         function ocrRowChanged(el, keepHint = false) {
             const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
-            const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)], lineBase = invoiceLineBase(l);
+            const l = ocrLine(row), lineBase = invoiceLineBase(l);
             // Mostra a conta da embalagem (3 Saco × 20 kg = 60 kg) para se perceber de onde vem a quantidade.
             const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || ''} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
             row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
@@ -2793,7 +2869,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         // Janela por cima da revisão para dar nome, unidade e categoria ao artigo novo. O artigo só é criado ao aprovar a fatura.
         function openNewIngredientDialog(row) {
             document.getElementById('new-ing-dialog')?.remove();
-            const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)];
+            const l = ocrLine(row);
             const v = c => row.querySelector('.ocr-new-' + c).value;
             const field = 'mt-1 w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400';
             const ov = document.createElement('div');
@@ -2840,11 +2916,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (document.getElementById('ocr-nif-ok') && !document.getElementById('ocr-nif-ok').checked) { showToast('NIF por confirmar', 'Marque a confirmação ou cancele e peça uma fatura corrigida.', 'warning'); return; }
             const number = document.getElementById('ocr-number').value.trim();
             if (!number) { showToast('Falta o número', 'Indique o número do documento.', 'warning'); return; }
-            const rows = [...document.querySelectorAll('.ocr-row')];
+            const badSplit = [...document.querySelectorAll('.ocr-split')].find(box => updateSplitStatus(box) !== 0 || [...box.querySelectorAll('.ocr-part-desc')].some(i => !i.value.trim()));
+            if (badSplit) { badSplit.scrollIntoView({ block: 'center' }); showToast('Linha dividida por acertar', 'Cada parte precisa de descrição e os valores das partes têm de somar o valor da linha.', 'warning'); return; }
+            const rows = [...document.querySelectorAll('.ocr-row:not(.ocr-split-parent)')];
             const lines = rows.map((row, idx) => {
                 const ing = row.querySelector('.ocr-ing').value, qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
                 const vat = Number(row.querySelector('.ocr-vat').value);
-                return ing ? { ing, qty, price: total / qty, vat } : { service: true, label: ex.lines[idx].description, qty: 1, price: total, vat };
+                return ing ? { ing, qty, price: total / qty, vat } : { service: true, label: ocrLine(row).description, qty: 1, price: total, vat };
             });
             if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
             const unnamed = rows.find(r => r.querySelector('.ocr-ing').value === '__new' && !r.dataset.named);
@@ -2858,7 +2936,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             rows.forEach((row, idx) => {
                 if (lines[idx].ing !== '__new') return;
                 lines[idx].ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
-                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ex.lines[idx].sku || '' }).id;
+                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' }).id;
             });
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
             const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
