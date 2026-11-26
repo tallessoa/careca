@@ -5,21 +5,21 @@
 -- que confirmam utilizador e palavra-passe em careca.backoffice_acesso.
 -- Nada aqui toca nas tabelas do sistema de reservas (esquema public).
 
-create table careca.backoffice_acesso (
+create table if not exists careca.backoffice_acesso (
   utilizador text primary key,
   senha_hash text not null,
   criado_em timestamptz not null default now()
 );
 -- shortcut: admin/admin igual ao login atual do admin.html; trocar a palavra-passe aqui (ou passar a Supabase Auth) antes de dados reais sensíveis.
-insert into careca.backoffice_acesso (utilizador, senha_hash) values ('admin', extensions.crypt('admin', extensions.gen_salt('bf')));
+insert into careca.backoffice_acesso (utilizador, senha_hash) values ('admin', extensions.crypt('admin', extensions.gen_salt('bf'))) on conflict do nothing;
 
-create table careca.backoffice_versao (
+create table if not exists careca.backoffice_versao (
   restaurante text primary key,
   versao bigint not null default 0,
   atualizado_em timestamptz not null default now()
 );
 
-create table careca.backoffice_dados (
+create table if not exists careca.backoffice_dados (
   restaurante text not null references careca.backoffice_versao(restaurante) on delete cascade,
   chave text not null,
   dados jsonb not null,
