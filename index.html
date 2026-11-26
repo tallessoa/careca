@@ -1090,13 +1090,14 @@
                     <input type="text" required placeholder="Ex: Grupo Horizonte Restauração" class="w-full px-4 py-3 rounded-xl bg-[#030712] border border-sky-400/20 text-white text-sm focus:outline-none focus:border-sky-400">
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-300 mb-1.5">E-mail Corporativo</label>
-                    <input type="email" required placeholder="gestao@seurestaurante.pt" class="w-full px-4 py-3 rounded-xl bg-[#030712] border border-sky-400/20 text-white text-sm focus:outline-none focus:border-sky-400">
+                    <label id="modal-user-label" class="block text-xs font-medium text-slate-300 mb-1.5">E-mail Corporativo</label>
+                    <input id="modal-user" type="email" required placeholder="gestao@seurestaurante.pt" class="w-full px-4 py-3 rounded-xl bg-[#030712] border border-sky-400/20 text-white text-sm focus:outline-none focus:border-sky-400">
                 </div>
                 <div id="modal-pass-group" class="hidden">
                     <label class="block text-xs font-medium text-slate-300 mb-1.5">Palavra-passe</label>
-                    <input type="password" placeholder="••••••••" class="w-full px-4 py-3 rounded-xl bg-[#030712] border border-sky-400/20 text-white text-sm focus:outline-none focus:border-sky-400">
+                    <input id="modal-pass" type="password" placeholder="••••••••" class="w-full px-4 py-3 rounded-xl bg-[#030712] border border-sky-400/20 text-white text-sm focus:outline-none focus:border-sky-400">
                 </div>
+                <p id="modal-login-error" role="alert" class="hidden text-xs text-rose-400">Utilizador ou palavra-passe incorretos.</p>
                 <button type="submit" id="modal-submit-btn" class="w-full py-3.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 shadow-neon-cobalt transition-all">
                     Confirmar Pedido
                 </button>
@@ -1423,6 +1424,13 @@
             const orgGroup = document.getElementById('modal-org-group');
             const passGroup = document.getElementById('modal-pass-group');
             const submitBtn = document.getElementById('modal-submit-btn');
+            const user = document.getElementById('modal-user');
+            modal.dataset.type = type;
+            document.getElementById('modal-login-error').classList.add('hidden');
+            user.type = type === 'login' ? 'text' : 'email';
+            user.placeholder = type === 'login' ? 'admin' : 'gestao@seurestaurante.pt';
+            user.autocomplete = type === 'login' ? 'username' : 'email';
+            document.getElementById('modal-user-label').textContent = type === 'login' ? 'Utilizador' : 'E-mail Corporativo';
 
             if (type === 'login') {
                 title.textContent = 'Aceder à Conta';
@@ -1454,6 +1462,12 @@
 
         function handleModalSubmit(event) {
             event.preventDefault();
+            if (document.getElementById('kareca-modal').dataset.type === 'login') {
+                // O admin.html confirma utilizador e palavra-passe no Supabase e volta a pedi-los se estiverem errados.
+                try { sessionStorage.setItem('kareca_admin_sessao', JSON.stringify({ u: document.getElementById('modal-user').value.trim(), p: document.getElementById('modal-pass').value })); } catch {}
+                location.href = 'admin.html';
+                return;
+            }
             closeModal();
             triggerToast('Pedido confirmado! A equipa da Kareca Solutions entrará em contacto em breve.');
         }

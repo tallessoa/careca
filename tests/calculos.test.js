@@ -22,7 +22,8 @@ function ing(id, baseUnit, yieldFactor, cmp, extra = {}) {
 
 function recipe(id, items, extra = {}) {
     return {
-        id, name: id, recipeType: 'final_product', yieldQuantity: 1, yieldUnit: 'un', cookingLossPct: 0, extraFixedCost: 0,
+        // Fichas de teste com preços escritos à mão; o modo global tem testes próprios.
+        id, name: id, recipeType: 'final_product', priceMode: 'manual', yieldQuantity: 1, yieldUnit: 'un', cookingLossPct: 0, extraFixedCost: 0,
         vatRate: 13, pvpSalaGross: 0, pvpTakeawayGross: 0, pvpUberGross: 0, soldByStore: { chiado: 0 }, items, ...extra
     };
 }
@@ -408,4 +409,151 @@ test('splitInvoiceLine divide um kit em partes com a embalagem de cada uma', () 
     assert.equal(ctx.splitInvoiceLine({ description: 'Sushi mix (salmão, atum)', qty: 2, unit: 'cx' }).length, 2);
     assert.equal(ctx.splitInvoiceLine({ description: 'Sushi mix (salmão, atum)', qty: 2, unit: 'cx' })[1].description, 'Sushi mix (salmão, atum)');
     assert.equal(ctx.splitInvoiceLine({ description: 'Nori + Arroz + Vinagre', qty: 1, unit: 'un' }).length, 3);
+});
+
+test('packSize / invoiceLineToBase: dúzias e embalagem do catálogo', () => {
+    const ctx = load({ ingredients: [] });
+    assert.deepEqual({ ...ctx.packSize('Ovos Classe M Cx 15 dz') }, { unit: 'un', qty: 180 });
+    // Fatura diz 2 un a 31,80 €, mas cada «un» é uma caixa de 15 dz.
+    const ovos = { description: 'OVOS CLASSE M', qty: 2, unit: 'un', unit_price_net: 31.8, line_total_net: 63.6 };
+    const r = ctx.invoiceLineToBase(ovos, { baseUnit: 'un', packLabel: 'Caixa 15 dz → 180 un' });
+    near(r.qty, 360); near(r.price, 63.6 / 360);
+    // Sem embalagem no catálogo, fica como estava (2 un).
+    near(ctx.invoiceLineToBase(ovos, { baseUnit: 'un', packLabel: '' }).qty, 2);
+    // Natas: garrafa de 2 L ou caixa de 200 ml, pelo catálogo ou pela descrição.
+    near(ctx.invoiceLineToBase({ description: 'NATAS CULINARIA', qty: 6, unit: 'un', line_total_net: 30 }, { baseUnit: 'L', packLabel: 'Garrafa 2 L' }).qty, 12);
+    near(ctx.invoiceLineToBase({ description: 'Natas 200ml', qty: 10, unit: 'un', line_total_net: 9 }, { baseUnit: 'L', packLabel: 'Garrafa 2 L' }).qty, 2);
+    // Peso na fatura ganha à embalagem do catálogo.
+    near(ctx.invoiceLineToBase({ description: 'Farinha', qty: 25, unit: 'kg', line_total_net: 20 }, { baseUnit: 'kg', packLabel: 'Saco 5 kg' }).qty, 25);
+});
+
+test('lotAndExpiry: lê lote e validade da descrição', () => {
+    const ctx = load({ ingredients: [] });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Natas 2L Lote: L2611A Val: 05/12/2026') }, { lot: 'L2611A', expiry: '2026-12-05' });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Ovos M lote 4471 validade 2026-12-20') }, { lot: '4471', expiry: '2026-12-20' });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Iogurte grego V. 3/1/27') }, { lot: '', expiry: '2027-01-03' });
+    assert.deepEqual({ ...ctx.lotAndExpiry('Salmão fresco lombo') }, { lot: '', expiry: '' });
+});
+
+test('lotExpiryRisks: lote que não sai a tempo da validade', () => {
+    const ctx = load({ ingredients: [] });
+    const ovos = { id: 'ovos', byStore: { chiado: { stockTheoretical: 300 } } };
+    const mv = [
+        { store: 'chiado', ingredient: 'ovos', document: 'FT 1', qty: 360, date: '2026-11-20', lot: 'L1', expiry: '2026-11-30' },
+        { store: 'chiado', ingredient: 'ovos', document: 'V1', qty: -60, date: '2026-11-24' }
+    ];
+    // Saíram 60 em 6 dias (10/dia); faltam 4 dias → só saem 40 dos 300.
+    let r = ctx.lotExpiryRisks([ovos], mv, 'chiado', '2026-11-26');
+    assert.equal(r.length, 1);
+    assert.equal(r[0].lot, 'L1'); near(r[0].remaining, 300); near(r[0].projected, 40);
+    // Ritmo suficiente: sem alerta.
+    ovos.byStore.chiado.stockTheoretical = 30;
+    mv[1].qty = -330;
+    assert.equal(ctx.lotExpiryRisks([ovos], mv, 'chiado', '2026-11-26').length, 0);
+    // No dia da entrega não alerta (ainda não há ritmo), salvo se a validade estiver a 2 dias.
+    const novo = { id: 'natas', byStore: { chiado: { stockTheoretical: 4 } } };
+    const mv2 = [{ store: 'chiado', ingredient: 'natas', document: 'FT 2', qty: 4, date: '2026-11-26', expiry: '2026-12-10' }];
+    assert.equal(ctx.lotExpiryRisks([novo], mv2, 'chiado', '2026-11-26').length, 0);
+    mv2[0].expiry = '2026-11-27';
+    assert.equal(ctx.lotExpiryRisks([novo], mv2, 'chiado', '2026-11-26').length, 1);
+    // Fatura anulada (correção) deixa de contar como lote.
+    mv2.push({ store: 'chiado', ingredient: 'natas', document: 'FT 2', qty: -4, date: '2026-11-26T10:00:00Z', type: 'correcao' });
+    assert.equal(ctx.lotExpiryRisks([novo], mv2, 'chiado', '2026-11-26').length, 0);
+    // O stock vai primeiro para o lote mais recente: o lote antigo já saiu todo.
+    const mv3 = [
+        { store: 'chiado', ingredient: 'ovos', document: 'FT A', qty: 180, date: '2026-11-10', expiry: '2026-11-28' },
+        { store: 'chiado', ingredient: 'ovos', document: 'FT B', qty: 180, date: '2026-11-24', expiry: '2026-12-20' },
+        { store: 'chiado', ingredient: 'ovos', document: 'V', qty: -200, date: '2026-11-25' }
+    ];
+    ovos.byStore.chiado.stockTheoretical = 160;
+    assert.equal(ctx.lotExpiryRisks([ovos], mv3, 'chiado', '2026-11-26').length, 0);
+});
+
+test('invoiceLineToBase: «OVOS 15 DZ CLASSE L» 2 × 31,80 € = 360 ovos a 0,1767 €', () => {
+    const ctx = load({ ingredients: [] });
+    for (const unit of ['', 'un', 'cx']) {
+        const r = ctx.invoiceLineToBase({ description: 'OVOS 15 DZ CLASSE L', qty: 2, unit, unit_price_net: 31.8, line_total_net: 63.6 }, { baseUnit: 'un', packLabel: '' });
+        near(r.qty, 360, unit); near(r.price, 63.6 / 360, unit);
+    }
+});
+
+test('convertToBaseQty: tabela local de unidades', () => {
+    const ctx = load({ ingredients: [] });
+    near(ctx.convertToBaseQty(1, 'kg', 'g'), 1000);
+    near(ctx.convertToBaseQty(1, 'L', 'ml'), 1000);
+    near(ctx.convertToBaseQty(15, 'dz', 'un'), 180);
+    near(ctx.convertToBaseQty(250, 'g', 'kg'), 0.25);
+    near(ctx.convertToBaseQty(33, 'cl', 'L'), 0.33);
+    assert.ok(Number.isNaN(ctx.convertToBaseQty(1, 'kg', 'L')));
+    // «2 dz» sem caixa na descrição = 24 un; «2 cx» de «15 DZ» = 360 un.
+    near(ctx.invoiceLineToBase({ description: 'OVOS CLASSE M', qty: 2, unit: 'dz', line_total_net: 4 }, { baseUnit: 'un' }).qty, 24);
+    near(ctx.invoiceLineToBase({ description: 'OVOS 15 DZ CLASSE L', qty: 2, unit: 'dz', line_total_net: 63.6 }, { baseUnit: 'un' }).qty, 360);
+});
+
+test('nome do fornecedor: artigo curto e reconhecimento pela descrição da fatura', () => {
+    const ctx = load({ ingredients: [{ id: 'ovos', name: 'Ovos', sku: '', supplierNames: { sup_am: 'Ovos 15dz Classe L' } }, { id: 'ovosm', name: 'Ovos Classe M', sku: '' }] });
+    assert.equal(ctx.cleanItemName('OVOS 15 DZ CLASSE L'), 'Ovos');
+    assert.equal(ctx.matchIngredient('OVOS 15DZ CLASSE L').id, 'ovos');
+    assert.equal(ctx.matchIngredient('Ovos Classe M').id, 'ovosm');
+});
+
+test('channelSuggestedPvp: (custo + custos fixos) ÷ food cost, depois comissão, custos variáveis e margem extra', () => {
+    const ctx = load({});
+    near(ctx.channelSuggestedPvp(3, 30, 13, {}), 11.3); // Sala: 3 / 0,30 = 10 € s/ IVA
+    near(ctx.channelSuggestedPvp(3, 30, 13, { feePct: 30, packaging: 0.6 }), 19.37); // 3,6 / 0,3 / 0,7 × 1,13
+    near(ctx.channelSuggestedPvp(3, 30, 13, { feePct: 15, varPct: 5, packaging: 1, marginPct: 10 }), 20.72); // 4 / 0,3 / 0,8 × 1,1 × 1,13
+    assert.equal(ctx.channelSuggestedPvp(0, 30, 13, {}), 0);
+    assert.equal(ctx.channelSuggestedPvp(3, 30, 13, { feePct: 60, varPct: 40 }), 0);
+});
+
+test('preços por canal em modo global seguem o custo e a configuração; os escritos à mão são ignorados', () => {
+    const c = load({ ...bowlState(), salesChannels: [{ id: 'uber', name: 'Uber', feePct: 30, varPct: 2, packaging: 0.65 }] });
+    const rec = { ...c.getRecipe('rec_bowl'), priceMode: 'global', targetFcPct: 25, channelPrices: { uber: 99 } };
+    const unit = c.calculateRecipeCost(rec).unitCost;
+    const [sala, uber] = c.getChannelMetrics(rec);
+    near(sala.pvpGross, c.channelSuggestedPvp(unit, 25, rec.vatRate, {}));
+    assert.ok(Math.abs(sala.foodCostPct - 25) < 0.2);
+    near(uber.pvpGross, c.channelSuggestedPvp(unit, 25, rec.vatRate, { feePct: 30, varPct: 2, packaging: 0.65 }));
+    near(uber.commEur, uber.pvpNet * 0.32);
+});
+
+test('canais configuráveis: preço por canal, taxa como comissão, preços antigos de Uber mantêm-se', () => {
+    const c = load({ ...bowlState(), salesChannels: [{ id: 'uber', name: 'Uber', feePct: 15 }, { id: 'glovo', name: 'Glovo', feePct: 20 }] });
+    const rec = c.getRecipe('rec_bowl');
+    rec.channelPrices = { glovo: 21 };
+    const [sala, uber, glovo] = c.getChannelMetrics(rec);
+    assert.equal(sala.key, 'sala');
+    near(uber.pvpGross, 19.9);
+    near(uber.commEur, 19.9 / 1.13 * 0.15);
+    near(glovo.pvpGross, 21);
+    near(glovo.commEur, 21 / 1.13 * 0.2);
+});
+
+test('orderCheck: falta, a mais, não veio, não encomendado, oferta e preço', () => {
+    const { orderCheck } = load({});
+    const out = orderCheck(
+        [{ ing: 'a', qty: 10, price: 2 }, { ing: 'b', qty: 5, price: 1 }, { ing: 'c', qty: 3, price: 4 }, { ing: 'd', qty: 2, price: 1 }],
+        [{ ing: 'a', qty: 8, price: 2.2 }, { ing: 'b', qty: 5, price: 1 }, { ing: 'b', qty: 1, price: 0, offer: true }, { ing: 'd', qty: 2, price: 1 }, { ing: 'e', qty: 1, price: 0, offer: true }, { service: true, qty: 1, price: 9 }]);
+    const by = Object.fromEntries(out.map(r => [r.ing, r]));
+    assert.equal(by.a.status, 'Falta'); near(by.a.diff, -2); near(by.a.priceDiff, 0.1);
+    assert.equal(by.b.status, 'A mais'); assert.equal(by.b.offer, true); near(by.b.price, 1); near(by.b.priceDiff, 0);
+    assert.equal(by.c.status, 'Não veio');
+    assert.equal(by.d.status, 'Conforme');
+    assert.equal(by.e.status, 'Não encomendado'); assert.equal(by.e.offerOnly, true);
+    assert.equal(out.length, 5);
+});
+
+test('ingredientUsage segue as sub-receitas até à dose do prato', () => {
+    const c = load(bowlState());
+    const u = c.ingredientUsage(c.getRecipe('rec_bowl'), 'ing_salmao');
+    near(u.netQty, 0.18);
+    near(u.grossQty, 0.18 / 0.82);
+    assert.deepEqual([...u.subRecipes], ['rec_sub_salmao']);
+    const direct = c.ingredientUsage(c.getRecipe('rec_bowl'), 'ing_abacate');
+    near(direct.netQty, 0.065);
+    assert.equal(direct.subRecipes.length, 0);
+    // custo da dose do insumo = bruto × preço, coerente com o custo da ficha
+    const prices = new Map([['ing_salmao', 20]]);
+    const bowl = c.getRecipe('rec_bowl');
+    near(c.calculateRecipeCost(bowl, prices).unitCost - c.calculateRecipeCost(bowl).unitCost, u.grossQty * (20 - 12.35));
 });

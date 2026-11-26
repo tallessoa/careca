@@ -40,11 +40,21 @@ function getRecipeSold30d(recipe, storeId = appState.activeStore) {
 // ====================================================================
 // 4. MOTOR DE CÁLCULO RECURSIVO (DAG) & MATRIZ BCG DINÂMICA
 // ====================================================================
+// Tabela local de unidades: [grandeza, quantas unidades base]. Não depende de servidor.
+// Peso em kg, volume em L, contagem em un.
+const UNIT_TABLE = {
+    kg: ['kg', 1], kgs: ['kg', 1], quilo: ['kg', 1], quilos: ['kg', 1], g: ['kg', 0.001], gr: ['kg', 0.001], grs: ['kg', 0.001], grama: ['kg', 0.001], gramas: ['kg', 0.001], mg: ['kg', 0.000001],
+    l: ['L', 1], lt: ['L', 1], lts: ['L', 1], litro: ['L', 1], litros: ['L', 1], dl: ['L', 0.1], cl: ['L', 0.01], ml: ['L', 0.001],
+    un: ['un', 1], uni: ['un', 1], und: ['un', 1], unid: ['un', 1], u: ['un', 1], uds: ['un', 1], pc: ['un', 1], 'pç': ['un', 1], unidades: ['un', 1],
+    dz: ['un', 12], 'dúzia': ['un', 12], 'dúzias': ['un', 12], duzia: ['un', 12], duzias: ['un', 12], 'meia dúzia': ['un', 6], 'meia duzia': ['un', 6]
+};
+function unitInfo(unit) { return UNIT_TABLE[String(unit ?? '').trim().toLowerCase().replace(/\.$/, '')] || null; }
+
+// Converte entre unidades da mesma grandeza (1 kg = 1000 g, 1 L = 1000 ml, 1 dz = 12 un). NaN se forem de grandezas diferentes.
 function convertToBaseQty(qty, fromUnit, targetBaseUnit) {
-    const f = {kg:1000,g:1,L:1000,cl:10,ml:1,un:1};
-    const groups = [['kg','g'],['L','ml','cl'],['un']];
-    if (!groups.some(g=>g.includes(fromUnit) && g.includes(targetBaseUnit))) return NaN;
-    return Number(qty)*f[fromUnit]/f[targetBaseUnit];
+    const a = unitInfo(fromUnit), b = unitInfo(targetBaseUnit);
+    if (!a || !b || a[0] !== b[0]) return NaN;
+    return Number(qty) * a[1] / b[1];
 }
 
 function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId = appState.activeStore) {
@@ -62,8 +72,7 @@ function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId
             if (!ing) return;
             const ingMetrics = getIngMetricsForStore(ing, storeId);
             const baseNetQty = convertToBaseQty(item.netQty, item.unit || ing.baseUnit, ing.baseUnit);
-            const yieldFactor = Math.max(0.05, Math.min(1, Number(ing.yieldFactor) || 1));
-            const grossQty = baseNetQty / yieldFactor;
+            const grossQty = baseNetQty / ingYieldFactor(ing);
             const unitPrice = prices?.get(ing.id) ?? ingMetrics.cmp;
             itemsCost += grossQty * unitPrice;
         } else if (item.type === 'sub_recipe') {
@@ -77,12 +86,47 @@ function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId
     });
 
     const batchCost = itemsCost + (Number(recipe.extraFixedCost) || 0);
-    const yieldQty = Math.max(0.001, Number(recipe.yieldQuantity) || 1);
-    const cookingLoss = Math.max(0, Math.min(0.95, (Number(recipe.cookingLossPct) || 0) / 100));
-    const netYield = Math.max(0.001, yieldQty * (1 - cookingLoss));
-    const unitCost = batchCost / netYield;
+    const unitCost = batchCost / recipeNetYield(recipe);
 
     return {batchCost,unitCost,totalRecipeCost:unitCost};
+}
+
+function ingYieldFactor(ing) {
+    return Math.max(0.05, Math.min(1, Number(ing.yieldFactor) || 1));
+}
+
+// Rendimento líquido do lote, depois da quebra de cocção.
+function recipeNetYield(recipe) {
+    const yieldQty = Math.max(0.001, Number(recipe.yieldQuantity) || 1);
+    const cookingLoss = Math.max(0, Math.min(0.95, (Number(recipe.cookingLossPct) || 0) / 100));
+    return Math.max(0.001, yieldQty * (1 - cookingLoss));
+}
+
+// Quanto de um insumo entra numa unidade (dose) da receita, seguindo as sub-receitas.
+// netQty e grossQty na unidade base do insumo; subRecipes = ids das sub-receitas por onde passa.
+function ingredientUsage(recipe, ingId, visited = new Set()) {
+    const out = { netQty: 0, grossQty: 0, subRecipes: [] };
+    if (!recipe || visited.has(recipe.id)) return out;
+    const next = new Set(visited).add(recipe.id);
+    const perUnit = 1 / recipeNetYield(recipe);
+    (recipe.items || []).forEach(item => {
+        if (item.type === 'ingredient' && item.refId === ingId) {
+            const ing = getIngredient(ingId);
+            const qty = ing ? convertToBaseQty(item.netQty, item.unit || ing.baseUnit, ing.baseUnit) * perUnit : NaN;
+            if (!Number.isFinite(qty)) return;
+            out.netQty += qty;
+            out.grossQty += qty / ingYieldFactor(ing);
+        } else if (item.type === 'sub_recipe') {
+            const sub = getRecipe(item.refId);
+            const used = ingredientUsage(sub, ingId, next);
+            const k = sub ? convertToBaseQty(item.netQty, item.unit || sub.yieldUnit, sub.yieldUnit) * perUnit : NaN;
+            if (!(used.netQty > 0) || !Number.isFinite(k)) return;
+            out.netQty += used.netQty * k;
+            out.grossQty += used.grossQty * k;
+            for (const id of [sub.id, ...used.subRecipes]) if (!out.subRecipes.includes(id)) out.subRecipes.push(id);
+        }
+    });
+    return out;
 }
 
 function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore) {
@@ -90,16 +134,24 @@ function getChannelMetrics(recipe, prices = null, storeId = appState.activeStore
     const baseCost = costObj.totalRecipeCost;
     const vatDiv = 1 + Number(recipe.vatRate ?? 13) / 100;
 
+    // Sala é o canal base, sem taxa. Os restantes vêm da configuração (appState.salesChannels); os preços antigos de Takeaway/Uber continuam a valer.
+    const legacy = { takeaway: recipe.pvpTakeawayGross, uber: recipe.pvpUberGross };
+    // Modo global (o padrão): os preços saem do custo atual, do food cost pretendido da ficha e da configuração de cada canal.
+    // Modo manual: valem os preços escritos na ficha. Numa simulação de preços, o PVP global segue o custo atual, não o simulado.
+    const manual = recipe.priceMode === 'manual';
+    const unitCost = prices ? calculateRecipeCost(recipe, null, new Set(), storeId).unitCost : costObj.unitCost;
+    const target = Number(recipe.targetFcPct) || (typeof targetFcPct === 'function' ? targetFcPct() : 30);
+    const auto = ch => channelSuggestedPvp(unitCost, target, recipe.vatRate, ch);
     const channels = [
-        { key: 'sala', name: 'Sala (Dine-in)', pvpGross: Number(recipe.pvpSalaGross) || 0, commissionPct: 0, packaging: 0.00 },
-        { key: 'takeaway', name: 'Takeaway', pvpGross: Number(recipe.pvpTakeawayGross) || 0, commissionPct: 0, packaging: 0.45 },
-        { key: 'uber', name: 'Uber Eats (Delivery)', pvpGross: Number(recipe.pvpUberGross) || 0, commissionPct: 30, packaging: 0.65 }
+        { key: 'sala', name: 'Sala (Dine-in)', pvpGross: manual ? Number(recipe.pvpSalaGross) || 0 : auto({}), commissionPct: 0, varPct: 0, packaging: 0.00 },
+        ...salesChannels().map(ch => ({ key: ch.id, name: ch.name, pvpGross: manual ? Number(recipe.channelPrices?.[ch.id] ?? legacy[ch.id]) || 0 : auto(ch),
+            commissionPct: Number(ch.feePct) || 0, varPct: Number(ch.varPct) || 0, packaging: Number(ch.packaging) || 0 }))
     ];
 
     return channels.map(ch => {
         const pvpNet = ch.pvpGross / vatDiv;
         const totalCost = baseCost + ch.packaging;
-        const commEur = pvpNet * (ch.commissionPct / 100);
+        const commEur = pvpNet * ((ch.commissionPct + ch.varPct) / 100);
         const marginEur = pvpNet - totalCost - commEur;
         const foodCostPct = pvpNet > 0 ? (totalCost / pvpNet) * 100 : 0;
         const marginPct = pvpNet > 0 ? (marginEur / pvpNet) * 100 : 0;
@@ -240,6 +292,25 @@ function suggestedPvpGross(unitCost, targetFcPct, vatRate) {
     return unitCost / (targetFcPct / 100) * (1 + Number(vatRate ?? 13) / 100);
 }
 
+const DEFAULT_SALES_CHANNELS = [
+    { id: 'takeaway', name: 'Takeaway', feePct: 0, packaging: 0.45 },
+    { id: 'uber', name: 'Uber Eats (Delivery)', feePct: 30, packaging: 0.65 }
+];
+function salesChannels() {
+    return appState.salesChannels ?? DEFAULT_SALES_CHANNELS;
+}
+
+// PVP com IVA de um canal, arredondado ao cêntimo:
+// (custo da dose + custos fixos por dose) ÷ food cost pretendido ÷ (1 − comissão − outros custos variáveis) × (1 + margem extra).
+// Assim o food cost do canal (custos fixos incluídos) nunca passa a meta.
+// Sala é o canal sem configuração ({}): fica custo ÷ food cost pretendido. Devolve 0 se faltar custo ou meta, ou se as % somarem 100 ou mais.
+function channelSuggestedPvp(unitCost, targetFcPct, vatRate, ch = {}) {
+    const varPct = (Number(ch.feePct) || 0) + (Number(ch.varPct) || 0);
+    if (!(unitCost > 0) || !(targetFcPct > 0) || varPct >= 100) return 0;
+    const net = (unitCost + (Number(ch.packaging) || 0)) / (targetFcPct / 100) / (1 - varPct / 100) * (1 + (Number(ch.marginPct) || 0) / 100);
+    return Math.round(net * (1 + Number(vatRate ?? 13) / 100) * 100) / 100;
+}
+
 // Valor do stock do restaurante. counted=true usa a última contagem física (matéria-prima + preparações contadas);
 // caso contrário usa o stock teórico. Inclui as preparações produzidas em stock, ao custo unitário atual.
 function stockValue(counted = false) {
@@ -300,6 +371,9 @@ function matchIngredient(description, sku = '') {
     const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ');
     const bySku = sku && appState.ingredients.find(i => norm(i.sku).trim() === norm(sku).trim());
     if (bySku) return bySku;
+    // Nome que o fornecedor já usou numa fatura aprovada («Ovos 15dz Classe L» → Ovos).
+    const byName = norm(description).trim() && appState.ingredients.find(i => Object.values(i.supplierNames || {}).some(n => norm(n).trim() === norm(description).trim()));
+    if (byName) return byName;
     const words = new Set(norm(description).split(/\s+/).filter(w => w.length > 2));
     let best = null, score = 0;
     for (const ing of appState.ingredients) {
@@ -319,6 +393,9 @@ function packSize(text) {
     if (m) { const [unit, f] = INVOICE_BASE_UNITS[m[3]]; return { unit, qty: +(m[1] * m[2] * f).toFixed(6) }; }
     m = t.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*' + unitRe));
     if (m) { const [unit, f] = INVOICE_BASE_UNITS[m[2]]; return { unit, qty: +(m[1] * f).toFixed(6) }; }
+    // Dúzias: «Caixa 15 dz» = 180 ovos.
+    m = t.match(/(\d+(?:\.\d+)?)\s*(?:dz|dúzias?|duzias?)(?![a-zà-ú])/);
+    if (m) return { unit: 'un', qty: Math.round(m[1] * 12) };
     m = t.match(/(\d+)\s*(folhas|unidades|unid|uds|un|pcs|peças|pç|ovos|doses|rolos|saquetas|cápsulas)(?![a-zà-ú])/);
     return m ? { unit: 'un', qty: Number(m[1]) } : null;
 }
@@ -327,10 +404,12 @@ function packSize(text) {
 // «Molho de Soja Tradicional Fermentado (Bidão 5 L) Fermentação natural…» → «Molho de Soja Tradicional Fermentado».
 function cleanItemName(text) {
     const full = String(text ?? '').replace(/\s+/g, ' ').trim();
-    let name = full.split(/\s*(?:[(\[;,|]|\s[-–—]\s|\d+(?:[.,]\d+)?\s*[x×]?\s*\d*(?:[.,]\d+)?\s*(?:kgs?|grs?|g|lts?|litros?|l|ml|cl|un|uds?)(?![a-zà-ú]))/i)[0];
+    let name = full.split(/\s*(?:[(\[;,|]|\s[-–—]\s|\d+(?:[.,]\d+)?\s*[x×]?\s*\d*(?:[.,]\d+)?\s*(?:kgs?|grs?|g|lts?|litros?|l|ml|cl|un|uds?|dz|dúzias?|duzias?)(?![a-zà-ú]))/i)[0];
     name = name.replace(/(\s+(?:saco|sacos|caixa|cx|pack|bidão|garrafa|lata|frasco|emb\.?|embalagem|de|com))+$/i, '').trim();
     if (!name) name = full;
     if (name.length > 60) name = name.slice(0, 60).replace(/\s+\S*$/, '');
+    // Faturas em maiúsculas («OVOS») ficam «Ovos» no catálogo.
+    if (name === name.toUpperCase() && /[A-ZÀ-Ú]/.test(name)) name = name.charAt(0) + name.slice(1).toLowerCase();
     return name;
 }
 
@@ -369,16 +448,22 @@ function invoiceLineBase(line) {
     const qty = Number(line.qty);
     if (INVOICE_BASE_UNITS[u]) return { unit: INVOICE_BASE_UNITS[u][0], qty: qty * INVOICE_BASE_UNITS[u][1] };
     const pack = packSize(line.description);
-    return pack ? { unit: pack.unit, qty: qty * pack.qty, pack } : { unit: 'un', qty };
+    if (pack) return { unit: pack.unit, qty: qty * pack.qty, pack };
+    // «2 dz» sem caixa na descrição são 24 ovos.
+    const info = unitInfo(u);
+    return info && info[0] === 'un' ? { unit: 'un', qty: qty * info[1] } : { unit: 'un', qty };
 }
 
 // Converte uma linha lida (qtd na unidade da fatura) para a unidade base do insumo. Devolve null se as unidades não forem compatíveis.
 // Tenta primeiro com o tamanho da embalagem; se não servir para o insumo (ex.: insumo contado à unidade), usa a unidade da fatura.
+// Sem tamanho na descrição, usa a embalagem do artigo no catálogo («Caixa 15 dz», «Garrafa 2 L»): 2 un a 31,80 € = 2 caixas = 360 ovos.
 function invoiceLineToBase(line, ing) {
     const units = { kg: 'kg', kgs: 'kg', g: 'g', gr: 'g', l: 'L', lt: 'L', litro: 'L', litros: 'L', cl: 'cl', ml: 'ml', un: 'un', uni: 'un', und: 'un', unid: 'un', u: 'un', uds: 'un' };
     const total = Number(line.line_total_net) || Number(line.qty) * Number(line.unit_price_net);
     const raw = units[String(line.unit ?? '').trim().toLowerCase().replace('.', '')];
-    for (const b of [invoiceLineBase(line), raw && { unit: raw, qty: Number(line.qty) }]) {
+    const lineBase = invoiceLineBase(line);
+    const catalogPack = !lineBase.pack && !INVOICE_BASE_UNITS[String(line.unit ?? '').trim().toLowerCase().replace('.', '')] && packSize(ing.packLabel);
+    for (const b of [catalogPack && { unit: catalogPack.unit, qty: Number(line.qty) * catalogPack.qty }, lineBase, raw && { unit: raw, qty: Number(line.qty) }]) {
         const qty = b ? convertToBaseQty(b.qty, b.unit, ing.baseUnit) : NaN;
         if (Number.isFinite(qty) && qty > 0) return { qty, price: total / qty };
     }
@@ -522,4 +607,74 @@ function stockCheckList(ingredients, movements, store, today, idleDays = 14) {
         if (since && idle >= idleDays) out.push({ ingId: ing.id, kind: 'idle', days: idle });
     }
     return out;
+}
+
+// Lote e validade escritos numa linha de fatura («Lote: L2611 Val: 05/12/2026»). Campos vazios quando não existem.
+function lotAndExpiry(text) {
+    const t = String(text ?? '');
+    const lot = (t.match(/\blote?\s*(?:n\.?º|nº|no\.?|#)?\s*[:.]?\s*([A-Z0-9][A-Z0-9\-\/.]*\d[A-Z0-9\-\/]*)/i) || [])[1] || '';
+    const m = t.match(/\b(?:val(?:idade)?|v\.|exp(?:ira)?|consumir até|cons\.? até|dlc|dluo)\.?\s*[:.]?\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4}))/i);
+    let expiry = '';
+    if (m) {
+        const [y, mo, d] = m[1] ? [m[1], m[2], m[3]] : [m[6].length === 2 ? '20' + m[6] : m[6], m[5], m[4]];
+        expiry = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (Number.isNaN(Date.parse(expiry))) expiry = '';
+    }
+    return { lot: lot.replace(/[.\/-]+$/, ''), expiry };
+}
+
+// Lotes com validade que não vão sair a tempo. O stock atual é atribuído aos lotes mais recentes (sai primeiro o mais antigo);
+// o ritmo de saída é o consumo desde a entrada do lote. Alerta se o que resta do lote não sair até à validade a esse ritmo,
+// ou se a validade já passou. Só avalia lotes com pelo menos 2 dias ou a 2 dias (ou menos) do fim, para não alertar no dia da entrega.
+function lotExpiryRisks(ingredients, movements, store, today) {
+    const out = [];
+    for (const ing of ingredients) {
+        let stock = ing.byStore?.[store]?.stockTheoretical || 0;
+        if (!(stock > 0)) continue;
+        const own = movements.filter(mv => mv.ingredient === ing.id && mv.store === store && mv.date);
+        const lots = new Map();
+        for (const mv of own) {
+            const entry = mv.qty > 0 && mv.type !== 'correcao';
+            if (!entry && mv.type !== 'correcao') continue;
+            const lot = lots.get(mv.document) || { qty: 0, date: '' };
+            lot.qty += mv.qty;
+            if (entry && String(mv.date) >= lot.date) Object.assign(lot, { date: String(mv.date).slice(0, 10), expiry: mv.expiry, lot: mv.lot, received: mv.qty });
+            lots.set(mv.document, lot);
+        }
+        const ordered = [...lots.entries()].filter(([, l]) => l.qty > 1e-9 && l.date).sort((a, b) => b[1].date.localeCompare(a[1].date));
+        for (const [document, l] of ordered) {
+            const remaining = Math.min(l.qty, stock);
+            stock -= remaining;
+            if (!(remaining > 1e-9) || !l.expiry) continue;
+            const daysLeft = daysBetween(today, l.expiry), since = daysBetween(l.date, today);
+            if (since < 2 && daysLeft > 2) continue;
+            const outflow = -own.filter(mv => mv.qty < 0 && mv.type !== 'correcao' && String(mv.date).slice(0, 10) >= l.date).reduce((s, mv) => s + mv.qty, 0);
+            const rate = outflow / Math.max(1, since);
+            const projected = rate * Math.max(0, daysLeft);
+            // Os lotes mais antigos (o stock que sobra depois deste) saem primeiro.
+            if (daysLeft < 0 || remaining + stock > projected + 1e-9) out.push({ ingId: ing.id, document, lot: l.lot || '', date: l.date, expiry: l.expiry, remaining, received: l.received, projected, daysLeft });
+        }
+    }
+    return out;
+}
+
+// Conferência da encomenda com o que veio na fatura: por artigo, pedido vs. recebido, preço e oferta.
+// orderLines/received: [{ ing, qty, price, offer? }] em unidades base. Devolve uma linha por artigo com o estado.
+function orderCheck(orderLines, received) {
+    const rows = new Map();
+    const row = ing => rows.get(ing) || rows.set(ing, { ing, ordered: 0, orderedValue: 0, received: 0, value: 0, offer: false, charged: false }).get(ing);
+    for (const l of orderLines) { const r = row(l.ing); r.ordered += l.qty; r.orderedValue += l.qty * l.price; }
+    for (const l of received) {
+        if (l.service) continue;
+        const r = row(l.ing);
+        r.received += l.qty; r.value += l.qty * l.price;
+        if (l.offer) r.offer = true; else r.charged = true;
+    }
+    return [...rows.values()].map(r => {
+        const orderedPrice = r.ordered ? r.orderedValue / r.ordered : 0, chargedQty = received.filter(l => l.ing === r.ing && !l.offer && !l.service).reduce((n, l) => n + l.qty, 0);
+        const price = chargedQty ? r.value / chargedQty : 0, diff = r.received - r.ordered, eps = 1e-9;
+        const status = !r.ordered ? 'Não encomendado' : !r.received ? 'Não veio' : diff < -eps ? 'Falta' : diff > eps ? 'A mais' : 'Conforme';
+        return { ing: r.ing, ordered: r.ordered, received: r.received, orderedPrice, price, offer: r.offer, offerOnly: r.offer && !r.charged, diff, status,
+            priceDiff: r.charged && r.ordered && orderedPrice > 0 ? price / orderedPrice - 1 : 0 };
+    });
 }
