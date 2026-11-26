@@ -1305,9 +1305,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const today = new Date().toLocaleDateString('sv-SE');
             const recent = (type, ingId) => appState.alerts.some(a => a.type === type && a.ingId === ingId && a.store === RESTAURANT && (a.unread || daysBetween(a.createdAt || today, today) < 7));
             let added = 0;
+            const lotRisks = lotExpiryRisks(appState.ingredients, appState.movements, RESTAURANT, today);
             for (const c of stockCheckList(appState.ingredients, appState.movements, RESTAURANT, today, appState.settings?.idleDays || 14)) {
                 const ing = getIngredient(c.ingId), type = c.kind === 'idle' ? 'idle_stock' : 'expiry';
-                if (recent(type, ing.id)) continue;
+                // O alerta do lote já diz o mesmo com mais detalhe (documento, quantidade por sair).
+                if (recent(type, ing.id) || (type === 'expiry' && lotRisks.some(r => r.ingId === ing.id))) continue;
                 const m = ing.byStore[RESTAURANT], stock = fmtNum(m.stockTheoretical, 2) + ' ' + ing.baseUnit;
                 const text = {
                     expired: [`${ing.name}: validade passada`, `Terminou a ${m.expiry} (há ${c.days} dia(s)) e há ${stock} em stock. Verifique e registe a quebra se for o caso.`],
@@ -1316,6 +1318,17 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 }[c.kind];
                 appState.alerts.unshift({ id: crypto.randomUUID(), type, ingId: ing.id, severity: c.kind === 'expired' ? 'critical' : 'warning', store: RESTAURANT, unread: true,
                     time: new Date().toLocaleString('pt-PT'), createdAt: today, title: text[0], message: text[1] });
+                added++;
+            }
+            for (const r of lotRisks) {
+                if (appState.alerts.some(a => a.type === 'lot_expiry' && a.ingId === r.ingId && a.document === r.document && (a.unread || daysBetween(a.createdAt || today, today) < 3))) continue;
+                const ing = getIngredient(r.ingId), u = ' ' + ing.baseUnit, lotTxt = r.lot ? ` (lote ${r.lot})` : '';
+                const title = r.daysLeft < 0 ? `${ing.name}: lote de ${r.date} fora de validade` : `${ing.name}: lote de ${r.date} não vai sair a tempo`;
+                const message = r.daysLeft < 0
+                    ? `Entrou com a ${r.document}${lotTxt}, validade ${r.expiry}. Ainda há ${fmtNum(r.remaining, 2)}${u} por sair. Verifique e registe a quebra.`
+                    : `Entrou com a ${r.document}${lotTxt}: ${fmtNum(r.received, 2)}${u}, validade ${r.expiry} (${r.daysLeft === 0 ? 'hoje' : `daqui a ${r.daysLeft} dia(s)`}). Ainda há ${fmtNum(r.remaining, 2)}${u} por sair e ao ritmo atual só saem cerca de ${fmtNum(r.projected, 2)}${u}. Use primeiro ou promova.`;
+                appState.alerts.unshift({ id: crypto.randomUUID(), type: 'lot_expiry', ingId: r.ingId, document: r.document, severity: r.daysLeft <= 1 ? 'critical' : 'warning', store: RESTAURANT, unread: true,
+                    time: new Date().toLocaleString('pt-PT'), createdAt: today, title, message });
                 added++;
             }
             return added;
@@ -1341,7 +1354,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const isCrit = a.severity === 'critical';
                 const borderCol = isCrit ? 'border-rose-500/35 bg-rose-500/5' : 'border-amber-500/35 bg-amber-500/5';
                 const pillCol = isCrit ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300';
-                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', idle_stock: 'PARADO' }[a.type] || 'ALERTA';
+                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', idle_stock: 'PARADO' }[a.type] || 'ALERTA';
 
                 return `
                     <div class="p-4 rounded-xl border ${a.unread ? borderCol : 'border-[#1E293B] bg-[#111827]/60 opacity-75'} transition-all">
@@ -1857,7 +1870,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 ${lines.length ? `<div class="overflow-x-auto rounded-xl border border-[#1E293B]"><table class="w-full text-left text-xs sm:text-sm font-mono tabular-nums">
                     <thead><tr class="text-[11px] uppercase text-slate-400 border-b border-[#1E293B] bg-[#050814]/60"><th class="py-2 px-3">Artigo</th><th class="py-2 px-3 text-right">Qtd.</th><th class="py-2 px-3 text-right">Preço s/ IVA</th><th class="py-2 px-3 text-right">IVA</th><th class="py-2 px-3 text-right">Total s/ IVA</th></tr></thead>
                     <tbody class="divide-y divide-[#1E293B]/60">${lines.map(l => { const ing = !l.service && getIngredient(l.ing); return `<tr>
-                        <td class="py-2 px-3 font-sans text-white">${escHtml(l.service ? l.label || 'Despesa' : ing?.name || 'Artigo removido')}${l.service ? ' <span class="text-[11px] text-slate-500">(sem stock)</span>' : ''}</td>
+                        <td class="py-2 px-3 font-sans text-white">${escHtml(l.service ? l.label || 'Despesa' : ing?.name || 'Artigo removido')}${l.service ? ' <span class="text-[11px] text-slate-500">(sem stock)</span>' : ''}${l.lot || l.expiry ? `<div class="text-[11px] font-mono text-slate-400">${l.lot ? 'Lote ' + escHtml(l.lot) : ''}${l.lot && l.expiry ? ' · ' : ''}${l.expiry ? 'Val. ' + escHtml(l.expiry) : ''}</div>` : ''}</td>
                         <td class="py-2 px-3 text-right">${fmtNum(l.qty, 3)} ${escHtml(l.service ? '' : ing?.baseUnit || '')}</td>
                         <td class="py-2 px-3 text-right">${fmtEur(l.price, 4)}</td>
                         <td class="py-2 px-3 text-right">${fmtNum(l.vat, 0)}%</td>
@@ -1999,6 +2012,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <label class="sm:col-span-2 text-xs text-slate-300">Qtd.<input class="ie-qty ${field}" type="number" step="any" min="0" value="${+Number(l.qty).toFixed(4)}" oninput="updateInvoiceEditTotal()"></label>
                 <label class="sm:col-span-2 text-xs text-slate-300">Preço s/ IVA<input class="ie-price ${field}" type="number" step="any" min="0" value="${+Number(l.price).toFixed(4)}" oninput="updateInvoiceEditTotal()"></label>
                 <label class="sm:col-span-2 text-xs text-slate-300">IVA %<input class="ie-vat ${field}" type="number" step="any" min="0" value="${l.vat}" oninput="updateInvoiceEditTotal()"></label>
+                ${l.service ? '' : `<label class="sm:col-span-5 text-xs text-slate-300">Lote<input class="ie-lot ${field}" value="${escHtml(l.lot || '')}"></label><label class="sm:col-span-6 text-xs text-slate-300">Validade<input class="ie-exp ${field}" type="date" value="${escHtml(l.expiry || '')}"></label>`}
                 <button type="button" onclick="this.closest('.ie-row').remove(); updateInvoiceEditTotal()" class="sm:col-span-1 px-2 py-1.5 rounded-lg text-xs text-rose-300 border border-rose-500/30" aria-label="Remover linha">✕</button></div>`;
         }
         function updateInvoiceEditTotal() {
@@ -2011,7 +2025,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             return [...document.querySelectorAll('#ie-lines .ie-row')].map(r => {
                 const n = c => Number(r.querySelector('.ie-' + c).value);
                 return r.dataset.service ? { service: true, label: r.querySelector('.ie-label').value.trim() || 'Despesa', qty: n('qty'), price: n('price'), vat: n('vat') }
-                    : { ing: r.querySelector('.ie-ing').value, qty: n('qty'), price: n('price'), vat: n('vat') };
+                    : { ing: r.querySelector('.ie-ing').value, qty: n('qty'), price: n('price'), vat: n('vat'), ...(r.querySelector('.ie-lot').value.trim() && { lot: r.querySelector('.ie-lot').value.trim() }), ...(r.querySelector('.ie-exp').value && { expiry: r.querySelector('.ie-exp').value }) };
             });
         }
         function openInvoiceEdit(idx) {
@@ -2108,13 +2122,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ing.priceHistory.push(l.price);
                     (ing.supplierPrices ??= {})[inv.supplierId] = { price: l.price, date: inv.date };
                     // Validade: mantém a do lote anterior se ainda estava dentro do prazo e termina antes (sai primeiro).
-                    if (ing.shelfLifeDays > 0) {
-                        const lot = addDaysIso(inv.date, ing.shelfLifeDays);
-                        if (!(oldQty > 0 && m.expiry && m.expiry >= inv.date && m.expiry < lot)) m.expiry = lot;
-                    }
+                    // A validade impressa na fatura ganha à calculada pelos dias de validade do artigo.
+                    const lot = l.expiry || (ing.shelfLifeDays > 0 ? addDaysIso(inv.date, ing.shelfLifeDays) : '');
+                    if (lot && !(oldQty > 0 && m.expiry && m.expiry >= inv.date && m.expiry < lot)) m.expiry = lot;
+                    if (lot) l.expiry = lot;
                 }
                 m.stockTheoretical += sign*l.qty;
-                appState.movements.push({store:inv.store, ingredient:l.ing, document:inv.id, qty:sign*l.qty, date:inv.date});
+                appState.movements.push({store:inv.store, ingredient:l.ing, document:inv.id, qty:sign*l.qty, date:inv.date, ...(l.lot && { lot: l.lot }), ...(sign > 0 && l.expiry && { expiry: l.expiry })});
                 if (sign > 0 && previous > 0 && l.price > previous*1.05) appState.alerts.unshift({
                     id:crypto.randomUUID(),type:'price_inflation',severity:'warning',store:inv.store,unread:true,time:'Agora',
                     title:ing.name+' · aumento '+fmtPct((l.price/previous-1)*100),message:'Última compra da loja: '+fmtEur(previous)+' → '+fmtEur(l.price)
@@ -2247,9 +2261,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 </div>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <label class="block text-xs text-slate-300">Quantidade (emb.)<input class="mp-qty mt-1 ${field}" type="number" step="any" min="0.0001" value="1" required></label>
-                    <label class="block text-xs text-slate-300">Unid. base por emb.<input class="mp-factor mt-1 ${field}" onchange="prefillManualPrice(this.closest('.mp-row'))" type="number" step="any" min="0.0001" value="1" required></label>
+                    <label class="block text-xs text-slate-300">Unid. base por emb.<input class="mp-factor mt-1 ${field}" onchange="prefillManualPrice(this.closest('.mp-row'), 'factor')" type="number" step="any" min="0.0001" value="1" required></label>
                     <label class="block text-xs text-slate-300">Preço/emb. s/ IVA (€)<input class="mp-price mt-1 ${field}" type="number" step="any" min="0" required></label>
                     <label class="block text-xs text-slate-300">IVA<select class="mp-vat mt-1 ${field}"><option value="6">6%</option><option value="13">13%</option><option value="23">23%</option></select></label>
+                    <label class="block text-xs text-slate-300 col-span-1 sm:col-span-2">Lote (opcional)<input class="mp-lot mt-1 ${field}"></label>
+                    <label class="block text-xs text-slate-300 col-span-1 sm:col-span-2">Validade (opcional)<input class="mp-exp mt-1 ${field}" type="date"></label>
                 </div>
             </div>`;
         }
@@ -2267,7 +2283,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             return [...document.querySelectorAll('#mp-lines .mp-row')].map(row => {
                 const v = cls => row.querySelector('.mp-'+cls).value;
                 const factor = Number(v('factor'));
-                return { ing: v('ingredient'), qty: Number(v('qty'))*factor, price: Number(v('price'))/factor, vat: Number(v('vat')) };
+                const lot = v('lot').trim(), expiry = v('exp');
+                return { ing: v('ingredient'), qty: Number(v('qty'))*factor, price: Number(v('price'))/factor, vat: Number(v('vat')), ...(lot && { lot }), ...(expiry && { expiry }) };
             });
         }
         function updateManualPurchaseTotal() {
@@ -2278,9 +2295,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const vat = lines.reduce((n,l) => n + l.qty*l.price*l.vat/100, 0);
             el.textContent = `${lines.length} linha(s) · Líquido ${fmtEur(net)} · IVA ${fmtEur(vat)} · Total ${fmtEur(net+vat)}`;
         }
-        function prefillManualPrice(row) {
+        function prefillManualPrice(row, ev) {
             const ing = row && getIngredient(row.querySelector('.mp-ingredient').value);
             if (ing) {
+                // Ao escolher o artigo, propõe as unidades base por embalagem a partir do catálogo («Caixa 15 dz» → 180).
+                const pack = packSize(ing.packLabel), per = pack && convertToBaseQty(pack.qty, pack.unit, ing.baseUnit);
+                if (ev !== 'factor') row.querySelector('.mp-factor').value = per > 0 ? +per.toFixed(4) : 1;
                 const m = getIngMetricsForStore(ing, RESTAURANT);
                 row.querySelector('.mp-price').value = (m.lastCost * Number(row.querySelector('.mp-factor').value || 1)).toFixed(4);
             }
@@ -2308,7 +2328,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 customer_name: { type: 'STRING' }, customer_nif: { type: 'STRING', description: 'NIF do adquirente/cliente; vazio se não existir' },
                 lines: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
                     description: { type: 'STRING' }, sku: { type: 'STRING' }, qty: { type: 'NUMBER' }, unit: { type: 'STRING', description: 'kg, g, L, cl, ml, un ou a unidade impressa' },
-                    unit_price_net: { type: 'NUMBER', description: 'preço unitário sem IVA, após descontos' }, line_total_net: { type: 'NUMBER' }, vat_rate: { type: 'NUMBER' }
+                    unit_price_net: { type: 'NUMBER', description: 'preço unitário sem IVA, após descontos' }, line_total_net: { type: 'NUMBER' }, vat_rate: { type: 'NUMBER' },
+                    lot: { type: 'STRING', description: 'lote do artigo, se impresso; vazio se não existir' }, expiry: { type: 'STRING', description: 'data de validade do artigo AAAA-MM-DD, se impressa; vazio se não existir' }
                 }, required: ['description', 'qty', 'unit_price_net', 'vat_rate'] } },
                 totals: { type: 'OBJECT', properties: { net: { type: 'NUMBER' }, vat: { type: 'NUMBER' }, gross: { type: 'NUMBER' } } }
             },
@@ -2444,7 +2465,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             method: 'POST', signal: ctrl.signal,
                             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
                             body: JSON.stringify({
-                                contents: [{ parts: [{ inline_data: { mime_type: uploadType, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
+                                contents: [{ parts: [{ inline_data: { mime_type: uploadType, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Se a linha tiver lote ou validade, preenche lot e expiry. Na descrição mantém a embalagem impressa (ex.: Cx 15 dz, Garrafa 2 L). Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
                                 generationConfig
                             })
                         });
@@ -2529,8 +2550,17 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <button type="button" onclick="splitOcrRow(this.closest('.ocr-row'))" class="px-2.5 py-1 rounded-lg text-xs text-sky-300 border border-sky-400/30" title="Para uma linha com vários produtos, como um kit">Dividir linha</button></div>`}
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
                         <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option><option value="__new">+ Criar artigo novo no catálogo</option>${ingOptions(ing?.id)}</select></label>
-                        <label class="text-xs text-slate-300">Qtd. total em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
+                        <label class="text-xs text-slate-300">Total recebido (unid. base)<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
                         <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
+                    </div>
+                    <div class="ocr-ask hidden p-2 rounded-lg border border-amber-500/40 bg-amber-500/5 text-xs text-amber-200 space-y-1.5">
+                        <div>Não consegui perceber quanto vem em cada «${escHtml(l.unit || 'un')}». Quanto veio ao todo nesta linha?</div>
+                        <div class="flex gap-2"><input class="ocr-ask-qty ${field}" type="number" step="any" min="0" aria-label="Quantidade que veio" placeholder="Ex.: 360" oninput="ocrAskChanged(this)">
+                        <select class="ocr-ask-unit ${field} font-sans" style="max-width:9rem" aria-label="Unidade" onchange="ocrAskChanged(this)">${['un', 'dz', 'kg', 'g', 'L', 'ml'].map(u => `<option value="${u}">${{ un: 'unidades', dz: 'dúzias', kg: 'kg', g: 'gramas', L: 'litros', ml: 'ml' }[u]}</option>`).join('')}</select></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="text-xs text-slate-300">Lote (opcional)<input class="ocr-lot ${field}" value="${escHtml(l.lot || lotAndExpiry(l.description).lot)}"></label>
+                        <label class="text-xs text-slate-300">Validade (opcional)<input class="ocr-exp ${field}" type="date" value="${escHtml(/^\d{4}-\d{2}-\d{2}$/.test(l.expiry || '') ? l.expiry : lotAndExpiry(l.description).expiry)}"></label>
                     </div>
                     <div class="ocr-new hidden flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border border-sky-400/30 bg-sky-500/5 text-xs">
                         <input type="hidden" class="ocr-new-name" value="${escHtml(cleanItemName(l.description))}"><input type="hidden" class="ocr-new-unit" value="${invoiceLineBase(l).unit}"><input type="hidden" class="ocr-new-cat" value="${ING_CATEGORIES[0]}">
@@ -2642,7 +2672,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
             const l = ocrLine(row), lineBase = invoiceLineBase(l);
             // Mostra a conta da embalagem (3 Saco × 20 kg = 60 kg) para se perceber de onde vem a quantidade.
-            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || ''} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
+            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || 'emb.'} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
             row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
             if (el.classList.contains('ocr-ing')) {
                 if (choice === '__new') {
@@ -2657,6 +2687,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     if (base && !keepHint) row.querySelector('.ocr-qty').value = +base.qty.toFixed(4);
                 }
             }
+            // Sem tamanho na descrição nem embalagem no catálogo, «2 un» pode ser 2 caixas: pergunta quanto veio e deixa a quantidade por preencher.
+            if (el.classList.contains('ocr-ing')) {
+                const unknown = choice && !lineBase.pack && !INVOICE_BASE_UNITS[String(l.unit ?? '').trim().toLowerCase().replace('.', '')] && (choice === '__new' || (ing && !packSize(ing.packLabel)));
+                row.querySelector('.ocr-ask').classList.toggle('hidden', !unknown);
+                if (unknown && !row.querySelector('.ocr-ask-qty').value) row.querySelector('.ocr-qty').value = '';
+                if (unknown && ing) row.querySelector('.ocr-ask-unit').value = ing.baseUnit;
+            }
             const qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
             const out = row.querySelector('.ocr-price');
             if (keepHint && out.textContent) return;
@@ -2666,6 +2703,28 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
             out.textContent = qty > 0 ? `${packNote}${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
+        }
+        // Resposta a «quanto veio»: converte para a unidade base do artigo (dúzias × 12; gramas → kg; ml → L) e recalcula o preço por unidade.
+        function ocrAskChanged(el) {
+            const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
+            let q = Number(row.querySelector('.ocr-ask-qty').value), u = row.querySelector('.ocr-ask-unit').value;
+            if (u === 'dz') { q *= 12; u = 'un'; }
+            let base = ing?.baseUnit;
+            if (choice === '__new') {
+                base = { g: 'kg', ml: 'L' }[u] || u;
+                row.querySelector('.ocr-new-unit').value = base;
+                row.querySelector('.ocr-new-summary').textContent = `Artigo novo: ${row.querySelector('.ocr-new-name').value} · ${base} · ${row.querySelector('.ocr-new-cat').value}`;
+            }
+            const qty = convertToBaseQty(q, u, base);
+            const out = row.querySelector('.ocr-price');
+            if (!(q > 0) || !Number.isFinite(qty)) {
+                row.querySelector('.ocr-qty').value = '';
+                out.className = 'ocr-price text-[11px] font-mono text-amber-300';
+                out.textContent = q > 0 ? `«${u}» não converte para ${base}: escolha outra unidade.` : 'Indique quanto veio.';
+                return;
+            }
+            row.querySelector('.ocr-qty').value = +qty.toFixed(4);
+            ocrRowChanged(row.querySelector('.ocr-qty'));
         }
         // Janela por cima da revisão para dar nome, unidade e categoria ao artigo novo. O artigo só é criado ao aprovar a fatura.
         function openNewIngredientDialog(row) {
@@ -2722,9 +2781,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const rows = [...document.querySelectorAll('.ocr-row:not(.ocr-split-parent)')];
             const lines = rows.map((row, idx) => {
                 const ing = row.querySelector('.ocr-ing').value, qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
-                const vat = Number(row.querySelector('.ocr-vat').value);
-                return ing ? { ing, qty, price: total / qty, vat } : { service: true, label: ocrLine(row).description, qty: 1, price: total, vat };
+                const vat = Number(row.querySelector('.ocr-vat').value), lot = row.querySelector('.ocr-lot').value.trim(), expiry = row.querySelector('.ocr-exp').value;
+                return ing ? { ing, qty, price: total / qty, vat, ...(lot && { lot }), ...(expiry && { expiry }) } : { service: true, label: ocrLine(row).description, qty: 1, price: total, vat };
             });
+            const ask = rows.find((r, i) => !lines[i].service && !r.querySelector('.ocr-ask').classList.contains('hidden') && !(lines[i].qty > 0));
+            if (ask) { ask.scrollIntoView({ block: 'center' }); ask.querySelector('.ocr-ask-qty').focus(); showToast('Quanto veio?', 'Indique a quantidade que veio nesta linha para calcular o preço por unidade.', 'warning'); return; }
             if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
             const unnamed = rows.find(r => r.querySelector('.ocr-ing').value === '__new' && !r.dataset.named);
             if (unnamed) { openNewIngredientDialog(unnamed); return; }
@@ -2738,6 +2799,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 if (lines[idx].ing !== '__new') return;
                 lines[idx].ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
                     category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' }).id;
+            });
+            // Aprende a embalagem: se a linha vem em «un»/«cx» sem tamanho e a quantidade foi corrigida (2 caixas → 360 ovos), guarda 180 un por embalagem.
+            rows.forEach((row, idx) => {
+                const ing = !lines[idx].service && getIngredient(lines[idx].ing), l = ocrLine(row), q = Number(l.qty);
+                if (!ing || !(q > 0) || invoiceLineBase(l).pack || packSize(ing.packLabel) || ['kg', 'L'].includes(invoiceLineBase(l).unit)) return;
+                const per = +(lines[idx].qty / q).toFixed(4);
+                if (per !== 1) ing.packLabel = `Embalagem → ${String(per).replace('.', ',')} ${ing.baseUnit}`;
             });
             const summary = lines.map(l => l.service ? l.label : getIngredient(l.ing).name + ' · ' + fmtNum(l.qty, 3) + ' ' + getIngredient(l.ing).baseUnit).join(' + ');
             const inv = { id: number, docType: document.getElementById('ocr-type').value, store: RESTAURANT, supplierId, date: document.getElementById('ocr-date').value,
@@ -3115,8 +3183,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Conversão Embalagem → Base</label>
-                            <input id="ing-pack" type="text" value="${ing ? escHtml(ing.packLabel) : 'Caixa 5 kg → 5,00 kg'}" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-sky-300 focus:outline-none focus:border-sky-400">
+                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Conversão Embalagem → Base <span class="text-slate-500">(usada quando a fatura só diz «un»)</span></label>
+                            <input id="ing-pack" type="text" value="${ing ? escHtml(ing.packLabel) : ''}" placeholder="Ex.: Caixa 15 dz · Garrafa 2 L · Caixa 200 ml" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-sky-300 focus:outline-none focus:border-sky-400">
                         </div>
                     </div>
 

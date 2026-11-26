@@ -319,6 +319,9 @@ function packSize(text) {
     if (m) { const [unit, f] = INVOICE_BASE_UNITS[m[3]]; return { unit, qty: +(m[1] * m[2] * f).toFixed(6) }; }
     m = t.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*' + unitRe));
     if (m) { const [unit, f] = INVOICE_BASE_UNITS[m[2]]; return { unit, qty: +(m[1] * f).toFixed(6) }; }
+    // Dúzias: «Caixa 15 dz» = 180 ovos.
+    m = t.match(/(\d+(?:\.\d+)?)\s*(?:dz|dúzias?|duzias?)(?![a-zà-ú])/);
+    if (m) return { unit: 'un', qty: Math.round(m[1] * 12) };
     m = t.match(/(\d+)\s*(folhas|unidades|unid|uds|un|pcs|peças|pç|ovos|doses|rolos|saquetas|cápsulas)(?![a-zà-ú])/);
     return m ? { unit: 'un', qty: Number(m[1]) } : null;
 }
@@ -374,11 +377,14 @@ function invoiceLineBase(line) {
 
 // Converte uma linha lida (qtd na unidade da fatura) para a unidade base do insumo. Devolve null se as unidades não forem compatíveis.
 // Tenta primeiro com o tamanho da embalagem; se não servir para o insumo (ex.: insumo contado à unidade), usa a unidade da fatura.
+// Sem tamanho na descrição, usa a embalagem do artigo no catálogo («Caixa 15 dz», «Garrafa 2 L»): 2 un a 31,80 € = 2 caixas = 360 ovos.
 function invoiceLineToBase(line, ing) {
     const units = { kg: 'kg', kgs: 'kg', g: 'g', gr: 'g', l: 'L', lt: 'L', litro: 'L', litros: 'L', cl: 'cl', ml: 'ml', un: 'un', uni: 'un', und: 'un', unid: 'un', u: 'un', uds: 'un' };
     const total = Number(line.line_total_net) || Number(line.qty) * Number(line.unit_price_net);
     const raw = units[String(line.unit ?? '').trim().toLowerCase().replace('.', '')];
-    for (const b of [invoiceLineBase(line), raw && { unit: raw, qty: Number(line.qty) }]) {
+    const lineBase = invoiceLineBase(line);
+    const catalogPack = !lineBase.pack && !INVOICE_BASE_UNITS[String(line.unit ?? '').trim().toLowerCase().replace('.', '')] && packSize(ing.packLabel);
+    for (const b of [catalogPack && { unit: catalogPack.unit, qty: Number(line.qty) * catalogPack.qty }, lineBase, raw && { unit: raw, qty: Number(line.qty) }]) {
         const qty = b ? convertToBaseQty(b.qty, b.unit, ing.baseUnit) : NaN;
         if (Number.isFinite(qty) && qty > 0) return { qty, price: total / qty };
     }
@@ -520,6 +526,55 @@ function stockCheckList(ingredients, movements, store, today, idleDays = 14) {
         const since = last(own.filter(mv => mv.qty < 0)) || last(own.filter(mv => mv.qty > 0));
         const idle = since ? daysBetween(since, today) : 0;
         if (since && idle >= idleDays) out.push({ ingId: ing.id, kind: 'idle', days: idle });
+    }
+    return out;
+}
+
+// Lote e validade escritos numa linha de fatura («Lote: L2611 Val: 05/12/2026»). Campos vazios quando não existem.
+function lotAndExpiry(text) {
+    const t = String(text ?? '');
+    const lot = (t.match(/\blote?\s*(?:n\.?º|nº|no\.?|#)?\s*[:.]?\s*([A-Z0-9][A-Z0-9\-\/.]*\d[A-Z0-9\-\/]*)/i) || [])[1] || '';
+    const m = t.match(/\b(?:val(?:idade)?|v\.|exp(?:ira)?|consumir até|cons\.? até|dlc|dluo)\.?\s*[:.]?\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4}))/i);
+    let expiry = '';
+    if (m) {
+        const [y, mo, d] = m[1] ? [m[1], m[2], m[3]] : [m[6].length === 2 ? '20' + m[6] : m[6], m[5], m[4]];
+        expiry = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (Number.isNaN(Date.parse(expiry))) expiry = '';
+    }
+    return { lot: lot.replace(/[.\/-]+$/, ''), expiry };
+}
+
+// Lotes com validade que não vão sair a tempo. O stock atual é atribuído aos lotes mais recentes (sai primeiro o mais antigo);
+// o ritmo de saída é o consumo desde a entrada do lote. Alerta se o que resta do lote não sair até à validade a esse ritmo,
+// ou se a validade já passou. Só avalia lotes com pelo menos 2 dias ou a 2 dias (ou menos) do fim, para não alertar no dia da entrega.
+function lotExpiryRisks(ingredients, movements, store, today) {
+    const out = [];
+    for (const ing of ingredients) {
+        let stock = ing.byStore?.[store]?.stockTheoretical || 0;
+        if (!(stock > 0)) continue;
+        const own = movements.filter(mv => mv.ingredient === ing.id && mv.store === store && mv.date);
+        const lots = new Map();
+        for (const mv of own) {
+            const entry = mv.qty > 0 && mv.type !== 'correcao';
+            if (!entry && mv.type !== 'correcao') continue;
+            const lot = lots.get(mv.document) || { qty: 0, date: '' };
+            lot.qty += mv.qty;
+            if (entry && String(mv.date) >= lot.date) Object.assign(lot, { date: String(mv.date).slice(0, 10), expiry: mv.expiry, lot: mv.lot, received: mv.qty });
+            lots.set(mv.document, lot);
+        }
+        const ordered = [...lots.entries()].filter(([, l]) => l.qty > 1e-9 && l.date).sort((a, b) => b[1].date.localeCompare(a[1].date));
+        for (const [document, l] of ordered) {
+            const remaining = Math.min(l.qty, stock);
+            stock -= remaining;
+            if (!(remaining > 1e-9) || !l.expiry) continue;
+            const daysLeft = daysBetween(today, l.expiry), since = daysBetween(l.date, today);
+            if (since < 2 && daysLeft > 2) continue;
+            const outflow = -own.filter(mv => mv.qty < 0 && mv.type !== 'correcao' && String(mv.date).slice(0, 10) >= l.date).reduce((s, mv) => s + mv.qty, 0);
+            const rate = outflow / Math.max(1, since);
+            const projected = rate * Math.max(0, daysLeft);
+            // Os lotes mais antigos (o stock que sobra depois deste) saem primeiro.
+            if (daysLeft < 0 || remaining + stock > projected + 1e-9) out.push({ ingId: ing.id, document, lot: l.lot || '', date: l.date, expiry: l.expiry, remaining, received: l.received, projected, daysLeft });
+        }
     }
     return out;
 }
