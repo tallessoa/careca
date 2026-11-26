@@ -488,3 +488,10 @@ test('convertToBaseQty: tabela local de unidades', () => {
     near(ctx.invoiceLineToBase({ description: 'OVOS CLASSE M', qty: 2, unit: 'dz', line_total_net: 4 }, { baseUnit: 'un' }).qty, 24);
     near(ctx.invoiceLineToBase({ description: 'OVOS 15 DZ CLASSE L', qty: 2, unit: 'dz', line_total_net: 63.6 }, { baseUnit: 'un' }).qty, 360);
 });
+
+test('nome do fornecedor: artigo curto e reconhecimento pela descrição da fatura', () => {
+    const ctx = load({ ingredients: [{ id: 'ovos', name: 'Ovos', sku: '', supplierNames: { sup_am: 'Ovos 15dz Classe L' } }, { id: 'ovosm', name: 'Ovos Classe M', sku: '' }] });
+    assert.equal(ctx.cleanItemName('OVOS 15 DZ CLASSE L'), 'Ovos');
+    assert.equal(ctx.matchIngredient('OVOS 15DZ CLASSE L').id, 'ovos');
+    assert.equal(ctx.matchIngredient('Ovos Classe M').id, 'ovosm');
+});
