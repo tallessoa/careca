@@ -250,6 +250,12 @@ function suggestedPvpGross(unitCost, targetFcPct, vatRate) {
     return unitCost / (targetFcPct / 100) * (1 + Number(vatRate ?? 13) / 100);
 }
 
+// PVP Takeaway e Uber sugeridos: PVP Sala + a taxa (%) de cada canal calculada sobre o PVP Sala. Arredonda ao cêntimo.
+function channelPricesFromSala(salaGross, feeTakeawayPct = 0, feeUberPct = 30) {
+    const withFee = pct => Math.round((Number(salaGross) || 0) * (1 + (Number(pct) || 0) / 100) * 100) / 100;
+    return { takeaway: withFee(feeTakeawayPct), uber: withFee(feeUberPct) };
+}
+
 // Valor do stock do restaurante. counted=true usa a última contagem física (matéria-prima + preparações contadas);
 // caso contrário usa o stock teórico. Inclui as preparações produzidas em stock, ao custo unitário atual.
 function stockValue(counted = false) {

@@ -495,3 +495,11 @@ test('nome do fornecedor: artigo curto e reconhecimento pela descrição da fatu
     assert.equal(ctx.matchIngredient('OVOS 15DZ CLASSE L').id, 'ovos');
     assert.equal(ctx.matchIngredient('Ovos Classe M').id, 'ovosm');
 });
+
+test('channelPricesFromSala: taxa de cada canal sobre o PVP Sala', () => {
+    const ctx = load({});
+    const p = ctx.channelPricesFromSala(11.3, 10, 30);
+    near(p.takeaway, 12.43);
+    near(p.uber, 14.69);
+    assert.equal(ctx.channelPricesFromSala(0).uber, 0);
+});

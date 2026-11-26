@@ -507,6 +507,57 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .kd-opt[aria-disabled=true]{opacity:.4;cursor:not-allowed}
 @media (pointer:coarse){.kd-opt{padding:.85rem .9rem;font-size:1rem}}
 </style>
+<style>
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Ficha técnica (modelo em papel, com o tema escuro do painel) */
+.ft-sheet{display:grid;gap:16px}
+.ft-head{display:grid;gap:12px}
+.ft-title span{display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#7dd3fc;font-weight:700}
+.ft-title input{width:100%;margin-top:4px;padding:6px 0;background:transparent;border:0;border-bottom:1px solid #354862;color:#fff;font-size:1.25rem;font-weight:700}
+.ft-title input:focus{outline:none;border-color:#38bdf8}
+.ft-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 14px}
+.ft-sheet label{display:block;min-width:0;color:#b9c9de;font-size:.8rem}
+.ft-sheet input:not([type=checkbox]),.ft-sheet textarea{box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:8px 10px;border:1px solid #354862;border-radius:8px;background:#080f1e;color:#f1f5f9;font:inherit;font-size:.875rem}
+.ft-sheet .kd-btn{width:100%;margin-top:4px;font-size:.875rem;border-color:#354862;border-radius:8px;background-color:#080f1e}
+.ft-sheet :focus-visible{outline:2px solid #38bdf8;outline-offset:1px}
+.ft-pair{display:grid;grid-template-columns:minmax(0,1fr) 80px;gap:6px}
+.ft-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:900px){.ft-grid{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}}
+.ft-box{min-width:0;background:#0b1120;border:1px solid #26354b;border-radius:12px;overflow:hidden}
+.ft-box>*:not(.ft-bar):not(.ft-scroll){margin-left:12px;margin-right:12px}
+.ft-box>textarea{width:calc(100% - 24px)!important;margin-bottom:12px;resize:vertical}
+.ft-bar{margin:0 0 10px;padding:8px 12px;background:#1e293b;color:#e2e8f0;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.ft-hint{color:#94a3b8;font-size:.75rem;margin-bottom:10px}
+.ft-scroll{overflow-x:auto}
+.ft-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.ft-table th{padding:6px 8px;text-align:left;color:#94a3b8;font-weight:600;font-size:.75rem;border-bottom:1px solid #354862;white-space:nowrap}
+.ft-table td{padding:4px 6px;border-bottom:1px solid #1e293b;vertical-align:middle}
+.ft-table td input,.ft-table td .kd-btn{margin-top:0!important;padding:6px 8px!important}
+.ft-table td .kd-btn{padding-right:1.8rem!important;min-width:70px}
+.ft-ingredients .ft-table td:nth-child(2){min-width:200px}.ft-ingredients .ft-table td:nth-child(3){width:90px;min-width:80px}.ft-ingredients .ft-table td:nth-child(5){min-width:120px}
+.ft-num{text-align:right!important;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ft-code{font-family:ui-monospace,monospace;font-size:.75rem;color:#94a3b8;white-space:nowrap}
+.kd-opt .ft-code{margin-left:auto}
+.ft-tag{font-size:.65rem;padding:1px 5px;border-radius:4px;background:#1e3a5f;color:#7dd3fc}
+.ft-empty{padding:14px 8px!important;color:#94a3b8;text-align:center}
+.ft-del{padding:6px 9px;border-radius:6px;color:#94a3b8}.ft-del:hover{background:#3f1d2b;color:#fda4af}
+.ft-add{display:block;margin-top:10px;margin-bottom:10px;padding:8px 12px;border-radius:8px;font-size:.8rem;font-weight:600;color:#7dd3fc;background:rgba(37,99,235,.15);border:1px dashed rgba(56,189,248,.45)}
+.ft-add:hover{background:rgba(37,99,235,.28)}
+.ft-extra{display:flex!important;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.ft-extra input{width:110px!important;text-align:right}
+.ft-costs{margin-top:10px;margin-bottom:12px;padding-top:10px;border-top:1px solid #354862;display:grid;gap:4px;font-size:.85rem}
+.ft-costs div{display:flex;justify-content:space-between;gap:10px}.ft-costs strong{color:#fff;font-variant-numeric:tabular-nums}
+.ft-prices{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px;margin-bottom:12px}
+.ft-prices small{display:block;margin-top:3px;color:#7dd3fc;font-size:.72rem}
+#recipe-modal-live-summary{margin-bottom:12px}
+.ft-allergens{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 12px;margin-bottom:12px!important;font-size:.82rem;color:#94a3b8}
+.ft-allergens li{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #1e293b}.ft-allergens li span[aria-hidden]{width:14px;text-align:center}
+.ft-allergens li.on{color:#fcd34d;font-weight:600}
+.ft-mode{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ft-mode button{padding:10px 12px;border-radius:10px;border:1px solid #354862;background:#080f1e;color:#cbd5e1;font-size:.85rem;font-weight:600}
+.ft-mode button[aria-pressed=true]{border-color:#38bdf8;background:rgba(37,99,235,.2);color:#fff}
+.ft-ocr{padding:12px}.ft-ocr label{display:block;color:#b9c9de;font-size:.8rem}.ft-ocr input{display:block;margin-top:6px;max-width:100%;color:#cbd5e1;font-size:.8rem}.ft-ocr .ft-hint{margin:8px 0 0}
+.ft-search[aria-invalid=true]{border-color:#f59e0b!important;color:#fcd34d!important}
+</style>
 </head>
 <body class="font-sans antialiased bg-[#050814] text-slate-100 min-h-screen flex flex-col">
     <div id="login-gate" style="z-index:1000" class="fixed inset-0 flex items-center justify-center p-4 bg-[#050814]">
@@ -2501,6 +2552,54 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             pdf.destroy();
             return rows;
         }
+        // Pedido ao Gemini (via careca-ocr) com tentativas e modelo de reserva. Devolve o JSON lido segundo o schema.
+        async function geminiOcr(data, mime, prompt, schema, setStage = () => {}) {
+            let model = ''; // vazio: o servidor usa o modelo configurado no superadmin
+            const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
+            // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
+            // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
+            const call = async generationConfig => {
+                const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 120000);
+                try {
+                    return await fetch(OCR_URL, {
+                        method: 'POST', signal: ctrl.signal,
+                        headers: { 'Content-Type': 'application/json', apikey: OCR_APIKEY },
+                        body: JSON.stringify({ model, request: {
+                            contents: [{ parts: [{ inline_data: { mime_type: mime, data } }, { text: prompt }] }],
+                            generationConfig
+                        } })
+                    });
+                } catch (e) {
+                    throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear inqgarcghwidlljgxsle.supabase.co.');
+                } finally { clearTimeout(timer); }
+            };
+            const base = { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 32768 };
+            let config = { ...base, thinkingConfig: { thinkingLevel: 'low' } }, res, body, fellBack = false;
+            for (let attempt = 1; ; attempt++) {
+                res = await call(config);
+                body = await res.json().catch(() => ({}));
+                if (res.status === 400 && config.thinkingConfig && /thinking/i.test(body.error?.message || '')) { config = base; continue; } // modelo que não aceita thinkingLevel
+                if (![429, 500, 503].includes(res.status)) break;
+                // Gemini sobrecarregado: espera 2, 4 e 8 s; se continuar, passa uma vez para o modelo mais leve.
+                if (attempt < 4) {
+                    const wait = 2 ** attempt;
+                    setStage('Enviar ao OCR', `Serviço OCR ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
+                    await new Promise(r => setTimeout(r, wait * 1000));
+                } else if (!fellBack && model !== FALLBACK_MODEL) {
+                    fellBack = true; attempt = 0; model = FALLBACK_MODEL; config = { ...base, thinkingConfig: { thinkingLevel: 'low' } };
+                    setStage('Enviar ao OCR', 'Modelo principal ocupado, a tentar com o modelo de reserva');
+                } else break;
+            }
+            if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? '\n\nTentado 4 vezes com o modelo principal e com o de reserva. O serviço OCR está sobrecarregado: tente daqui a uns minutos.' : ''));
+            const cand = body.candidates?.[0], finish = cand?.finishReason;
+            const text = cand?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
+            if (!text) throw Error('O OCR não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
+            let ex;
+            try { ex = JSON.parse(text); } catch (e) {
+                throw Error((finish === 'MAX_TOKENS' ? 'A resposta foi cortada a meio (MAX_TOKENS).' : 'A resposta não é JSON válido (' + e.message + ', fim: ' + (finish || '?') + ').') + '\n\nInício da resposta:\n' + text.slice(0, 400));
+            }
+            return { ex, fellBack, usage: body.usageMetadata || {} };
+        }
         // Com cropped, a foto já passou pelo corte: segue direto para a leitura.
         async function readInvoiceFile(input, cropped) {
             const file = cropped || input.files[0];
@@ -2534,54 +2633,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const uploadType = upload === file ? mime : upload.type;
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro: ' + (r.error?.message || 'erro desconhecido'))); r.readAsDataURL(upload); });
                 const prepared = performance.now();
-                let model = ''; // vazio: o servidor usa o modelo configurado no superadmin
-                const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
                 setStage('Enviar ao OCR', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao OCR`);
-                // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
-                // Sem temperature: nos modelos Gemini 3 baixar a temperatura pode pôr o modelo em ciclo e demorar mais.
-                const call = async generationConfig => {
-                    const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 120000);
-                    try {
-                        return await fetch(OCR_URL, {
-                            method: 'POST', signal: ctrl.signal,
-                            headers: { 'Content-Type': 'application/json', apikey: OCR_APIKEY },
-                            body: JSON.stringify({ model, request: {
-                                contents: [{ parts: [{ inline_data: { mime_type: uploadType, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Se a linha tiver lote ou validade, preenche lot e expiry. Na descrição mantém a embalagem impressa (ex.: Cx 15 dz, Garrafa 2 L). Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
-                                generationConfig
-                            } })
-                        });
-                    } catch (e) {
-                        throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear inqgarcghwidlljgxsle.supabase.co.');
-                    } finally { clearTimeout(timer); }
-                };
-                const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, maxOutputTokens: 32768 };
-                let config = { ...base, thinkingConfig: { thinkingLevel: 'low' } }, res, body, fellBack = false;
-                for (let attempt = 1; ; attempt++) {
-                    res = await call(config);
-                    body = await res.json().catch(() => ({}));
-                    if (res.status === 400 && config.thinkingConfig && /thinking/i.test(body.error?.message || '')) { config = base; continue; } // modelo que não aceita thinkingLevel
-                    if (![429, 500, 503].includes(res.status)) break;
-                    // Gemini sobrecarregado: espera 2, 4 e 8 s; se continuar, passa uma vez para o modelo mais leve.
-                    if (attempt < 4) {
-                        const wait = 2 ** attempt;
-                        setStage('Enviar ao OCR', `Serviço OCR ocupado (HTTP ${res.status}), nova tentativa ${attempt + 1}/4 daqui a ${wait} s`);
-                        await new Promise(r => setTimeout(r, wait * 1000));
-                    } else if (!fellBack && model !== FALLBACK_MODEL) {
-                        fellBack = true; attempt = 0; model = FALLBACK_MODEL; config = { ...base, thinkingConfig: { thinkingLevel: 'low' } };
-                        setStage('Enviar ao OCR', 'Modelo principal ocupado, a tentar com o modelo de reserva');
-                    } else break;
-                }
-                if (!res.ok) throw Error(`HTTP ${res.status} ${body.error?.status || ''}: ${body.error?.message || res.statusText || 'sem detalhe'}` + (fellBack ? '\n\nTentado 4 vezes com o modelo principal e com o de reserva. O serviço OCR está sobrecarregado: tente daqui a uns minutos.' : ''));
+                const { ex, fellBack, usage: ocrUsage } = await geminiOcr(data, uploadType, 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Se a linha tiver lote ou validade, preenche lot e expiry. Na descrição mantém a embalagem impressa (ex.: Cx 15 dz, Garrafa 2 L). Não inventes campos: deixa vazio o que não estiver no documento.', OCR_SCHEMA, setStage);
                 stage = 'Ler a resposta do OCR';
-                const cand = body.candidates?.[0], finish = cand?.finishReason;
-                const text = cand?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
-                if (!text) throw Error('O OCR não devolveu dados (' + (finish || body.promptFeedback?.blockReason || 'sem resposta') + ').');
-                let ex;
-                try { ex = JSON.parse(text); } catch (e) {
-                    throw Error((finish === 'MAX_TOKENS' ? 'A resposta foi cortada a meio (MAX_TOKENS).' : 'A resposta não é JSON válido (' + e.message + ', fim: ' + (finish || '?') + ').') + '\n\nInício da resposta:\n' + text.slice(0, 400));
-                }
                 if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos. O documento está legível e é uma fatura?');
-                const done = performance.now(), usage = body.usageMetadata || {};
+                const done = performance.now(), usage = ocrUsage;
                 console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
                 showToast('Fatura lida em ' + fmtNum((done - started) / 1000, 1) + ' s', (fellBack ? 'Lida com o modelo de reserva porque o principal estava ocupado. Confira bem as linhas. · ' : '') + 'OCR ' + fmtNum((done - prepared) / 1000, 1) + ' s · ' + (usage.totalTokenCount || '?') + ' tokens', fellBack ? 'warning' : 'info');
@@ -3687,6 +3743,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <select onchange="selectRecipe(this.value)">${list.map(r=>`<option value="${escHtml(r.id)}" ${r.id===rec.id?'selected':''}>${escHtml(r.name)}</option>`).join('')}</select></label>
                 <div class="work-actions"><h2>${escHtml(rec.name)}</h2>${editable?`<button class="work-btn" onclick="openRecipeModal('${rec.id}')">Editar ficha</button>`:''}</div>
                 <p class="work-muted">${escHtml(rec.code)} · ${escHtml(rec.category)} · ${rec.recipeType==='sub_recipe'?'Preparação intermédia':'Produto final'}</p>
+                ${rec.version||rec.responsible||rec.sheetDate?`<p class="work-muted">Versão ${escHtml(rec.version||'—')} · ${escHtml(rec.sheetDate||'—')} · Responsável: ${escHtml(rec.responsible||'—')}</p>`:''}
                 <p>Rendimento líquido: <strong>${fmtNum(rec.yieldQuantity*(1-(rec.cookingLossPct||0)/100),3)} ${escHtml(rec.yieldUnit)}</strong>
                 · Custo por ${escHtml(rec.yieldUnit)}: <strong>${fmtEur(cost.unitCost)}</strong></p>
                 <h3>Ingredientes do lote</h3><div class="work-list">${rec.items.map(item=>{
@@ -3697,6 +3754,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         ${item.note?`<small>${escHtml(item.note)}</small>`:''}</div>`;
                 }).join('')}</div>
                 <p class="work-muted">Outros custos do lote: ${fmtEur(rec.extraFixedCost||0)} · Custo total: ${fmtEur(cost.batchCost)}</p>
+                ${rec.method?`<h3>Método de confeção</h3><p style="white-space:pre-line">${escHtml(rec.method)}</p>`:''}
+                ${rec.notes?`<h3>Notas</h3><p style="white-space:pre-line">${escHtml(rec.notes)}</p>`:''}
                 <p>Alergénios: <strong>${recipeAllergens(rec).map(escHtml).join(', ') || 'nenhum registado nos ingredientes'}</strong></p>
                 ${rec.recipeType==='final_product'?`<p>PVP sugerido para a meta de ${fmtPct(targetFcPct())}: <strong>${fmtEur(suggestedPvpGross(getChannelMetrics(rec)[0].totalCost, targetFcPct(), rec.vatRate))}</strong> com IVA (Sala)</p>`:''}
                 ${rec.recipeType==='sub_recipe'?`<p>Em stock: <strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0,3)} ${escHtml(rec.yieldUnit)}</strong>${role.canCountInventory?` <button class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>`:''}</p>`:''}
@@ -3859,7 +3918,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <div class="flex flex-wrap items-center gap-2.5">
                         ${role.canEditRecipes ? `
                             <button onclick="openRecipeModal(null, true)" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/35 text-sky-300 transition-all">
-                                Abrir amostra de ficha
+                                Ler ficha por OCR
                             </button>
                             <button onclick="openRecipeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
                                 + Nova Ficha Técnica
@@ -3889,128 +3948,98 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const rec = recipeId ? getRecipe(recipeId) : null;
             const isEdit = Boolean(rec);
 
-            appState.recipeFormRows = rec
-                ? rec.items.map(it => ({ ...it }))
-                : [
-                    { type: 'ingredient', refId: appState.ingredients[0]?.id || 'ing_salmao', netQty: 0, unit: appState.ingredients[0]?.baseUnit || 'kg', note: '' }
-                ];
+            // Ficha nova começa sem linhas: cada ingrediente entra só com «Adicionar novo ingrediente».
+            appState.recipeFormRows = rec ? rec.items.map(it => ({ ...it })) : [];
 
             const categories = ['Pratos Principais', 'Entradas', 'Burgers & Sandes', 'Saladas', 'Sobremesas', 'Bebidas & Cocktails', 'Bases & Preparações'];
 
             const html = `
-                <div class="space-y-5">
-                    <div ${startInOcrMode?'':'hidden'} class="p-4 rounded-2xl bg-gradient-to-r from-blue-950/60 via-[#050814] to-[#050814] border border-sky-400/30 space-y-3">
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                                <span class="text-[11px] font-mono uppercase text-sky-400">Exemplos locais de extração</span>
-                                <h4 class="font-bold text-sm text-white">Preencher a ficha com uma amostra</h4>
-                            </div>
-                            <button type="button" onclick="document.getElementById('recipe-ocr-dropzone').classList.toggle('hidden')" class="text-xs font-mono text-sky-400 hover:underline">
-                                ${startInOcrMode ? 'Ocultar painel OCR' : 'Mostrar / Ocultar OCR'}
-                            </button>
-                        </div>
-
-                        <div id="recipe-ocr-dropzone" class="${startInOcrMode ? '' : 'hidden'} space-y-3 pt-2 border-t border-sky-400/15">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-[11px] font-mono text-slate-400">Escolher amostra:</span>
-                                <button type="button" onclick="applyRecipeOcrPreset('excel')" class="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#111827] hover:bg-[#1E293B] border border-emerald-500/30 text-emerald-300">
-                                    📊 Excel (.xlsx) — Salmão à Brás
-                                </button>
-                                <button type="button" onclick="applyRecipeOcrPreset('pdf')" class="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#111827] hover:bg-[#1E293B] border border-sky-400/30 text-sky-300">
-                                    📑 PDF Ficha — Risotto de Cogumelos
-                                </button>
-                                <button type="button" onclick="applyRecipeOcrPreset('photo')" class="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#111827] hover:bg-[#1E293B] border border-amber-500/30 text-amber-300">
-                                    📸 Foto Caderno Chef — Gin Tónico
-                                </button>
-                            </div>
-
-                            <div id="recipe-ocr-status" class="hidden p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 font-mono"></div>
-                        </div>
+                <div class="space-y-4">
+                    ${isEdit ? '' : `<div class="ft-mode" role="group" aria-label="Como preencher a ficha">
+                        <button type="button" id="ft-mode-manual" aria-pressed="${!startInOcrMode}" onclick="setRecipeFillMode(false)">✍️ Preencher manualmente</button>
+                        <button type="button" id="ft-mode-ocr" aria-pressed="${startInOcrMode}" onclick="setRecipeFillMode(true)">📄 Ler documento por OCR</button>
                     </div>
-
-                    <form onsubmit="saveRecipeForm(event, '${rec ? rec.id : ''}')" class="space-y-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                            <div class="sm:col-span-6">
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Nome do Prato / Sub-Receita *</label>
-                                <input id="rec-name" type="text" required value="${rec ? escHtml(rec.name) : ''}" placeholder="Ex: Bacalhau Confitado com Grão" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
+                    <div id="recipe-ocr-panel" class="ft-box ft-ocr" ${startInOcrMode ? '' : 'hidden'}>
+                        <label>Foto ou PDF de uma ficha técnica (PDF, JPG, PNG, WEBP ou HEIC, até 14 MB)
+                            <input type="file" accept="application/pdf,image/*" onchange="readRecipeFile(this)"></label>
+                        <p id="recipe-ocr-status" role="status" class="ft-hint">O OCR preenche o cabeçalho, os ingredientes, o método e as notas. Os ingredientes são ligados aos artigos pelo código ou pelo nome; os que não encontrar ficam por escolher na pesquisa.</p>
+                    </div>`}
+                    <form onsubmit="saveRecipeForm(event, '${rec ? rec.id : ''}')" class="ft-sheet" data-id="${rec ? rec.id : ''}">
+                        <div class="ft-head">
+                            <div class="ft-title">
+                                <span>Ficha técnica de restaurante</span>
+                                <input id="rec-name" type="text" required value="${rec ? escHtml(rec.name) : ''}" placeholder="Nome do prato ou preparação *" aria-label="Nome do prato ou preparação">
                             </div>
-                            <div class="sm:col-span-3">
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Código *</label>
-                                <input id="rec-code" type="text" required value="${rec ? escHtml(rec.code) : 'FT-' + Math.floor(115 + Math.random() * 880)}" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
-                            </div>
-                            <div class="sm:col-span-3">
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Tipo</label>
-                                <select id="rec-type" onchange="recalcRecipeModalPreview()" class="w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-xs font-semibold text-white focus:outline-none focus:border-sky-400">
-                                    <option value="final_product" ${!rec || rec.recipeType === 'final_product' ? 'selected' : ''}>Prato Final</option>
-                                    <option value="sub_recipe" ${rec && rec.recipeType === 'sub_recipe' ? 'selected' : ''}>Sub-Receita</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                            <div class="sm:col-span-2">
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Categoria</label>
-                                <select id="rec-cat" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
-                                    ${categories.map(c => `<option value="${c}" ${rec && rec.category === c ? 'selected' : ''}>${c}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Rendimento (Qtd / Unid)</label>
-                                <div class="flex gap-1.5">
-                                    <input id="rec-yield-qty" type="number" step="0.1" min="0.1" value="${rec ? rec.yieldQuantity : 1}" oninput="recalcRecipeModalPreview()" class="w-2/3 px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white">
-                                    <select id="rec-yield-unit" class="w-1/3 px-2 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-xs font-mono text-white">
+                            <div class="ft-meta">
+                                <label>Código<input id="rec-code" type="text" required value="${rec ? escHtml(rec.code) : 'FT-' + String(appState.recipes.length + 1).padStart(3, '0')}"></label>
+                                <label>Versão<input id="rec-version" type="text" value="${escHtml(rec?.version || '1.0')}"></label>
+                                <label>Data<input id="rec-date" type="date" value="${escHtml(rec?.sheetDate || new Date().toISOString().slice(0, 10))}"></label>
+                                <label>Responsável<input id="rec-responsible" type="text" value="${escHtml(rec?.responsible || '')}" placeholder="Ex: Chef de cozinha"></label>
+                                <label>Dose (n.º de porções)<span class="ft-pair">
+                                    <input id="rec-yield-qty" type="number" step="0.1" min="0.1" value="${rec ? rec.yieldQuantity : 1}" oninput="recalcRecipeModalPreview()">
+                                    <select id="rec-yield-unit" onchange="recalcRecipeModalPreview()" aria-label="Unidade da dose">
                                         <option value="un" ${!rec || rec.yieldUnit === 'un' ? 'selected' : ''}>un</option>
                                         <option value="kg" ${rec && rec.yieldUnit === 'kg' ? 'selected' : ''}>kg</option>
                                         <option value="L" ${rec && rec.yieldUnit === 'L' ? 'selected' : ''}>L</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Quebra Cocção (%)</label>
-                                <input id="rec-cooking-loss" type="number" step="1" min="0" max="70" value="${rec ? (rec.cookingLossPct || 0) : 0}" oninput="recalcRecipeModalPreview()" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white">
-                            </div>
-                        </div>
-
-                        <!-- Linhas de Ingredientes & Sub-Receitas -->
-                        <div class="p-4 rounded-2xl bg-[#050814] border border-[#1E293B] space-y-3">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-mono uppercase text-sky-400">Ingredientes &amp; Sub-Receitas (Quantidades Líquidas)</span>
-                                <button type="button" onclick="addRecipeFormRow()" class="px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 border border-sky-400/30 text-sky-300">
-                                    + Adicionar ingrediente
-                                </button>
-                            </div>
-                            <div id="recipe-form-rows-container" class="work-list"></div>
-                            <div class="pt-2 border-t border-[#1E293B] flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <span class="text-slate-400">Temperos / Guarnições menores (€ fixo por lote):</span>
-                                <input id="rec-extra-cost" type="number" step="0.05" min="0" value="${rec ? (rec.extraFixedCost || 0).toFixed(2) : '0.45'}" oninput="recalcRecipeModalPreview()" class="w-28 px-3 py-1.5 rounded-lg bg-[#0B1120] border border-[#1E293B] font-mono text-right text-white">
+                                    </select></span></label>
+                                <label>Tipo<select id="rec-type" onchange="recalcRecipeModalPreview()">
+                                    <option value="final_product" ${!rec || rec.recipeType === 'final_product' ? 'selected' : ''}>Prato final</option>
+                                    <option value="sub_recipe" ${rec && rec.recipeType === 'sub_recipe' ? 'selected' : ''}>Preparação (sub-receita)</option>
+                                </select></label>
+                                <label>Categoria<select id="rec-cat">
+                                    ${categories.map(c => `<option value="${c}" ${rec && rec.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                </select></label>
+                                <label>Quebra na confeção (%)<input id="rec-cooking-loss" type="number" step="1" min="0" max="70" value="${rec ? (rec.cookingLossPct || 0) : 0}" oninput="recalcRecipeModalPreview()"></label>
                             </div>
                         </div>
 
-                        <!-- Preços por Canal -->
-                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1">PVP Sala c/ IVA (€)</label>
-                                <input id="rec-pvp-sala" type="number" step="0.01" min="0" value="${rec ? rec.pvpSalaGross.toFixed(2) : '18.50'}" oninput="recalcRecipeModalPreview()" class="w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1">PVP Takeaway (€)</label>
-                                <input id="rec-pvp-take" type="number" step="0.01" min="0" value="${rec ? rec.pvpTakeawayGross.toFixed(2) : '18.00'}" class="w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1">PVP Uber Eats (€)</label>
-                                <input id="rec-pvp-uber" type="number" step="0.01" min="0" value="${rec ? rec.pvpUberGross.toFixed(2) : '21.50'}" class="w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-300 mb-1">Taxa IVA (%)</label>
-                                <select id="rec-vat" onchange="recalcRecipeModalPreview()" class="w-full px-3 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white">
+                        <div class="ft-grid">
+                            <section class="ft-box ft-ingredients">
+                                <h3 class="ft-bar">Ingredientes</h3>
+                                <div class="ft-scroll"><table class="ft-table">
+                                    <thead><tr><th>Código</th><th>Ingrediente</th><th class="ft-num">Qtd.</th><th>Unid.</th><th>Observações</th><th class="ft-num">Custo</th><th><span class="sr-only">Remover</span></th></tr></thead>
+                                    <tbody id="recipe-form-rows-container"></tbody>
+                                </table></div>
+                                <button type="button" onclick="addRecipeFormRow()" class="ft-add">+ Adicionar novo ingrediente</button>
+                                <label class="ft-extra">Temperos e guarnições menores (€ fixo por lote)
+                                    <input id="rec-extra-cost" type="number" step="0.05" min="0" value="${rec ? (rec.extraFixedCost || 0).toFixed(2) : '0.00'}" oninput="recalcRecipeModalPreview()"></label>
+                                <div id="recipe-modal-costs" class="ft-costs"></div>
+                            </section>
+                            <section class="ft-box">
+                                <h3 class="ft-bar">Método de confeção</h3>
+                                <textarea id="rec-method" rows="12" placeholder="Passos de preparação, tempos, temperaturas e empratamento.">${escHtml(rec?.method || '')}</textarea>
+                            </section>
+                        </div>
+
+                        <section class="ft-box" id="recipe-pvp-section">
+                            <h3 class="ft-bar">Preços de venda (sugeridos a 30% de food cost)</h3>
+                            <p class="ft-hint">Os preços vêm pré-preenchidos com a sugestão e acompanham o custo até os alterar. Takeaway e Uber = PVP Sala + a taxa do canal sobre o PVP Sala.</p>
+                            <div class="ft-prices">
+                                <label>PVP Sala c/ IVA (€)<input id="rec-pvp-sala" type="number" step="0.01" min="0" value="${rec ? rec.pvpSalaGross.toFixed(2) : ''}" oninput="markPvpEdited(this)"><small id="sug-sala"></small></label>
+                                <label>Taxa takeaway sobre PVP Sala (%)<input id="rec-fee-take" type="number" step="0.5" min="0" value="${rec?.feeTakeawayPct ?? 0}" oninput="recalcRecipeModalPreview()"></label>
+                                <label>PVP Takeaway (€)<input id="rec-pvp-take" type="number" step="0.01" min="0" value="${rec ? rec.pvpTakeawayGross.toFixed(2) : ''}" oninput="markPvpEdited(this)"><small id="sug-take"></small></label>
+                                <label>Taxa Uber Eats sobre PVP Sala (%)<input id="rec-fee-uber" type="number" step="0.5" min="0" value="${rec?.feeUberPct ?? 30}" oninput="recalcRecipeModalPreview()"></label>
+                                <label>PVP Uber Eats (€)<input id="rec-pvp-uber" type="number" step="0.01" min="0" value="${rec ? rec.pvpUberGross.toFixed(2) : ''}" oninput="markPvpEdited(this)"><small id="sug-uber"></small></label>
+                                <label>Taxa IVA<select id="rec-vat" onchange="recalcRecipeModalPreview()">
                                     <option value="13" ${!rec || rec.vatRate === 13 ? 'selected' : ''}>13% (Restauração)</option>
                                     <option value="23" ${rec && rec.vatRate === 23 ? 'selected' : ''}>23% (Bebidas Alc.)</option>
                                     <option value="6" ${rec && rec.vatRate === 6 ? 'selected' : ''}>6% (Reduzida)</option>
-                                </select>
+                                </select></label>
                             </div>
-                        </div>
+                            <div id="recipe-modal-live-summary"></div>
+                        </section>
 
-                        <div id="recipe-modal-live-summary" class="p-4 rounded-xl bg-blue-950/40 border border-sky-400/30 flex flex-wrap items-center justify-between gap-4 font-mono"></div>
+                        <div class="ft-grid">
+                            <section class="ft-box">
+                                <h3 class="ft-bar">Alergénios (incluindo derivados)</h3>
+                                <p class="ft-hint">Calculados a partir dos alergénios registados em cada artigo.</p>
+                                <ul id="recipe-modal-allergens" class="ft-allergens"></ul>
+                            </section>
+                            <section class="ft-box">
+                                <h3 class="ft-bar">Notas</h3>
+                                <textarea id="rec-notes" rows="8" placeholder="Conservação, empratamento, variações…">${escHtml(rec?.notes || '')}</textarea>
+                            </section>
+                        </div>
 
                         <div class="flex justify-end gap-3 pt-2">
                             <button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Cancelar</button>
@@ -4027,50 +4056,109 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             recalcRecipeModalPreview();
         }
 
+        const RECIPE_UNIT_GROUPS = [['g', 'kg'], ['ml', 'cl', 'L'], ['un']];
+        function recipeRowRef(row) {
+            if (!row.refId) return null;
+            return row.type === 'sub_recipe' ? getRecipe(row.refId) : getIngredient(row.refId);
+        }
+
         function renderRecipeFormRows() {
             const container = document.getElementById('recipe-form-rows-container');
             if (!container) return;
-
-            const subRecipes = appState.recipes.filter(r => r.recipeType === 'sub_recipe');
-            const units = ['kg', 'g', 'L', 'cl', 'ml', 'un'];
-
+            if (!appState.recipeFormRows.length) {
+                container.innerHTML = '<tr><td colspan="7" class="ft-empty">Sem ingredientes. Use «Adicionar novo ingrediente».</td></tr>';
+                return;
+            }
             container.innerHTML = appState.recipeFormRows.map((row, idx) => {
-                const currentVal = `${row.type}:${row.refId}`;
-                const ingOptions = appState.ingredients.map(i => {
-                    return `<option value="ingredient:${i.id}" ${currentVal === 'ingredient:' + i.id ? 'selected' : ''}>${escHtml(i.name)}</option>`;
-                }).join('');
-                const subOptions = subRecipes.map(s => `<option value="sub_recipe:${s.id}" ${currentVal === 'sub_recipe:' + s.id ? 'selected' : ''}>[Sub-Receita] ${escHtml(s.name)}</option>`).join('');
-
-                const base = row.type==='sub_recipe'?getRecipe(row.refId)?.yieldUnit:getIngredient(row.refId)?.baseUnit;
-                const compatible = [['g','kg'],['ml','cl','L'],['un']].find(group=>group.includes(base)) || units;
-                return `<fieldset class="work-row work-ingredient"><legend>Ingrediente ${idx+1}</legend>
-                    <label class="work-field">Artigo ou preparação<select onchange="updateRecipeFormRow(${idx}, 'ref', this.value)">
-                    <optgroup label="Ingredientes">${ingOptions}</optgroup><optgroup label="Preparações">${subOptions}</optgroup></select></label>
-                    <div class="work-pair"><label class="work-field">Quantidade líquida<input type="number" step="any" min="0.000001" required value="${row.netQty || ''}" oninput="updateRecipeFormRow(${idx},'netQty',this.value)"></label>
-                    <label class="work-field">Unidade<select onchange="updateRecipeFormRow(${idx},'unit',this.value)">${compatible.map(u=>`<option ${u===row.unit?'selected':''}>${u}</option>`).join('')}</select></label></div>
-                    <label class="work-field">Nota (opcional)<input value="${escHtml(row.note||'')}" oninput="updateRecipeFormRow(${idx},'note',this.value)"></label>
-                    <div><button class="work-btn" type="button" onclick="removeRecipeFormRow(${idx})" ${appState.recipeFormRows.length===1?'disabled':''}>Remover ingrediente</button></div></fieldset>`;
+                const ref = recipeRowRef(row);
+                const isPrep = row.type === 'sub_recipe';
+                const base = ref ? (isPrep ? ref.yieldUnit : ref.baseUnit) : null;
+                const units = RECIPE_UNIT_GROUPS.find(g => g.includes(base)) || [];
+                return `<tr>
+                    <td class="ft-code">${escHtml(ref ? (isPrep ? ref.code : ref.sku) || '—' : '—')}</td>
+                    <td><input type="search" class="ft-search" autocomplete="off" placeholder="Pesquisar artigo ou preparação…" aria-label="Ingrediente ${idx + 1}"
+                        value="${escHtml(ref ? (isPrep ? '[Prep.] ' : '') + ref.name : row.ocrName || '')}" ${!ref && row.ocrName ? 'aria-invalid="true" title="Lido no documento e não encontrado no catálogo: escolha o artigo"' : ''} oninput="showRecipeSearch(this, ${idx})" onfocus="showRecipeSearch(this, ${idx})"
+                        onkeydown="recipeSearchKey(event, ${idx})" onblur="hideRecipeSearch(this, ${idx})"></td>
+                    <td><input type="number" class="ft-num" step="any" min="0" aria-label="Quantidade" value="${row.netQty || ''}" oninput="updateRecipeFormRow(${idx},'netQty',this.value)" ${ref ? '' : 'disabled'}></td>
+                    <td>${ref ? `<select aria-label="Unidade" onchange="updateRecipeFormRow(${idx},'unit',this.value)">${units.map(u => `<option ${u === row.unit ? 'selected' : ''}>${u}</option>`).join('')}</select>` : '—'}</td>
+                    <td><input aria-label="Observações" value="${escHtml(row.note || '')}" oninput="updateRecipeFormRow(${idx},'note',this.value)"></td>
+                    <td class="ft-num" id="ft-line-cost-${idx}"></td>
+                    <td><button type="button" class="ft-del" onclick="removeRecipeFormRow(${idx})" aria-label="Remover ingrediente ${idx + 1}" title="Remover">✕</button></td>
+                </tr>`;
             }).join('');
         }
 
+        // Pesquisa de artigos e preparações: só mostra resultados depois de escrever (não lista o catálogo).
+        let recipeSearchHits = [];
+        function recipeSearchList() {
+            let list = document.getElementById('ft-search-list');
+            if (!list) {
+                list = document.createElement('ul');
+                list.id = 'ft-search-list';
+                list.className = 'kd-list';
+                list.setAttribute('role', 'listbox');
+                list.addEventListener('mousedown', e => e.preventDefault());
+                document.body.appendChild(list);
+                window.addEventListener('scroll', e => { if (!list.contains(e.target)) list.hidden = true; }, true);
+            }
+            return list;
+        }
+        function showRecipeSearch(input, idx) {
+            const list = recipeSearchList();
+            const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+            const q = norm(input.value.replace(/^\[Prep\.\]\s*/, '').trim());
+            const editingId = document.querySelector('.ft-sheet')?.dataset.id;
+            recipeSearchHits = !q ? [] : [
+                ...appState.ingredients.map(i => ({ type: 'ingredient', id: i.id, code: i.sku, name: i.name })),
+                ...appState.recipes.filter(r => r.recipeType === 'sub_recipe' && r.id !== editingId).map(r => ({ type: 'sub_recipe', id: r.id, code: r.code, name: r.name }))
+            ].filter(h => norm(h.name).includes(q) || norm(h.code).includes(q)).slice(0, 8);
+            if (!q || document.activeElement !== input) { list.hidden = true; return; }
+            list.innerHTML = recipeSearchHits.length
+                ? recipeSearchHits.map((h, i) => `<li role="option" class="kd-opt${i === 0 ? ' kd-active' : ''}" data-i="${i}" onclick="pickRecipeSearch(${idx}, ${i})">${h.type === 'sub_recipe' ? '<span class="ft-tag">Prep.</span>' : ''}${escHtml(h.name)}<small class="ft-code">${escHtml(h.code || '')}</small></li>`).join('')
+                : '<li class="kd-opt" aria-disabled="true">Nenhum artigo encontrado</li>';
+            const r = input.getBoundingClientRect();
+            Object.assign(list.style, { left: r.left + 'px', top: r.bottom + 4 + 'px', width: Math.max(r.width, 260) + 'px', maxHeight: '260px' });
+            list.hidden = false;
+        }
+        function hideRecipeSearch(input, idx) {
+            recipeSearchList().hidden = true;
+            const ref = recipeRowRef(appState.recipeFormRows[idx] || {});
+            input.value = ref ? (appState.recipeFormRows[idx].type === 'sub_recipe' ? '[Prep.] ' : '') + ref.name : appState.recipeFormRows[idx]?.ocrName || '';
+        }
+        function recipeSearchKey(e, idx) {
+            const list = recipeSearchList();
+            if (list.hidden || !recipeSearchHits.length) return;
+            const items = [...list.querySelectorAll('.kd-opt')];
+            const cur = items.findIndex(it => it.classList.contains('kd-active'));
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const next = (cur + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                items[cur]?.classList.remove('kd-active');
+                items[next].classList.add('kd-active');
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                pickRecipeSearch(idx, Math.max(0, cur));
+            } else if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                list.hidden = true;
+            }
+        }
+        function pickRecipeSearch(idx, i) {
+            const hit = recipeSearchHits[i];
+            if (!hit) return;
+            updateRecipeFormRow(idx, 'ref', hit.type + ':' + hit.id);
+            recipeSearchList().hidden = true;
+            document.querySelectorAll('#recipe-form-rows-container tr')[idx]?.querySelector('input[type=number]')?.focus();
+        }
+
         function addRecipeFormRow() {
-            const firstIng = appState.ingredients[0];
-            appState.recipeFormRows.push({
-                type: 'ingredient',
-                refId: firstIng ? firstIng.id : 'ing_salmao',
-                netQty: 0,
-                unit: firstIng ? firstIng.baseUnit : 'kg',
-                note: ''
-            });
+            appState.recipeFormRows.push({ type: 'ingredient', refId: '', netQty: 0, unit: '', note: '' });
             renderRecipeFormRows();
             recalcRecipeModalPreview();
+            [...document.querySelectorAll('#recipe-form-rows-container .ft-search')].pop()?.focus();
         }
 
         function removeRecipeFormRow(idx) {
-            if (appState.recipeFormRows.length <= 1) {
-                showToast('Mínimo 1 linha', 'A ficha técnica precisa de pelo menos um ingrediente ou sub-receita.', 'warning');
-                return;
-            }
             appState.recipeFormRows.splice(idx, 1);
             renderRecipeFormRows();
             recalcRecipeModalPreview();
@@ -4080,16 +4168,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const row = appState.recipeFormRows[idx];
             if (!row) return;
             if (field === 'ref') {
-                const parts = val.split(':');
-                row.type = parts[0];
-                row.refId = parts[1];
-                if (row.type === 'ingredient') {
-                    const ing = getIngredient(row.refId);
-                    if (ing) row.unit = ing.baseUnit;
-                } else {
-                    const sub = getRecipe(row.refId);
-                    if (sub) row.unit = sub.yieldUnit;
-                }
+                const [type, refId] = val.split(':');
+                row.type = type;
+                row.refId = refId;
+                delete row.ocrName;
+                const ref = recipeRowRef(row);
+                if (ref) row.unit = type === 'ingredient' ? ref.baseUnit : ref.yieldUnit;
                 renderRecipeFormRows();
             } else if (field === 'netQty') {
                 row.netQty = parseFloat(val) || 0;
@@ -4101,159 +4185,147 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             recalcRecipeModalPreview();
         }
 
+        // PVP escrito à mão deixa de seguir a sugestão. Numa ficha já existente os preços guardados nunca são substituídos.
+        function markPvpEdited(input) {
+            input.dataset.edited = '1';
+            recalcRecipeModalPreview();
+        }
+
         function recalcRecipeModalPreview() {
             const box = document.getElementById('recipe-modal-live-summary');
             if (!box) return;
-
+            const val = id => document.getElementById(id)?.value;
+            const items = appState.recipeFormRows.filter(r => r.refId);
             const tempRecipe = {
                 id: 'temp_preview',
-                recipeType: document.getElementById('rec-type')?.value || 'final_product',
-                yieldQuantity: parseFloat(document.getElementById('rec-yield-qty')?.value) || 1,
-                yieldUnit: document.getElementById('rec-yield-unit')?.value || 'un',
-                cookingLossPct: parseFloat(document.getElementById('rec-cooking-loss')?.value) || 0,
-                extraFixedCost: parseFloat(document.getElementById('rec-extra-cost')?.value) || 0,
-                vatRate: parseFloat(document.getElementById('rec-vat')?.value) || 13,
-                pvpSalaGross: parseFloat(document.getElementById('rec-pvp-sala')?.value) || 0,
-                pvpTakeawayGross: parseFloat(document.getElementById('rec-pvp-sala')?.value) || 0,
-                pvpUberGross: parseFloat(document.getElementById('rec-pvp-sala')?.value) || 0,
-                items: appState.recipeFormRows
+                recipeType: val('rec-type') || 'final_product',
+                yieldQuantity: parseFloat(val('rec-yield-qty')) || 1,
+                yieldUnit: val('rec-yield-unit') || 'un',
+                cookingLossPct: parseFloat(val('rec-cooking-loss')) || 0,
+                extraFixedCost: parseFloat(val('rec-extra-cost')) || 0,
+                vatRate: parseFloat(val('rec-vat')) || 13,
+                items
             };
+            const unitLabel = tempRecipe.yieldUnit === 'un' ? 'dose' : tempRecipe.yieldUnit;
+            const costs = document.getElementById('recipe-modal-costs');
+            const allergens = document.getElementById('recipe-modal-allergens');
+            const issue = validateRecipe(tempRecipe, 'temp_preview');
+            if (issue) { costs.textContent = issue; box.textContent = ''; return; }
 
-            const issue = validateRecipe(tempRecipe,'temp_preview');
-            if (issue) {box.textContent=issue;return;}
-            const costObj = calculateRecipeCost(tempRecipe, null, new Set(), appState.activeStore);
-            if (tempRecipe.recipeType === 'sub_recipe') {
-                box.innerHTML = `
-                    <div class="text-xs text-sky-300">Sub-Receita Calculada (com perdas de preparação &amp; cocção):</div>
-                    <div class="text-base font-bold text-white">Custo Unitário: <span class="text-sky-400">${fmtEur(costObj.unitCost)}/${escHtml(tempRecipe.yieldUnit)}</span></div>
-                `;
-            } else {
-                const sala = getChannelMetrics(tempRecipe, null, appState.activeStore)[0];
-                box.innerHTML = `
-                    <div>
-                        <span class="text-[10px] text-slate-400 block">Custo Técnico</span>
-                        <span class="text-base font-bold text-white">${fmtEur(sala.totalCost)}</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] text-slate-400 block">Food Cost Sala</span>
-                        <span class="text-base font-bold ${sala.foodCostPct <= 30 ? 'text-emerald-400' : 'text-rose-400'}">${fmtPct(sala.foodCostPct)}</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] text-slate-400 block">Margem Bruta Sala (Classificação BCG Automática)</span>
-                        <span class="text-base font-bold text-sky-400">${fmtEur(sala.marginEur)} (${fmtPct(sala.marginPct)})</span>
-                    </div>
-                `;
-            }
+            appState.recipeFormRows.forEach((row, idx) => {
+                const cell = document.getElementById('ft-line-cost-' + idx);
+                if (cell) cell.textContent = row.refId && row.netQty > 0 ? fmtEur(calculateRecipeCost({ ...tempRecipe, extraFixedCost: 0, yieldQuantity: 1, cookingLossPct: 0, items: [row] }).batchCost) : '';
+            });
+            const cost = calculateRecipeCost(tempRecipe, null, new Set(), appState.activeStore);
+            costs.innerHTML = `<div><span>Custo total da receita</span><strong>${fmtEur(cost.batchCost)}</strong></div>
+                <div><span>Custo por ${escHtml(unitLabel)}</span><strong>${fmtEur(cost.unitCost)}</strong></div>`;
+            const found = recipeAllergens(tempRecipe);
+            allergens.innerHTML = ALLERGENS.map(a => `<li class="${found.includes(a) ? 'on' : ''}"><span aria-hidden="true">${found.includes(a) ? '✓' : '—'}</span>${escHtml(a)}${found.includes(a) ? '<span class="sr-only"> (contém)</span>' : ''}</li>`).join('');
+
+            const pvpSection = document.getElementById('recipe-pvp-section');
+            pvpSection.hidden = tempRecipe.recipeType === 'sub_recipe';
+            if (pvpSection.hidden) return;
+
+            const isNew = !document.querySelector('.ft-sheet')?.dataset.id;
+            const field = id => document.getElementById(id);
+            const follow = (input, v) => { if (isNew && !input.dataset.edited) input.value = v > 0 ? v.toFixed(2) : ''; };
+            const salaSug = Math.round(suggestedPvpGross(cost.unitCost, 30, tempRecipe.vatRate) * 100) / 100;
+            follow(field('rec-pvp-sala'), salaSug);
+            const sala = parseFloat(field('rec-pvp-sala').value) || 0;
+            const fromSala = channelPricesFromSala(sala, val('rec-fee-take'), val('rec-fee-uber'));
+            follow(field('rec-pvp-take'), fromSala.takeaway);
+            follow(field('rec-pvp-uber'), fromSala.uber);
+            field('sug-sala').textContent = 'Sugerido: ' + fmtEur(salaSug);
+            field('sug-take').textContent = 'Sugerido: ' + fmtEur(fromSala.takeaway);
+            field('sug-uber').textContent = 'Sugerido: ' + fmtEur(fromSala.uber);
+
+            const metrics = getChannelMetrics({ ...tempRecipe, pvpSalaGross: sala, pvpTakeawayGross: parseFloat(val('rec-pvp-take')) || 0, pvpUberGross: parseFloat(val('rec-pvp-uber')) || 0 }, null, appState.activeStore);
+            box.innerHTML = `<table class="ft-table ft-channels"><thead><tr><th>Canal</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead><tbody>
+                ${metrics.map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td><td class="ft-num ${c.foodCostPct <= 30 ? 'text-emerald-400' : 'text-rose-400'}">${fmtPct(c.foodCostPct)}</td><td class="ft-num">${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</td></tr>`).join('')}
+                </tbody></table>`;
         }
 
-        function handleRecipeOcrFileUpload(input) {
-            const file = input.files && input.files[0];
+        function setRecipeFillMode(ocr) {
+            document.getElementById('ft-mode-manual').setAttribute('aria-pressed', String(!ocr));
+            document.getElementById('ft-mode-ocr').setAttribute('aria-pressed', String(ocr));
+            document.getElementById('recipe-ocr-panel').hidden = !ocr;
+        }
+
+        const RECIPE_OCR_SCHEMA = {
+            type: 'OBJECT',
+            properties: {
+                name: { type: 'STRING', description: 'nome do prato ou preparação' }, code: { type: 'STRING' }, version: { type: 'STRING' },
+                date: { type: 'STRING', description: 'AAAA-MM-DD' }, responsible: { type: 'STRING' }, portions: { type: 'NUMBER', description: 'dose / n.º de porções' },
+                ingredients: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+                    code: { type: 'STRING' }, name: { type: 'STRING' }, qty: { type: 'NUMBER' }, unit: { type: 'STRING', description: 'kg, g, L, cl, ml ou un' }, notes: { type: 'STRING' }
+                }, required: ['name', 'qty', 'unit'] } },
+                method: { type: 'STRING', description: 'método de confeção, um passo por linha' }, notes: { type: 'STRING' }
+            },
+            required: ['name', 'ingredients']
+        };
+
+        // Lê uma ficha técnica (foto ou PDF) com o mesmo OCR das faturas e preenche o formulário aberto. Nada é gravado sem «Criar Ficha Técnica».
+        async function readRecipeFile(input) {
+            const file = input.files[0];
+            const status = document.getElementById('recipe-ocr-status');
             if (!file) return;
-            const ext = file.name.split('.').pop().toLowerCase();
-            const mode = (ext === 'xlsx' || ext === 'xls' || ext === 'csv') ? 'excel' : ext === 'pdf' ? 'pdf' : 'photo';
-
-            const statusEl = document.getElementById('recipe-ocr-status');
-            if (statusEl) {
-                statusEl.classList.remove('hidden');
-                statusEl.textContent = `⏳ A processar "${file.name}" com OCR...`;
-            }
-
-            setTimeout(() => applyRecipeOcrPreset(mode, file.name), 450);
+            const say = text => { if (status) status.textContent = text; };
+            const mime = invoiceMime(file);
+            if (!mime) return say(`Formato não suportado: «${file.name}». Use PDF, JPG, PNG, WEBP ou HEIC.`);
+            if (file.size > 14 * 1024 * 1024) return say(`Ficheiro grande demais (${fmtNum(file.size / 1048576, 1)} MB). Máximo 14 MB.`);
+            if (!await invoiceMagicOk(file, mime).catch(() => false)) return say(`«${file.name}» não é um ${mime === 'application/pdf' ? 'PDF' : 'imagem'} válido.`);
+            input.disabled = true;
+            try {
+                say('A preparar o ficheiro…');
+                const upload = await prepareInvoiceImage(file, mime);
+                const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro.')); r.readAsDataURL(upload); });
+                say('A ler a ficha com o OCR… pode demorar até um minuto.');
+                const { ex } = await geminiOcr(data, upload === file ? mime : upload.type,
+                    'Extrai os dados desta ficha técnica de restaurante portuguesa: cabeçalho, ingredientes (código, nome, quantidade líquida, unidade, observações), método de confeção e notas. Quantidades com vírgula decimal (0,08 = 0.08). Não inventes campos: deixa vazio o que não estiver no documento.',
+                    RECIPE_OCR_SCHEMA, (_, text) => say(text + '…'));
+                if (!document.getElementById('rec-name')) return; // o utilizador fechou a ficha entretanto
+                applyRecipeOcr(ex);
+                const missing = appState.recipeFormRows.filter(r => !r.refId).length;
+                say(`✓ Lidos ${appState.recipeFormRows.length} ingrediente(s) de «${file.name}».` + (missing ? ` Por ligar ao catálogo: ${missing} (a amarelo), escolha o artigo na pesquisa.` : '') + ' Reveja tudo antes de criar a ficha.');
+            } catch (e) {
+                console.error('Leitura de ficha técnica falhou', e);
+                say('Não foi possível ler a ficha: ' + e.message);
+            } finally { input.disabled = false; input.value = ''; }
         }
 
-        function applyRecipeOcrPreset(mode, customFileName = null) {
-            const presets = {
-                excel: {
-                    sourceLabel: customFileName || 'Fichas_Tecnicas_Outono.xlsx (Folha: Bacalhau_Bras)',
-                    name: 'Salmão à Brás',
-                    code: 'FT-204',
-                    category: 'Pratos Principais',
-                    recipeType: 'final_product',
-                    yieldQuantity: 1,
-                    yieldUnit: 'un',
-                    cookingLossPct: 0,
-                    extraFixedCost: 1.45,
-                    pvpSalaGross: 17.50,
-                    pvpTakeawayGross: 16.90,
-                    pvpUberGross: 20.50,
-                    vatRate: 13,
-                    rows: [
-                        { type: 'ingredient', refId: 'ing_azeite', netQty: 0.040, unit: 'L', note: 'Azeite DOP refogado' },
-                        { type: 'ingredient', refId: 'ing_salmao', netQty: 0.160, unit: 'kg', note: 'Lombo lascado (mapeado)' }
-                    ]
-                },
-                pdf: {
-                    sourceLabel: customFileName || 'Ficha_Chef_Executivo_Nov2026.pdf',
-                    name: 'Risotto de Cogumelos & Azeite Trufado',
-                    code: 'FT-208',
-                    category: 'Pratos Principais',
-                    recipeType: 'final_product',
-                    yieldQuantity: 1,
-                    yieldUnit: 'un',
-                    cookingLossPct: 0,
-                    extraFixedCost: 1.60,
-                    pvpSalaGross: 21.90,
-                    pvpTakeawayGross: 21.00,
-                    pvpUberGross: 24.90,
-                    vatRate: 13,
-                    rows: [
-                        { type: 'ingredient', refId: 'ing_arroz', netQty: 0.160, unit: 'kg', note: 'Carnaroli' },
-                        { type: 'ingredient', refId: 'ing_cogumelos', netQty: 0.150, unit: 'kg', note: 'Mix silvestres' },
-                        { type: 'ingredient', refId: 'ing_azeite', netQty: 0.025, unit: 'L', note: 'Finalização' }
-                    ]
-                },
-                photo: {
-                    sourceLabel: customFileName || 'Foto_Caderno_Bar_20261119.jpg',
-                    name: 'Gin Tónico Botânico Signature',
-                    code: 'FT-312',
-                    category: 'Bebidas & Cocktails',
-                    recipeType: 'final_product',
-                    yieldQuantity: 1,
-                    yieldUnit: 'un',
-                    cookingLossPct: 0,
-                    extraFixedCost: 0.85,
-                    pvpSalaGross: 11.50,
-                    pvpTakeawayGross: 11.50,
-                    pvpUberGross: 13.50,
-                    vatRate: 23,
-                    rows: [
-                        { type: 'ingredient', refId: 'ing_gin', netQty: 0.060, unit: 'L', note: 'Dose 6 cl' }
-                    ]
-                }
-            };
-
-            const p = presets[mode] || presets.excel;
-            document.getElementById('rec-name').value = p.name;
-            document.getElementById('rec-code').value = p.code;
-            document.getElementById('rec-cat').value = p.category;
-            document.getElementById('rec-type').value = p.recipeType;
-            document.getElementById('rec-yield-qty').value = p.yieldQuantity;
-            document.getElementById('rec-yield-unit').value = p.yieldUnit;
-            document.getElementById('rec-cooking-loss').value = p.cookingLossPct;
-            document.getElementById('rec-extra-cost').value = p.extraFixedCost.toFixed(2);
-            document.getElementById('rec-pvp-sala').value = p.pvpSalaGross.toFixed(2);
-            document.getElementById('rec-pvp-take').value = p.pvpTakeawayGross.toFixed(2);
-            document.getElementById('rec-pvp-uber').value = p.pvpUberGross.toFixed(2);
-            document.getElementById('rec-vat').value = String(p.vatRate);
-
-            appState.recipeFormRows = p.rows.map(r => ({ ...r }));
+        function applyRecipeOcr(ex) {
+            const set = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
+            set('rec-name', ex.name); set('rec-code', ex.code); set('rec-version', ex.version); set('rec-responsible', ex.responsible);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(ex.date || '')) set('rec-date', ex.date);
+            if (ex.portions > 0) set('rec-yield-qty', ex.portions);
+            set('rec-method', ex.method); set('rec-notes', ex.notes);
+            const units = { kg: 'kg', kgs: 'kg', quilo: 'kg', g: 'g', gr: 'g', l: 'L', lt: 'L', litro: 'L', cl: 'cl', ml: 'ml', un: 'un', uni: 'un', und: 'un', unid: 'un', unidade: 'un' };
+            const norm = t => String(t || '').trim().toLowerCase();
+            appState.recipeFormRows = (ex.ingredients || []).filter(l => l.name).map(l => {
+                const prep = appState.recipes.find(r => r.recipeType === 'sub_recipe' && ((l.code && norm(r.code) === norm(l.code)) || norm(r.name) === norm(l.name)));
+                // Só aceita o palpite do nome se todas as palavras do artigo aparecerem na linha lida («Pão de sementes» não é «Pão alentejano»).
+                const guess = prep ? null : matchIngredient(l.name, l.code);
+                const words = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(w => w.length > 2);
+                const ing = guess && ((l.code && norm(guess.sku) === norm(l.code)) || words(guess.name).every(w => words(l.name).includes(w))) ? guess : null;
+                const ref = prep || ing;
+                const base = ref ? (prep ? prep.yieldUnit : ing.baseUnit) : '';
+                const unit = units[norm(l.unit).replace(/\.$/, '')] || base;
+                const ok = RECIPE_UNIT_GROUPS.some(g => g.includes(base) && g.includes(unit));
+                return { type: prep ? 'sub_recipe' : 'ingredient', refId: ref?.id || '', netQty: Number(l.qty) || 0, unit: ok ? unit : base, note: l.notes || '', ocrName: ref ? '' : l.name };
+            });
             renderRecipeFormRows();
             recalcRecipeModalPreview();
-
-            const statusEl = document.getElementById('recipe-ocr-status');
-            if (statusEl) {
-                statusEl.classList.remove('hidden');
-                statusEl.textContent = `✓ Amostra carregada: "${p.sourceLabel}" e preencheu ${p.rows.length} linha(s) no formulário. Reveja os dados e clique em Guardar.`;
-            }
-            showToast('Amostra carregada', `Formulário preenchido a partir de ${p.sourceLabel}.`, 'info');
         }
-
 
         function saveRecipeForm(e, recipeId) {
             e.preventDefault();
             if (!appState.roles[appState.activeRole].canEditRecipes) return;
 
-            const validRows = appState.recipeFormRows.filter(r => r.netQty > 0);
+            if (appState.recipeFormRows.some(r => !r.refId || !(r.netQty > 0))) {
+                showToast('Rever ingredientes', 'Cada linha precisa de um artigo escolhido na pesquisa e de uma quantidade. Remova as linhas vazias.', 'warning');
+                return;
+            }
+            const validRows = appState.recipeFormRows;
             if (validRows.length === 0) {
                 showToast('Adicione ingredientes', 'Insira pelo menos uma linha com quantidade superior a zero.', 'warning');
                 return;
@@ -4272,7 +4344,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 pvpTakeawayGross: parseFloat(document.getElementById('rec-pvp-take').value) || 0,
                 pvpUberGross: parseFloat(document.getElementById('rec-pvp-uber').value) || 0,
                 vatRate: parseFloat(document.getElementById('rec-vat').value) || 13,
-                items: validRows.map(r => ({ ...r }))
+                feeTakeawayPct: parseFloat(document.getElementById('rec-fee-take').value) || 0,
+                feeUberPct: parseFloat(document.getElementById('rec-fee-uber').value) || 0,
+                version: document.getElementById('rec-version').value.trim(),
+                sheetDate: document.getElementById('rec-date').value,
+                responsible: document.getElementById('rec-responsible').value.trim(),
+                method: document.getElementById('rec-method').value.trim(),
+                notes: document.getElementById('rec-notes').value.trim(),
+                items: validRows.map(({ ocrName, ...r }) => r)
             };
 
             if (recipeId && appState.posMappings.some(m=>m.recipeIds.includes(recipeId)) && payload.recipeType!=='final_product') {
