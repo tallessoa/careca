@@ -2553,6 +2553,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         <label class="text-xs text-slate-300">Qtd. total em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
                         <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
                     </div>
+                    <div class="ocr-ask hidden p-2 rounded-lg border border-amber-500/40 bg-amber-500/5 text-xs text-amber-200 space-y-1.5">
+                        <div>Não consegui perceber quanto vem em cada «${escHtml(l.unit || 'un')}». Quanto veio ao todo nesta linha?</div>
+                        <div class="flex gap-2"><input class="ocr-ask-qty ${field}" type="number" step="any" min="0" aria-label="Quantidade que veio" placeholder="Ex.: 360" oninput="ocrAskChanged(this)">
+                        <select class="ocr-ask-unit ${field} font-sans" style="max-width:9rem" aria-label="Unidade" onchange="ocrAskChanged(this)">${['un', 'dz', 'kg', 'g', 'L', 'ml'].map(u => `<option value="${u}">${{ un: 'unidades', dz: 'dúzias', kg: 'kg', g: 'gramas', L: 'litros', ml: 'ml' }[u]}</option>`).join('')}</select></div>
+                    </div>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="text-xs text-slate-300">Lote (opcional)<input class="ocr-lot ${field}" value="${escHtml(l.lot || lotAndExpiry(l.description).lot)}"></label>
                         <label class="text-xs text-slate-300">Validade (opcional)<input class="ocr-exp ${field}" type="date" value="${escHtml(/^\d{4}-\d{2}-\d{2}$/.test(l.expiry || '') ? l.expiry : lotAndExpiry(l.description).expiry)}"></label>
@@ -2682,6 +2687,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     if (base && !keepHint) row.querySelector('.ocr-qty').value = +base.qty.toFixed(4);
                 }
             }
+            // Sem tamanho na descrição nem embalagem no catálogo, «2 un» pode ser 2 caixas: pergunta quanto veio e deixa a quantidade por preencher.
+            if (el.classList.contains('ocr-ing')) {
+                const unknown = choice && !lineBase.pack && !INVOICE_BASE_UNITS[String(l.unit ?? '').trim().toLowerCase().replace('.', '')] && (choice === '__new' || (ing && !packSize(ing.packLabel)));
+                row.querySelector('.ocr-ask').classList.toggle('hidden', !unknown);
+                if (unknown && !row.querySelector('.ocr-ask-qty').value) row.querySelector('.ocr-qty').value = '';
+                if (unknown && ing) row.querySelector('.ocr-ask-unit').value = ing.baseUnit;
+            }
             const qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
             const out = row.querySelector('.ocr-price');
             if (keepHint && out.textContent) return;
@@ -2691,6 +2703,28 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
             out.textContent = qty > 0 ? `${packNote}${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
+        }
+        // Resposta a «quanto veio»: converte para a unidade base do artigo (dúzias × 12; gramas → kg; ml → L) e recalcula o preço por unidade.
+        function ocrAskChanged(el) {
+            const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
+            let q = Number(row.querySelector('.ocr-ask-qty').value), u = row.querySelector('.ocr-ask-unit').value;
+            if (u === 'dz') { q *= 12; u = 'un'; }
+            let base = ing?.baseUnit;
+            if (choice === '__new') {
+                base = { g: 'kg', ml: 'L' }[u] || u;
+                row.querySelector('.ocr-new-unit').value = base;
+                row.querySelector('.ocr-new-summary').textContent = `Artigo novo: ${row.querySelector('.ocr-new-name').value} · ${base} · ${row.querySelector('.ocr-new-cat').value}`;
+            }
+            const qty = convertToBaseQty(q, u, base);
+            const out = row.querySelector('.ocr-price');
+            if (!(q > 0) || !Number.isFinite(qty)) {
+                row.querySelector('.ocr-qty').value = '';
+                out.className = 'ocr-price text-[11px] font-mono text-amber-300';
+                out.textContent = q > 0 ? `«${u}» não converte para ${base}: escolha outra unidade.` : 'Indique quanto veio.';
+                return;
+            }
+            row.querySelector('.ocr-qty').value = +qty.toFixed(4);
+            ocrRowChanged(row.querySelector('.ocr-qty'));
         }
         // Janela por cima da revisão para dar nome, unidade e categoria ao artigo novo. O artigo só é criado ao aprovar a fatura.
         function openNewIngredientDialog(row) {
@@ -2750,6 +2784,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const vat = Number(row.querySelector('.ocr-vat').value), lot = row.querySelector('.ocr-lot').value.trim(), expiry = row.querySelector('.ocr-exp').value;
                 return ing ? { ing, qty, price: total / qty, vat, ...(lot && { lot }), ...(expiry && { expiry }) } : { service: true, label: ocrLine(row).description, qty: 1, price: total, vat };
             });
+            const ask = rows.find((r, i) => !lines[i].service && !r.querySelector('.ocr-ask').classList.contains('hidden') && !(lines[i].qty > 0));
+            if (ask) { ask.scrollIntoView({ block: 'center' }); ask.querySelector('.ocr-ask-qty').focus(); showToast('Quanto veio?', 'Indique a quantidade que veio nesta linha para calcular o preço por unidade.', 'warning'); return; }
             if (lines.some(l => !(l.qty > 0) || !Number.isFinite(l.price))) { showToast('Rever linhas', 'Todas as linhas precisam de quantidade maior que zero.', 'warning'); return; }
             const unnamed = rows.find(r => r.querySelector('.ocr-ing').value === '__new' && !r.dataset.named);
             if (unnamed) { openNewIngredientDialog(unnamed); return; }
