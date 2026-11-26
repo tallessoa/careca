@@ -309,13 +309,41 @@ function matchIngredient(description, sku = '') {
     return best;
 }
 
+const INVOICE_BASE_UNITS = { kg: ['kg', 1], kgs: ['kg', 1], g: ['kg', 0.001], gr: ['kg', 0.001], grs: ['kg', 0.001], l: ['L', 1], lt: ['L', 1], lts: ['L', 1], litro: ['L', 1], litros: ['L', 1], ml: ['L', 0.001], cl: ['L', 0.01] };
+
+// Tamanho de uma embalagem escrito na descrição: "Saco 20 kg", "Caixa 6 x 0,75 L", "Pacote 100 folhas". null se não houver.
+function packSize(text) {
+    const t = String(text ?? '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2');
+    const unitRe = '(kgs?|grs?|g|lts?|litros?|l|ml|cl)(?![a-zà-ú])';
+    let m = t.match(new RegExp('(\\d+)\\s*[x×]\\s*(\\d+(?:\\.\\d+)?)\\s*' + unitRe));
+    if (m) { const [unit, f] = INVOICE_BASE_UNITS[m[3]]; return { unit, qty: +(m[1] * m[2] * f).toFixed(6) }; }
+    m = t.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*' + unitRe));
+    if (m) { const [unit, f] = INVOICE_BASE_UNITS[m[2]]; return { unit, qty: +(m[1] * f).toFixed(6) }; }
+    m = t.match(/(\d+)\s*(folhas|unidades|unid|uds|un|pcs|peças|pç|ovos|doses|rolos|saquetas|cápsulas)(?![a-zà-ú])/);
+    return m ? { unit: 'un', qty: Number(m[1]) } : null;
+}
+
+// Quantidade total de uma linha em unidade base (kg, L ou un). Peso e volume convertem-se diretamente;
+// embalagens (saco, caixa, pacote…) multiplicam a quantidade pelo tamanho escrito na descrição: 3 sacos de 20 kg = 60 kg.
+function invoiceLineBase(line) {
+    const u = String(line.unit ?? '').trim().toLowerCase().replace('.', '');
+    const qty = Number(line.qty);
+    if (INVOICE_BASE_UNITS[u]) return { unit: INVOICE_BASE_UNITS[u][0], qty: qty * INVOICE_BASE_UNITS[u][1] };
+    const pack = packSize(line.description);
+    return pack ? { unit: pack.unit, qty: qty * pack.qty, pack } : { unit: 'un', qty };
+}
+
 // Converte uma linha lida (qtd na unidade da fatura) para a unidade base do insumo. Devolve null se as unidades não forem compatíveis.
+// Tenta primeiro com o tamanho da embalagem; se não servir para o insumo (ex.: insumo contado à unidade), usa a unidade da fatura.
 function invoiceLineToBase(line, ing) {
     const units = { kg: 'kg', kgs: 'kg', g: 'g', gr: 'g', l: 'L', lt: 'L', litro: 'L', litros: 'L', cl: 'cl', ml: 'ml', un: 'un', uni: 'un', und: 'un', unid: 'un', u: 'un', uds: 'un' };
-    const unit = units[String(line.unit ?? '').trim().toLowerCase().replace('.', '')];
-    const qty = unit ? convertToBaseQty(line.qty, unit, ing.baseUnit) : NaN;
     const total = Number(line.line_total_net) || Number(line.qty) * Number(line.unit_price_net);
-    return Number.isFinite(qty) && qty > 0 ? { qty, price: total / qty } : null;
+    const raw = units[String(line.unit ?? '').trim().toLowerCase().replace('.', '')];
+    for (const b of [invoiceLineBase(line), raw && { unit: raw, qty: Number(line.qty) }]) {
+        const qty = b ? convertToBaseQty(b.qty, b.unit, ing.baseUnit) : NaN;
+        if (Number.isFinite(qty) && qty > 0) return { qty, price: total / qty };
+    }
+    return null;
 }
 
 // Limites para esticar o contraste: ignora 1% dos píxeis mais escuros e mais claros (histograma de 256 tons).
