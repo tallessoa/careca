@@ -323,6 +323,17 @@ function packSize(text) {
     return m ? { unit: 'un', qty: Number(m[1]) } : null;
 }
 
+// Nome curto para um artigo novo a partir da descrição da fatura: corta na embalagem, no tamanho ou no texto comercial.
+// «Molho de Soja Tradicional Fermentado (Bidão 5 L) Fermentação natural…» → «Molho de Soja Tradicional Fermentado».
+function cleanItemName(text) {
+    const full = String(text ?? '').replace(/\s+/g, ' ').trim();
+    let name = full.split(/\s*(?:[(\[;,|]|\s[-–—]\s|\d+(?:[.,]\d+)?\s*[x×]?\s*\d*(?:[.,]\d+)?\s*(?:kgs?|grs?|g|lts?|litros?|l|ml|cl|un|uds?)(?![a-zà-ú]))/i)[0];
+    name = name.replace(/(\s+(?:saco|sacos|caixa|cx|pack|bidão|garrafa|lata|frasco|emb\.?|embalagem|de|com))+$/i, '').trim();
+    if (!name) name = full;
+    if (name.length > 60) name = name.slice(0, 60).replace(/\s+\S*$/, '');
+    return name;
+}
+
 // Quantidade total de uma linha em unidade base (kg, L ou un). Peso e volume convertem-se diretamente;
 // embalagens (saco, caixa, pacote…) multiplicam a quantidade pelo tamanho escrito na descrição: 3 sacos de 20 kg = 60 kg.
 function invoiceLineBase(line) {
