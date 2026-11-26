@@ -3757,7 +3757,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 ${rec.method?`<h3>Método de confeção</h3><p style="white-space:pre-line">${escHtml(rec.method)}</p>`:''}
                 ${rec.notes?`<h3>Notas</h3><p style="white-space:pre-line">${escHtml(rec.notes)}</p>`:''}
                 <p>Alergénios: <strong>${recipeAllergens(rec).map(escHtml).join(', ') || 'nenhum registado nos ingredientes'}</strong></p>
-                ${rec.recipeType==='final_product'?`<p>PVP sugerido para a meta de ${fmtPct(targetFcPct())}: <strong>${fmtEur(suggestedPvpGross(getChannelMetrics(rec)[0].totalCost, targetFcPct(), rec.vatRate))}</strong> com IVA (Sala)</p>`:''}
+                ${rec.recipeType==='final_product'?`<p>PVP sugerido para a meta de ${fmtPct(rec.targetFcPct ?? targetFcPct())}: <strong>${fmtEur(suggestedPvpGross(getChannelMetrics(rec)[0].totalCost, rec.targetFcPct ?? targetFcPct(), rec.vatRate))}</strong> com IVA (Sala)</p>`:''}
                 ${rec.recipeType==='sub_recipe'?`<p>Em stock: <strong>${fmtNum(rec.prepStock?.[RESTAURANT] || 0,3)} ${escHtml(rec.yieldUnit)}</strong>${role.canCountInventory?` <button class="work-btn" onclick="openProductionModal('${rec.id}')">Produzir</button>`:''}</p>`:''}
                 ${rec.recipeType==='final_product'?`<details class="work-detail"><summary>Preços e margens por canal</summary><div class="work-list">
                     ${getChannelMetrics(rec).map(c=>`<div class="work-row"><strong>${escHtml(c.name)}</strong>PVP: ${fmtEur(c.pvpGross)} · Food cost: ${fmtPct(c.foodCostPct)} · Margem: ${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</div>`).join('')}</div></details>`:''}
@@ -4012,9 +4012,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         </div>
 
                         <section class="ft-box" id="recipe-pvp-section">
-                            <h3 class="ft-bar">Preços de venda (sugeridos a 30% de food cost)</h3>
-                            <p class="ft-hint">Os preços vêm pré-preenchidos com a sugestão e acompanham o custo até os alterar. Takeaway e Uber = PVP Sala + a taxa do canal sobre o PVP Sala.</p>
+                            <h3 class="ft-bar">Preços de venda sugeridos</h3>
+                            <p class="ft-hint">O PVP Sala é sugerido para o food cost pretendido (30% por omissão). Os preços vêm pré-preenchidos com a sugestão e acompanham o custo até os alterar. Takeaway e Uber = PVP Sala + a taxa do canal sobre o PVP Sala.</p>
                             <div class="ft-prices">
+                                <label>Food cost pretendido (%)<input id="rec-target-fc" type="number" step="0.5" min="1" max="100" value="${rec?.targetFcPct ?? 30}" oninput="recalcRecipeModalPreview()"></label>
                                 <label>PVP Sala c/ IVA (€)<input id="rec-pvp-sala" type="number" step="0.01" min="0" value="${rec ? rec.pvpSalaGross.toFixed(2) : ''}" oninput="markPvpEdited(this)"><small id="sug-sala"></small></label>
                                 <label>Taxa takeaway sobre PVP Sala (%)<input id="rec-fee-take" type="number" step="0.5" min="0" value="${rec?.feeTakeawayPct ?? 0}" oninput="recalcRecipeModalPreview()"></label>
                                 <label>PVP Takeaway (€)<input id="rec-pvp-take" type="number" step="0.01" min="0" value="${rec ? rec.pvpTakeawayGross.toFixed(2) : ''}" oninput="markPvpEdited(this)"><small id="sug-take"></small></label>
@@ -4229,7 +4230,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const isNew = !document.querySelector('.ft-sheet')?.dataset.id;
             const field = id => document.getElementById(id);
             const follow = (input, v) => { if (isNew && !input.dataset.edited) input.value = v > 0 ? v.toFixed(2) : ''; };
-            const salaSug = Math.round(suggestedPvpGross(cost.unitCost, 30, tempRecipe.vatRate) * 100) / 100;
+            const targetFc = parseFloat(val('rec-target-fc')) || 30;
+            const salaSug = Math.round(suggestedPvpGross(cost.unitCost, targetFc, tempRecipe.vatRate) * 100) / 100;
             follow(field('rec-pvp-sala'), salaSug);
             const sala = parseFloat(field('rec-pvp-sala').value) || 0;
             const fromSala = channelPricesFromSala(sala, val('rec-fee-take'), val('rec-fee-uber'));
@@ -4241,7 +4243,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
             const metrics = getChannelMetrics({ ...tempRecipe, pvpSalaGross: sala, pvpTakeawayGross: parseFloat(val('rec-pvp-take')) || 0, pvpUberGross: parseFloat(val('rec-pvp-uber')) || 0 }, null, appState.activeStore);
             box.innerHTML = `<table class="ft-table ft-channels"><thead><tr><th>Canal</th><th class="ft-num">PVP c/ IVA</th><th class="ft-num">Food cost</th><th class="ft-num">Margem</th></tr></thead><tbody>
-                ${metrics.map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td><td class="ft-num ${c.foodCostPct <= 30 ? 'text-emerald-400' : 'text-rose-400'}">${fmtPct(c.foodCostPct)}</td><td class="ft-num">${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</td></tr>`).join('')}
+                ${metrics.map(c => `<tr><td>${escHtml(c.name)}</td><td class="ft-num">${fmtEur(c.pvpGross)}</td><td class="ft-num ${c.foodCostPct <= targetFc ? 'text-emerald-400' : 'text-rose-400'}">${fmtPct(c.foodCostPct)}</td><td class="ft-num">${fmtEur(c.marginEur)} (${fmtPct(c.marginPct)})</td></tr>`).join('')}
                 </tbody></table>`;
         }
 
@@ -4344,6 +4346,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 pvpTakeawayGross: parseFloat(document.getElementById('rec-pvp-take').value) || 0,
                 pvpUberGross: parseFloat(document.getElementById('rec-pvp-uber').value) || 0,
                 vatRate: parseFloat(document.getElementById('rec-vat').value) || 13,
+                targetFcPct: parseFloat(document.getElementById('rec-target-fc').value) || 30,
                 feeTakeawayPct: parseFloat(document.getElementById('rec-fee-take').value) || 0,
                 feeUberPct: parseFloat(document.getElementById('rec-fee-uber').value) || 0,
                 version: document.getElementById('rec-version').value.trim(),
