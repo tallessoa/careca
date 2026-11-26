@@ -2118,7 +2118,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <label class="text-slate-300">Número<input id="ie-number" class="${field}" value="${escHtml(inv.id)}"></label>
                     <label class="text-slate-300">Data<input id="ie-date" type="date" class="${field}" value="${escHtml(inv.date)}"></label>
                     <label class="text-slate-300">ATCUD<input id="ie-atcud" class="${field}" value="${escHtml(inv.atcud || '')}"></label>
-                    <label class="text-slate-300">Fornecedor<select id="ie-supplier" class="${field} font-sans">${appState.suppliers.map(s => `<option value="${s.id}" ${s.id === inv.supplierId ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('')}</select></label>
+                    <label class="text-slate-300">Fornecedor<select id="ie-supplier" class="${field} font-sans">${appState.suppliers.map(s => `<option value="${s.id}" ${s.id === inv.supplierId ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)}</option>`).join('')}</select></label>
                 </div>
                 ${mode === 'lines' ? `<div id="ie-lines" class="space-y-2">${inv.lines.map(l => invoiceEditRow(l, field)).join('')}</div>
                     <div class="flex flex-wrap items-center justify-between gap-2"><button type="button" onclick="document.getElementById('ie-lines').insertAdjacentHTML('beforeend', invoiceEditRow({ ing: appState.ingredients[0].id, qty: 1, price: 0, vat: 6 }, '${field}')); updateInvoiceEditTotal()" class="px-3 py-1.5 rounded-lg text-xs text-sky-300 border border-sky-400/30">+ Linha</button>
@@ -2244,7 +2244,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 return;
             }
             const defaultStore = RESTAURANT;
-            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" class="bg-[#0B1120]">${escHtml(s.name)} (NIF ${escHtml(s.nif)})</option>`).join('');
+            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" class="bg-[#0B1120]">${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('');
             const ingOpts = appState.ingredients.map(i => {
                 const m = getIngMetricsForStore(i, defaultStore);
                 return `<option value="${i.id}" class="bg-[#0B1120]">${escHtml(i.name)} — Último: ${fmtEur(m.lastCost)}/${escHtml(i.baseUnit)}</option>`;
@@ -2673,7 +2673,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 </div>
                 <label class="block text-xs text-slate-300">Fornecedor (NIF lido: ${escHtml(ex.supplier_nif || '—')})<select id="ocr-supplier" class="${field} font-sans">
                     ${supplier ? '' : `<option value="__new">+ Criar fornecedor «${escHtml(ex.supplier_name || 'Sem nome')}» (NIF ${escHtml(ex.supplier_nif || '—')})</option>`}
-                    ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
+                    ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
                 <div class="space-y-2">${rows}</div>
                 <div class="text-xs font-mono text-slate-300">Total lido: líquido ${fmtEur(ex.totals?.net)} · IVA ${fmtEur(ex.totals?.vat)} · total ${fmtEur(ex.totals?.gross)}${diff > 0.05 ? ` <span class="text-amber-300">· a soma das linhas (${fmtEur(net)}) não bate com o total: confira o documento.</span>` : ''}</div>
                 ${nifIssue ? '<label class="flex items-center gap-2 text-xs text-rose-200"><input type="checkbox" id="ocr-nif-ok"> Confirmo que a mercadoria foi recebida e quero lançar este documento mesmo assim.</label>' : ''}
@@ -2967,7 +2967,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         return `
                                             <tr class="hover:bg-[#111827]/70">
                                                 <td class="py-4 px-5">
-                                                    <div class="font-semibold text-white">${escHtml(s.name)}</div>
+                                                    <div class="font-semibold text-white">${escHtml(s.tradeName || s.name)}</div>
+                                                    ${s.tradeName ? `<div class="text-xs text-slate-400">${escHtml(s.name)}</div>` : ''}
                                                     <div class="text-xs font-mono text-slate-400">NIF ${escHtml(s.nif)} • Prazo: ${escHtml(s.terms)}</div>
                                                 </td>
                                                 <td class="py-4 px-4 text-xs text-slate-300">${escHtml(s.category)}</td>
@@ -3106,13 +3107,18 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <form onsubmit="saveSupplierForm(event, '${sup ? sup.id : ''}')" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome da Empresa / Fornecedor *</label>
+                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome jurídico (firma / denominação social) *</label>
                             <input id="sup-name" type="text" required value="${sup ? escHtml(sup.name) : ''}" placeholder="Ex: Marisqueira do Norte, Lda." class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">NIF *</label>
                             <input id="sup-nif" type="text" required value="${sup ? escHtml(sup.nif) : ''}" placeholder="509 123 456" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome comercial (marca / designação comercial)</label>
+                        <input id="sup-trade" type="text" value="${sup ? escHtml(sup.tradeName || '') : ''}" placeholder="Ex: Marisqueira do Norte" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
+                        <p class="mt-1 text-[11px] text-slate-500">O nome jurídico é o que vem na fatura. O nome comercial é o nome por que a equipa conhece o fornecedor.</p>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3156,6 +3162,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
             const payload = {
                 name: document.getElementById('sup-name').value.trim(),
+                tradeName: document.getElementById('sup-trade').value.trim(),
                 nif: document.getElementById('sup-nif').value.trim(),
                 category: document.getElementById('sup-cat').value.trim(),
                 terms: document.getElementById('sup-terms').value,
@@ -3223,7 +3230,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const m = ing ? getIngMetricsForStore(ing, appState.activeStore) : { stockTheoretical: 10.0, minStock: 6.0, cmp: 8.50, lastCost: 8.50 };
             const isEdit = Boolean(ing);
             const lossPct = ing ? Math.round((1 - ing.yieldFactor) * 100) : 0;
-            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" ${ing && ing.supplierId === s.id ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('');
+            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" ${ing && ing.supplierId === s.id ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)}</option>`).join('');
             const zones = ['Câmara Fria', 'Congelador', 'Despensa Seca', 'Bar'];
 
             const units = ['kg', 'L', 'un'];
