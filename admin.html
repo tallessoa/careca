@@ -2287,7 +2287,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             input.value = '';
             if (!inv || !file) return;
             showToast('A ler o QR', file.name, 'info');
-            const text = await readFiscalQr(file);
+            let text;
+            try { text = await readFiscalQr(file); } catch (e) { showToast('Leitor de QR indisponível', e.message + '. Atualize a página (Ctrl+Shift+R).', 'warning'); return; }
             if (!text) { showToast('QR não encontrado', 'Use uma foto nítida, com o QR inteiro e de frente, ou o PDF original.', 'warning'); return; }
             if (nif && !text.startsWith('A:' + nif + '*')) { showToast('QR de outro fornecedor', 'O QR tem o NIF ' + text.slice(2, 11) + ', mas a fatura é do NIF ' + nif + '.', 'warning'); return; }
             inv.qr = text;
@@ -2847,9 +2848,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             return pdfJsLoading;
         }
         // QR fiscal (A:NIF*B:...) lido no browser com o jsQR (Apache-2.0, vendor/). Devolve '' se não houver QR fiscal legível.
+        // Se o leitor não carregar, lança o erro (o botão «Ler QR» mostra-o); quem lê a fatura toda ignora-o.
         async function readFiscalQr(file) {
+            await loadScript('vendor/jsQR.js');
             try {
-                await loadScript('vendor/jsQR.js');
                 const canvases = [];
                 if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
                     const pdf = await (await loadPdfJs()).getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
@@ -2860,13 +2862,25 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         canvases.push(c);
                     }
                 } else {
-                    const bmp = await createImageBitmap(file), c = document.createElement('canvas');
-                    c.width = bmp.width; c.height = bmp.height; c.getContext('2d').drawImage(bmp, 0, 0);
-                    canvases.push(c);
+                    canvases.push(await createImageBitmap(file));
                 }
-                for (const c of canvases) {
-                    const code = jsQR(c.getContext('2d').getImageData(0, 0, c.width, c.height).data, c.width, c.height);
-                    if (/^A:\d{9}\*B:/.test(code?.data || '')) return code.data;
+                const fiscal = t => /^A:\d{9}\*B:/.test(t || '') ? t : '';
+                for (const src of canvases) {
+                    // Leitor nativo do browser (Chrome Android/macOS, Safari), quando existe: é o mais robusto.
+                    if ('BarcodeDetector' in window) {
+                        const hit = (await new BarcodeDetector({ formats: ['qr_code'] }).detect(src).catch(() => [])).map(c => fiscal(c.rawValue)).find(Boolean);
+                        if (hit) return hit;
+                    }
+                    // O jsQR falha em fotos grandes de telemóvel (4000 px): tenta em vários tamanhos.
+                    for (const max of [1600, 1000, 2400, 700, 0]) {
+                        const k = max ? Math.min(1, max / Math.max(src.width, src.height)) : 1;
+                        if (max && k === 1 && max !== 1600) continue;
+                        const c = document.createElement('canvas');
+                        c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+                        const ctx = c.getContext('2d'); ctx.drawImage(src, 0, 0, c.width, c.height);
+                        const hit = fiscal(jsQR(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height)?.data);
+                        if (hit) return hit;
+                    }
                 }
             } catch (e) { console.info('QR fiscal não lido:', e.message); }
             return '';
@@ -2960,7 +2974,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     setStage('Ler o PDF localmente', 'A ler o texto do PDF');
                     const local = await pdfTextRows(file).then(rows => parseInvoiceText(rows, restaurantNif())).catch(e => ({ ok: false, reason: e.message }));
                     if (local.ok) {
-                        local.ex.qr_code = await readFiscalQr(file);
+                        local.ex.qr_code = await readFiscalQr(file).catch(() => '');
                         openOcrReview(local.ex, file.name, 'PDF (leitura local)');
                         showToast('Fatura lida localmente em ' + fmtNum((performance.now() - started) / 1000, 1) + ' s', 'Sem OCR: o PDF tem texto e as linhas batem com o total. Confira mesmo assim.', 'success');
                         return;
@@ -2976,7 +2990,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const { ex, fellBack, usage: ocrUsage } = await geminiOcr(data, uploadType, 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Se a linha tiver lote ou validade, preenche lot e expiry. Na descrição mantém a embalagem impressa (ex.: Cx 15 dz, Garrafa 2 L). Não inventes campos: deixa vazio o que não estiver no documento.', OCR_SCHEMA, setStage);
                 stage = 'Ler a resposta do OCR';
                 if (!Array.isArray(ex.lines) || !ex.lines.length) throw Error('Não foram encontradas linhas de artigos. O documento está legível e é uma fatura?');
-                ex.qr_code = await readFiscalQr(file) || ex.qr_code; // o Gemini nem sempre descodifica o QR; a leitura local é exata
+                ex.qr_code = await readFiscalQr(file).catch(() => '') || ex.qr_code; // o Gemini nem sempre descodifica o QR; a leitura local é exata
                 const done = performance.now(), usage = ocrUsage;
                 console.info('Leitura Gemini', { preparacaoMs: Math.round(prepared - started), pedidoMs: Math.round(done - prepared), bytes: upload.size, tokens: usage });
                 openOcrReview(ex, file.name);
