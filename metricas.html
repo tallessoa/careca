@@ -40,7 +40,7 @@ a{color:var(--acc)}
     <h1>Métricas Kareca</h1>
     <p class="mut small" style="margin:4px 0 16px">Acesso reservado ao administrador.</p>
     <form id="login-form">
-      <label class="small">Email<input id="email" type="email" autocomplete="username" required></label>
+      <label class="small">Email ou utilizador<input id="email" autocomplete="username" required></label>
       <label class="small" style="display:block;margin-top:10px">Palavra-passe<input id="pass" type="password" autocomplete="current-password" required></label>
       <div id="login-err" class="banner err" style="margin-top:12px" hidden></div>
       <button style="width:100%;margin-top:14px">Entrar</button>
@@ -163,7 +163,8 @@ async function carregar() {
   const { data: d, error } = await sb.rpc('careca_painel');
   if (error) {
     $('out').innerHTML = '';
-    $('msg').innerHTML = `<div class="banner err">${error.code === '42501' ? 'Esta conta não tem acesso às métricas.' : 'Não foi possível carregar: ' + esc(error.message)}</div>`;
+    const semAcesso = demoLogin() ? 'O acesso admin/admin só funciona enquanto os dados forem de demonstração. Saia e entre com a conta Gmail.' : 'Esta conta não tem acesso às métricas.';
+    $('msg').innerHTML = `<div class="banner err">${error.code === '42501' ? semAcesso : 'Não foi possível carregar: ' + esc(error.message)}</div>`;
     return;
   }
   render(d);
@@ -175,16 +176,22 @@ async function mostrar(sessao) {
   if (sessao) carregar();
 }
 
+// admin/admin: entra sem conta; a base de dados só responde enquanto todos os dados forem de demonstração.
+const DEMO_KEY = 'kareca_metricas_admin';
+const demoLogin = () => { try { return sessionStorage.getItem(DEMO_KEY) === '1'; } catch { return false; } };
+const setDemoLogin = on => { try { on ? sessionStorage.setItem(DEMO_KEY, '1') : sessionStorage.removeItem(DEMO_KEY); } catch {} };
+
 $('login-form').addEventListener('submit', async e => {
   e.preventDefault();
   $('login-err').hidden = true;
+  if ($('email').value.trim() === 'admin' && $('pass').value === 'admin') { setDemoLogin(true); return mostrar(true); }
   const { data, error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value });
   if (error) { $('login-err').textContent = 'Email ou palavra-passe errados.'; $('login-err').hidden = false; return; }
   mostrar(data.session);
 });
-$('logout').onclick = async () => { await sb.auth.signOut(); mostrar(null); };
+$('logout').onclick = async () => { setDemoLogin(false); await sb.auth.signOut(); mostrar(null); };
 $('reload').onclick = carregar;
-sb.auth.getSession().then(({ data }) => mostrar(data.session));
+sb.auth.getSession().then(({ data }) => mostrar(data.session || demoLogin()));
 </script>
 </body>
 </html>
