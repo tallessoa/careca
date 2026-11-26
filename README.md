@@ -29,7 +29,7 @@ Cada artigo do catálogo pode ter «Validade após receção (dias)». Ao recebe
 
 ## Painel de métricas (dono)
 
-`metricas.html` mostra restaurantes, subscrições e planos, pagamentos, vouchers e o gasto estimado com o Gemini. Abre em `/metricas.html` (por exemplo https://kareca.netlify.app/metricas.html) e pede login com a conta Supabase do administrador.
+`metricas.html` mostra restaurantes, subscrições e planos, pagamentos, vouchers e o gasto estimado com o Gemini. Abre em `/metricas.html` (por exemplo https://kareca.netlify.app/metricas.html) e pede login com a conta Supabase do administrador. Enquanto todos os dados forem de demonstração, também aceita `admin` / `admin`; o primeiro dado real (qualquer linha com `demo = false`) fecha esse acesso e passa a ser preciso a conta Supabase.
 
 Os dados vivem no Supabase, no esquema `careca` (ver `supabase/migrations/`). Esse esquema não está exposto na API: o painel só lê através da função `public.careca_painel()`, que recusa quem não estiver em `careca.admins`. Para dar acesso a outra conta: `insert into careca.admins (user_id) select id from auth.users where email = '...';`
 
