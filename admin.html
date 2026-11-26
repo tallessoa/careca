@@ -1051,7 +1051,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 importedSales: [], movements: [], openingVolumeDate: new Date().toISOString(),
                 activeStore: RESTAURANT,
                 activeRole: 'owner',
-                settings: { restaurantNif: '516234870', geminiModel: 'gemini-3.8-flash' },
+                settings: { restaurantNif: '516234870' },
                 supplierSubTab: 'catalog',
                 recipeSubTab: 'catalogue',
                 activeBcgQuadrant: 'star',
@@ -1185,8 +1185,6 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             }
         }
         ensureCurrentPeriod();
-        // Modelo por omissão antigo: a Google limitou o 2.5 a quem já o usava.
-        if (appState.settings?.geminiModel === 'gemini-2.5-flash') appState.settings.geminiModel = 'gemini-3.8-flash';
         (appState.invoices || []).forEach(inv => { if (inv.source?.startsWith('Gemini')) inv.source = inv.source.replace(/^Gemini/, 'OCR'); });
 
         let storageBaseline;
@@ -1849,9 +1847,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     </div>
                     <div class="p-4 rounded-2xl bg-[#111827] border border-[#1E293B]">
                         <div class="text-xs text-slate-400">Leitura de faturas (OCR)</div>
-                        <div class="mt-1.5 font-mono font-semibold text-sm ${geminiKey() && restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full ${geminiKey() && restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
-                            ${geminiKey() && restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
+                        <div class="mt-1.5 font-mono font-semibold text-sm ${restaurantNif() ? 'text-emerald-400' : 'text-amber-300'} flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full ${restaurantNif() ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
+                            ${restaurantNif() ? 'Ligado · NIF ' + escHtml(restaurantNif()) : 'Por configurar'}
                         </div>
                         <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono">
                             <button onclick="openSettingsModal()" class="text-sky-400 underline">Definições</button>
@@ -2395,8 +2393,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 date:new Date().toLocaleDateString('sv-SE'),itemsSummary:summary,lines});
         }
         // --- LEITURA DE FATURAS COM GOOGLE GEMINI ---
-        // shortcut: a chave da API fica no localStorage deste browser e o pedido sai do browser, o que a expõe a quem usar este computador; ao passar para online, chamar o Gemini a partir do servidor.
-        const GEMINI_KEY_STORAGE = 'kareca_gemini_api_key';
+        // O pedido vai para a Edge Function careca-ocr, que junta a chave e o modelo configurados no superadmin (metricas.html) e regista o gasto.
+        const OCR_URL = 'https://fgxxaenvuzkbmllnsdxj.supabase.co/functions/v1/careca-ocr';
+        const OCR_APIKEY = 'sb_publishable_AwB8iD34jREa3LrkJSw3cw_ubDTXh5b'; // chave publicável, pode estar no browser
+        try { localStorage.removeItem('kareca_gemini_api_key'); } catch {} // a chave antiga deixa de ficar neste browser
         const OCR_SCHEMA = {
             type: 'OBJECT',
             properties: {
@@ -2423,9 +2423,6 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             totals: { net: 298.00, vat: 17.88, gross: 315.88 }
         };
         let ocrDraft = null;
-        function geminiKey() {
-            try { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; } catch { return ''; }
-        }
         function restaurantNif() {
             return appState.settings?.restaurantNif || '';
         }
@@ -2434,10 +2431,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const field = 'mt-1 w-full px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white';
             openModal('Definições', 'Restaurante e leitura de faturas', `<form onsubmit="saveSettings(event)" class="space-y-4">
                 <label class="block text-xs text-slate-300">NIF do restaurante (adquirente nas faturas)<input id="set-nif" required value="${escHtml(s.restaurantNif || '')}" class="${field}" placeholder="500 000 000"></label>
-                <label class="block text-xs text-slate-300">Chave da API do serviço OCR (Google AI Studio)<input id="set-key" type="password" autocomplete="off" value="${escHtml(geminiKey())}" class="${field}" placeholder="AIza…"></label>
-                <label class="block text-xs text-slate-300">Modelo OCR<input id="set-model" required value="${escHtml(s.geminiModel || 'gemini-3.8-flash')}" class="${field}"></label>
                 <label class="block text-xs text-slate-300">Alertar artigos sem saídas há (dias)<input id="set-idle" type="number" min="1" step="1" required value="${s.idleDays || 14}" class="${field}"></label>
-                <p class="text-xs text-amber-200 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">A chave fica guardada só neste browser e não entra na cópia exportada. As faturas são enviadas diretamente para a Google. Use uma chave restrita a este fim e não a configure num computador partilhado. Crie a chave em aistudio.google.com.</p>
+                <p class="text-xs text-slate-400 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30">A chave e o modelo do OCR são configurados pela Kareca no painel da plataforma. As faturas que não se leem localmente seguem para a Google através do servidor da Kareca.</p>
                 <div class="flex justify-end gap-3"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Cancelar</button>
                 <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Guardar</button></div></form>`);
         }
@@ -2445,16 +2440,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             e.preventDefault();
             const nif = normalizeNif(document.getElementById('set-nif').value);
             if (nif.length !== 9) { showToast('NIF inválido', 'O NIF tem 9 dígitos.', 'warning'); return; }
-            appState.settings = { ...(appState.settings || {}), restaurantNif: nif, geminiModel: document.getElementById('set-model').value.trim(), idleDays: Math.max(1, Math.round(Number(document.getElementById('set-idle').value) || 14)) };
-            try {
-                const key = document.getElementById('set-key').value.trim();
-                key ? localStorage.setItem(GEMINI_KEY_STORAGE, key) : localStorage.removeItem(GEMINI_KEY_STORAGE);
-            } catch { showToast('Chave não guardada', 'O browser bloqueou o armazenamento local.', 'warning'); }
+            appState.settings = { ...(appState.settings || {}), restaurantNif: nif, idleDays: Math.max(1, Math.round(Number(document.getElementById('set-idle').value) || 14)) };
             persistState(); closeModal(); renderActiveView(); showToast('Definições guardadas', '', 'success');
         }
         function pickInvoiceFile() {
             if (!appState.roles[appState.activeRole].canApproveInvoices) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não tem permissão para importar faturas.', 'warning'); return; }
-            if (!geminiKey() || !restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante e a chave do OCR.', 'info'); openSettingsModal(); return; }
+            if (!restaurantNif()) { showToast('Configure primeiro', 'Indique o NIF do restaurante.', 'info'); openSettingsModal(); return; }
             document.getElementById('invoice-file')?.click();
         }
         const INVOICE_MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
@@ -2531,7 +2522,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const uploadType = upload === file ? mime : upload.type;
                 const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = () => reject(Error('O browser não conseguiu ler o ficheiro: ' + (r.error?.message || 'erro desconhecido'))); r.readAsDataURL(upload); });
                 const prepared = performance.now();
-                let model = appState.settings?.geminiModel || 'gemini-3.8-flash';
+                let model = ''; // vazio: o servidor usa o modelo configurado no superadmin
                 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
                 setStage('Enviar ao OCR', `A enviar ${fmtNum(upload.size / 1024, 0)} KB ao OCR`);
                 // Extrair dados de uma fatura não precisa de raciocínio longo: pensar pouco corta a maior parte da espera.
@@ -2539,16 +2530,16 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const call = async generationConfig => {
                     const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 120000);
                     try {
-                        return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+                        return await fetch(OCR_URL, {
                             method: 'POST', signal: ctrl.signal,
-                            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey() },
-                            body: JSON.stringify({
+                            headers: { 'Content-Type': 'application/json', apikey: OCR_APIKEY },
+                            body: JSON.stringify({ model, request: {
                                 contents: [{ parts: [{ inline_data: { mime_type: uploadType, data } }, { text: 'Extrai os dados desta fatura portuguesa de um fornecedor de restauração. Valores sem IVA após descontos. Se a linha tiver lote ou validade, preenche lot e expiry. Na descrição mantém a embalagem impressa (ex.: Cx 15 dz, Garrafa 2 L). Não inventes campos: deixa vazio o que não estiver no documento.' }] }],
                                 generationConfig
-                            })
+                            } })
                         });
                     } catch (e) {
-                        throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear generativelanguage.googleapis.com.');
+                        throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear fgxxaenvuzkbmllnsdxj.supabase.co.');
                     } finally { clearTimeout(timer); }
                 };
                 const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, maxOutputTokens: 32768 };
