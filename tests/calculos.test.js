@@ -361,3 +361,19 @@ test('stockCheckList: validade passada, a terminar e artigo parado', () => {
     assert.deepEqual([...r], ['a:expired:6', 'b:expiring:1', 'c:idle:25']);
     assert.equal(ctx.addDaysIso('2026-11-30', 3), '2026-12-03');
 });
+
+test('invoiceLineBase / invoiceLineToBase: embalagens multiplicam pelo tamanho da descrição', () => {
+    const ctx = load({});
+    const line = (description, qty, unit, price) => ({ description, qty, unit, unit_price_net: price, line_total_net: qty * price });
+    const arroz = line('Arroz Japonês para Sushi Grão Curto (Saco 20 kg)', 3, 'Saco', 34);
+    assert.deepEqual({ ...ctx.invoiceLineBase(arroz), pack: undefined }, { unit: 'kg', qty: 60, pack: undefined });
+    const r = ctx.invoiceLineToBase(arroz, { baseUnit: 'kg' });
+    near(r.qty, 60); near(r.price, 1.7);
+    near(ctx.invoiceLineToBase(line('Alga Nori (Pacote 100 folhas)', 4, 'Pacote', 14.5), { baseUnit: 'un' }).price, 0.145);
+    near(ctx.invoiceLineToBase(line('Vinho Caixa 6 x 0,75 L', 2, 'cx', 30), { baseUnit: 'L' }).qty, 9);
+    near(ctx.invoiceLineToBase(line('Gin 70cl', 3, 'garrafa', 20), { baseUnit: 'L' }).qty, 2.1);
+    // Insumo contado à unidade: o peso da descrição não serve, usa a unidade da fatura.
+    near(ctx.invoiceLineToBase(line('Farinha 500g', 10, 'un', 1), { baseUnit: 'un' }).qty, 10);
+    near(ctx.invoiceLineToBase(line('Salmão', 2, 'kg', 13), { baseUnit: 'kg' }).price, 13);
+    assert.equal(ctx.packSize('Lombo de salmão 2 lombos'), null);
+});

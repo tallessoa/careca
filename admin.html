@@ -2066,16 +2066,6 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <div class="flex justify-end gap-3">${appState.roles[appState.activeRole].canApproveInvoices ? `<button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
         }
         const ING_CATEGORIES = ['Proteínas', 'Hortícolas', 'Laticínios', 'Secos', 'Bebidas', 'Embalagens'];
-        // Unidade base provável para a unidade escrita na fatura, e o fator para converter a quantidade.
-        function guessBaseUnit(unit) {
-            const u = String(unit ?? '').trim().toLowerCase().replace('.', '');
-            if (['kg', 'kgs'].includes(u)) return { unit: 'kg', factor: 1 };
-            if (['g', 'gr', 'grs'].includes(u)) return { unit: 'kg', factor: 0.001 };
-            if (['l', 'lt', 'lts', 'litro', 'litros'].includes(u)) return { unit: 'L', factor: 1 };
-            if (u === 'ml') return { unit: 'L', factor: 0.001 };
-            if (u === 'cl') return { unit: 'L', factor: 0.01 };
-            return { unit: 'un', factor: 1 };
-        }
         // Artigo novo no catálogo, sem stock: a entrada vem do documento que o criou.
         function createIngredient({ name, baseUnit, category, supplierId, price, sku = '' }) {
             const zone = ['Proteínas', 'Hortícolas', 'Laticínios'].includes(category) ? 'Câmara Fria' : category === 'Bebidas' ? 'Bar' : 'Despensa Seca';
@@ -2697,11 +2687,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <div class="text-xs text-slate-400">Linha ${idx + 1}: «${escHtml(l.description)}» · ${fmtNum(l.qty, 3)} ${escHtml(l.unit || '')} × ${fmtEur(l.unit_price_net, 4)} = <strong class="text-white">${fmtEur(total)}</strong> · IVA ${fmtNum(l.vat_rate, 0)}%</div>
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
                         <label class="sm:col-span-2 text-xs text-slate-300">Artigo do catálogo<select class="ocr-ing ${field} font-sans" onchange="ocrRowChanged(this)"><option value="">Despesa sem stock (serviço, embalagem…)</option><option value="__new">+ Criar artigo novo no catálogo</option>${ingOptions(ing?.id)}</select></label>
-                        <label class="text-xs text-slate-300">Qtd. em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
+                        <label class="text-xs text-slate-300">Qtd. total em unid. base<input class="ocr-qty ${field}" type="number" step="any" min="0" value="${base ? +base.qty.toFixed(4) : l.qty}" oninput="ocrRowChanged(this)"></label>
                         <label class="text-xs text-slate-300">IVA %<input class="ocr-vat ${field}" type="number" step="any" min="0" value="${l.vat_rate}"></label>
                     </div>
                     <div class="ocr-new hidden flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border border-sky-400/30 bg-sky-500/5 text-xs">
-                        <input type="hidden" class="ocr-new-name" value="${escHtml(l.description || '')}"><input type="hidden" class="ocr-new-unit" value="${guessBaseUnit(l.unit).unit}"><input type="hidden" class="ocr-new-cat" value="${ING_CATEGORIES[0]}">
+                        <input type="hidden" class="ocr-new-name" value="${escHtml(l.description || '')}"><input type="hidden" class="ocr-new-unit" value="${invoiceLineBase(l).unit}"><input type="hidden" class="ocr-new-cat" value="${ING_CATEGORIES[0]}">
                         <span class="ocr-new-summary text-sky-200"></span>
                         <button type="button" onclick="openNewIngredientDialog(this.closest('.ocr-row'))" class="px-2.5 py-1 rounded-lg text-sky-300 border border-sky-400/30">Editar artigo</button>
                     </div>
@@ -2730,25 +2720,32 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         }
         function ocrRowChanged(el, keepHint = false) {
             const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
+            const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)], lineBase = invoiceLineBase(l);
+            // Mostra a conta da embalagem (3 Saco × 20 kg = 60 kg) para se perceber de onde vem a quantidade.
+            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || ''} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
             row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
             if (el.classList.contains('ocr-ing')) {
                 if (choice === '__new') {
-                    const l = ocrDraft.ex.lines[[...document.querySelectorAll('.ocr-row')].indexOf(row)], guess = guessBaseUnit(l.unit);
+                    const guess = lineBase;
                     row.querySelector('.ocr-new-unit').value = guess.unit;
-                    row.querySelector('.ocr-qty').value = +(Number(l.qty) * guess.factor).toFixed(4);
+                    row.querySelector('.ocr-qty').value = +guess.qty.toFixed(4);
                     row.querySelector('.ocr-new-summary').textContent = `Artigo novo: ${row.querySelector('.ocr-new-name').value} · ${guess.unit} · ${row.querySelector('.ocr-new-cat').value}`;
                     if (!keepHint) openNewIngredientDialog(row);
-                } else { row.dataset.prev = choice; delete row.dataset.named; }
+                } else {
+                    row.dataset.prev = choice; delete row.dataset.named;
+                    const base = ing && invoiceLineToBase(l, ing);
+                    if (base && !keepHint) row.querySelector('.ocr-qty').value = +base.qty.toFixed(4);
+                }
             }
             const qty = Number(row.querySelector('.ocr-qty').value), total = Number(row.dataset.total);
             const out = row.querySelector('.ocr-price');
             if (keepHint && out.textContent) return;
             out.className = 'ocr-price text-[11px] font-mono text-slate-400';
-            if (choice === '__new') { const u = row.querySelector('.ocr-new-unit').value; out.textContent = qty > 0 ? `Artigo novo · ${fmtEur(total / qty, 4)}/${u} passa a ser o custo inicial.` : 'Indique a quantidade.'; return; }
+            if (choice === '__new') { const u = row.querySelector('.ocr-new-unit').value; out.textContent = qty > 0 ? `${packNote}Artigo novo · ${fmtEur(total / qty, 4)}/${u} passa a ser o custo inicial.` : 'Indique a quantidade.'; return; }
             if (!ing) { out.textContent = 'Lançada como despesa, sem movimento de stock.'; return; }
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
-            out.textContent = qty > 0 ? `${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
+            out.textContent = qty > 0 ? `${packNote}${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
         }
         // Janela por cima da revisão para dar nome, unidade e categoria ao artigo novo. O artigo só é criado ao aprovar a fatura.
         function openNewIngredientDialog(row) {
