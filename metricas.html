@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Kareca — Métricas</title>
+<style>
+:root{--bg:#050814;--card:#0B1120;--line:#1e293b;--txt:#e2e8f0;--mut:#94a3b8;--acc:#38bdf8;--ok:#34d399;--warn:#fbbf24;--bad:#f87171}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 Inter,system-ui,sans-serif}
+h1,h2,p{margin:0}h1{font-size:20px}h2{font-size:15px;margin-bottom:12px}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+button,input{font:inherit;color:inherit}button{cursor:pointer;background:#2563eb;border:0;border-radius:10px;padding:8px 14px;color:#fff}
+button.sec{background:transparent;border:1px solid var(--line);color:var(--mut)}
+input{width:100%;background:#030712;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+.grid{display:grid;gap:12px}.k4{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.k2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.sec-t{margin:28px 0 12px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);font-family:ui-monospace,monospace}
+.kpi .l{font-size:12px;color:var(--mut)}.kpi .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}.kpi .s{font-size:12px;color:var(--mut)}
+.mut{color:var(--mut)}.small{font-size:12px}
+.banner{border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+.demo{background:color-mix(in srgb,#f59e0b 12%,transparent);border:1px solid color-mix(in srgb,#f59e0b 40%,transparent);color:#fde68a}
+.info{background:color-mix(in srgb,#3b82f6 10%,transparent);border:1px solid color-mix(in srgb,#3b82f6 35%,transparent);color:#bfdbfe}
+.err{background:color-mix(in srgb,#ef4444 12%,transparent);border:1px solid color-mix(in srgb,#ef4444 40%,transparent);color:#fecaca}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:var(--mut);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);white-space:nowrap}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;border:1px solid currentColor}
+.p-pago,.p-ativa,.p-ok{color:var(--ok)}.p-pendente,.p-experiencia{color:var(--acc)}.p-falhado,.p-em_atraso{color:var(--bad)}.p-reembolsado,.p-cancelada,.p-inativo{color:var(--mut)}
+.bar{height:8px;border-radius:99px;background:#1e293b;overflow:hidden;margin-top:8px}.bar>i{display:block;height:100%;background:var(--acc)}
+svg text{fill:var(--mut);font-size:10px}
+#login{max-width:360px;margin:12vh auto 0}
+a{color:var(--acc)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="card" hidden>
+    <h1>Métricas Kareca</h1>
+    <p class="mut small" style="margin:4px 0 16px">Acesso reservado ao administrador.</p>
+    <form id="login-form">
+      <label class="small">Email<input id="email" type="email" autocomplete="username" required></label>
+      <label class="small" style="display:block;margin-top:10px">Palavra-passe<input id="pass" type="password" autocomplete="current-password" required></label>
+      <div id="login-err" class="banner err" style="margin-top:12px" hidden></div>
+      <button style="width:100%;margin-top:14px">Entrar</button>
+    </form>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <div><h1>Métricas Kareca</h1><p class="mut small" id="gerado"></p></div>
+      <div style="display:flex;gap:8px"><button class="sec" id="reload">Atualizar</button><button class="sec" id="logout">Sair</button></div>
+    </header>
+    <div id="msg"></div>
+    <div id="out"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// Chave publicável: pode estar no browser. Os dados só saem por careca_painel(), que exige conta de administrador.
+const SUPABASE_URL = 'https://fgxxaenvuzkbmllnsdxj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_AwB8iD34jREa3LrkJSw3cw_ubDTXh5b';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur = v => Number(v || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+const usd = (v, d = 2) => Number(v || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'USD', minimumFractionDigits: d, maximumFractionDigits: d });
+const num = v => Number(v || 0).toLocaleString('pt-PT');
+const data = s => s ? new Date(s).toLocaleDateString('pt-PT') : '—';
+const ESTADOS = { pago: 'Pago', pendente: 'Pendente', falhado: 'Falhado', reembolsado: 'Reembolsado', ativa: 'Ativa', experiencia: 'Experiência', em_atraso: 'Em atraso', cancelada: 'Cancelada' };
+const pill = e => e ? `<span class="pill p-${esc(e)}">${esc(ESTADOS[e] || e)}</span>` : '<span class="mut">—</span>';
+const kpi = (l, v, s = '') => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+
+function barras(pontos, valor, rotulo, fmt) {
+  const W = 600, H = 150, max = Math.max(...pontos.map(valor), 0) || 1, bw = W / pontos.length;
+  const rects = pontos.map((p, i) => {
+    const h = valor(p) / max * (H - 24);
+    return `<rect x="${i * bw + 1}" y="${H - 16 - h}" width="${bw - 2}" height="${h}" rx="2" fill="#38bdf8"><title>${esc(rotulo(p))}: ${esc(fmt(valor(p)))}</title></rect>`;
+  }).join('');
+  const passo = Math.ceil(pontos.length / 6);
+  const eixo = pontos.map((p, i) => i % passo ? '' : `<text x="${i * bw + bw / 2}" y="${H - 2}" text-anchor="middle">${esc(rotulo(p))}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Gráfico de barras">${rects}${eixo}</svg>`;
+}
+
+function render(d) {
+  const r = d.resumo, g = d.gemini, m = g.mes;
+  const orc = (g.limites || []).find(l => l.chave === 'orcamento_mensal_usd');
+  const pct = orc?.valor ? Math.min(100, m.custo_usd / orc.valor * 100) : 0;
+  const hoje = new Date(), diasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+  const previsao = m.custo_usd / hoje.getDate() * diasMes;
+  const futuros = (g.precos || []).filter(p => p.valido_desde > hoje.toISOString().slice(0, 10));
+
+  $('gerado').textContent = 'Atualizado às ' + new Date(d.gerado_em).toLocaleTimeString('pt-PT');
+  $('msg').innerHTML = d.tem_demo ? `<div class="banner demo"><b>Dados de demonstração.</b> A app ainda não envia dados para aqui; tudo o que tem «[DEMO]» é fictício e será apagado quando a ligação for feita.</div>` : '';
+
+  $('out').innerHTML = `
+  <div class="sec-t">Negócio</div>
+  <div class="grid k4">
+    ${kpi('Restaurantes registados', num(r.restaurantes), `${num(r.novos_mes)} novos este mês`)}
+    ${kpi('Subscrições ativas', num(r.ativas), `${num(r.experiencia)} em experiência · ${num(r.em_atraso)} em atraso`)}
+    ${kpi('Receita mensal recorrente', eur(r.mrr_eur), 'ativas + em atraso, preço de tabela')}
+    ${kpi('Recebido este mês', eur(r.recebido_mes_eur), `${num(r.pendentes)} pendentes · ${num(r.falhados_mes)} falhados`)}
+  </div>
+  <div class="grid k2" style="margin-top:12px">
+    <div class="card"><h2>Planos</h2><div class="tw"><table>
+      <tr><th>Plano</th><th class="n">Preço/mês</th><th class="n">Ativas</th><th class="n">Experiência</th><th class="n">Receita/mês</th></tr>
+      ${d.planos.map(p => `<tr><td>${esc(p.nome)}</td><td class="n">${eur(p.preco)}</td><td class="n">${num(p.ativas)}</td><td class="n">${num(p.experiencia)}</td><td class="n">${eur(p.ativas * p.preco)}</td></tr>`).join('')}
+    </table></div></div>
+    <div class="card"><h2>Recebido por mês</h2>${d.receita_mensal.length ? barras(d.receita_mensal, p => +p.eur, p => p.mes, eur) : '<p class="mut small">Sem pagamentos.</p>'}</div>
+  </div>
+
+  <div class="sec-t">Gemini (leitura de faturas)</div>
+  <div class="banner info">Custo <b>estimado</b> a partir dos tokens de cada pedido e da tabela de preços abaixo (nível pago). A chave do AI Studio não tem API de consumo: o valor faturado exato está no <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud Billing</a> e os limites reais de pedidos por minuto e por dia em <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">AI Studio → Uso e limites</a>. Se a chave estiver no nível gratuito, o custo real é 0.</div>
+  <div class="grid k4">
+    ${kpi('Gasto este mês (estimado)', usd(m.custo_usd), `mês anterior: ${usd(g.mes_anterior_usd)}`)}
+    ${kpi('Previsão até fim do mês', usd(previsao), `ao ritmo atual · total desde o início ${usd(g.total_usd)}`)}
+    ${kpi('Pedidos este mês', num(m.pedidos), `${num(m.erros)} com erro ou sobrecarga · ${m.pedidos ? usd(m.custo_usd / m.pedidos, 4) : '—'} por pedido`)}
+    ${kpi('Tokens este mês', num(m.tokens_entrada + m.tokens_saida), `${num(m.tokens_entrada)} entrada · ${num(m.tokens_saida)} saída`)}
+  </div>
+  <div class="grid k2" style="margin-top:12px">
+    <div class="card"><h2>Gasto por dia (últimos 30 dias)</h2>${barras(g.por_dia, p => +p.usd, p => p.dia.slice(8, 10) + '/' + p.dia.slice(5, 7), v => usd(v, 4))}</div>
+    <div class="card"><h2>Orçamento e limites</h2>
+      ${orc ? `<div class="small">${usd(m.custo_usd)} de ${usd(orc.valor)} (${pct.toFixed(0)}%)</div><div class="bar"><i style="width:${pct}%;background:${pct >= 100 ? 'var(--bad)' : pct >= 80 ? 'var(--warn)' : 'var(--acc)'}"></i></div>` : ''}
+      <div class="tw" style="margin-top:12px"><table>
+        ${(g.limites || []).map(l => `<tr><td>${esc(l.nome)}<div class="mut small" style="white-space:normal">${esc(l.nota)}</div></td><td class="n">${num(l.valor)} ${esc(l.unidade)}</td></tr>`).join('')}
+      </table></div>
+    </div>
+  </div>
+  <div class="grid k2" style="margin-top:12px">
+    <div class="card"><h2>Por modelo (este mês)</h2><div class="tw"><table>
+      <tr><th>Modelo</th><th class="n">Pedidos</th><th class="n">Custo</th></tr>
+      ${g.por_modelo.map(p => `<tr><td>${esc(p.modelo)}</td><td class="n">${num(p.pedidos)}</td><td class="n">${usd(p.usd)}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">Sem pedidos.</td></tr>'}
+    </table></div></div>
+    <div class="card"><h2>Preços usados (USD por 1 M tokens)</h2><div class="tw"><table>
+      <tr><th>Modelo</th><th>Desde</th><th class="n">Entrada</th><th class="n">Saída</th></tr>
+      ${(g.precos || []).map(p => `<tr><td>${esc(p.modelo)}</td><td>${data(p.valido_desde)}${futuros.includes(p) ? ' <span class="pill p-pendente">futuro</span>' : ''}</td><td class="n">${usd(p.entrada_usd_m)}</td><td class="n">${usd(p.saida_usd_m)}</td></tr>`).join('')}
+    </table></div><p class="mut small" style="margin-top:8px">Fonte: ai.google.dev/pricing, consultada a 26/11/2026. A saída inclui os tokens de raciocínio.</p></div>
+  </div>
+
+  <div class="sec-t">Restaurantes</div>
+  <div class="card tw"><table>
+    <tr><th>Nome</th><th>Cidade</th><th>Registo</th><th>Plano</th><th>Estado</th><th class="n">Gemini este mês</th></tr>
+    ${d.restaurantes.map(x => `<tr><td>${esc(x.nome)}</td><td>${esc(x.cidade)}</td><td>${data(x.criado_em)}</td><td>${esc(x.plano || '—')}</td><td>${pill(x.estado)}</td><td class="n">${usd(x.gemini_mes_usd)}</td></tr>`).join('') || '<tr><td colspan="6" class="mut">Nenhum restaurante.</td></tr>'}
+  </table></div>
+
+  <div class="grid k2" style="margin-top:12px">
+    <div class="card"><h2>Últimos pagamentos</h2><div class="tw"><table>
+      <tr><th>Data</th><th>Restaurante</th><th>Método</th><th>Estado</th><th class="n">Valor</th></tr>
+      ${d.pagamentos.map(p => `<tr><td>${data(p.data)}</td><td>${esc(p.restaurante)}</td><td>${esc(p.metodo || '—')}</td><td>${pill(p.estado)}</td><td class="n">${eur(p.valor)}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">Sem pagamentos.</td></tr>'}
+    </table></div></div>
+    <div class="card"><h2>Vouchers</h2><div class="tw"><table>
+      <tr><th>Código</th><th>Desconto</th><th class="n">Usos</th><th>Validade</th><th>Estado</th></tr>
+      ${d.vouchers.map(v => `<tr><td><b>${esc(v.codigo)}</b><div class="mut small">${esc(v.descricao)}</div></td><td>${v.desconto_pct != null ? num(v.desconto_pct) + '%' : eur(v.desconto_eur)}</td><td class="n">${num(v.usos)}${v.max_usos ? ' / ' + num(v.max_usos) : ''}</td><td>${data(v.valido_ate)}</td><td><span class="pill p-${v.ativo ? 'ok' : 'inativo'}">${v.ativo ? 'Ativo' : 'Inativo'}</span></td></tr>`).join('') || '<tr><td colspan="5" class="mut">Sem vouchers.</td></tr>'}
+    </table></div></div>
+  </div>`;
+}
+
+async function carregar() {
+  $('msg').innerHTML = '<p class="mut">A carregar…</p>';
+  const { data: d, error } = await sb.rpc('careca_painel');
+  if (error) {
+    $('out').innerHTML = '';
+    $('msg').innerHTML = `<div class="banner err">${error.code === '42501' ? 'Esta conta não tem acesso às métricas.' : 'Não foi possível carregar: ' + esc(error.message)}</div>`;
+    return;
+  }
+  render(d);
+}
+
+async function mostrar(sessao) {
+  $('login').hidden = !!sessao;
+  $('app').hidden = !sessao;
+  if (sessao) carregar();
+}
+
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('login-err').hidden = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value });
+  if (error) { $('login-err').textContent = 'Email ou palavra-passe errados.'; $('login-err').hidden = false; return; }
+  mostrar(data.session);
+});
+$('logout').onclick = async () => { await sb.auth.signOut(); mostrar(null); };
+$('reload').onclick = carregar;
+sb.auth.getSession().then(({ data }) => mostrar(data.session));
+</script>
+</body>
+</html>
