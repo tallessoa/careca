@@ -24,6 +24,8 @@ create function public.careca_gemini_config() returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
 declare admin boolean := exists (select 1 from careca.admins where user_id = auth.uid());
 begin
+  -- Enquanto não houver nenhuma conta de administrador no projeto, admin/admin também pode configurar.
+  admin := admin or not exists (select 1 from careca.admins);
   if not (admin or careca.so_demo()) then raise exception 'Sem acesso' using errcode = '42501'; end if;
   return (select jsonb_build_object(
     'modelo', c.gemini_modelo,
@@ -37,11 +39,11 @@ end $$;
 revoke all on function public.careca_gemini_config() from public;
 grant execute on function public.careca_gemini_config() to anon, authenticated;
 
--- Gravar: só a conta administradora (não o admin/admin). Chave vazia mantém a atual.
+-- Gravar: só a conta administradora; enquanto não existir nenhuma, também admin/admin. Chave vazia mantém a atual.
 create function public.careca_gemini_config_guardar(p_chave text, p_modelo text, p_orcamento_usd numeric) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
-  if not exists (select 1 from careca.admins where user_id = auth.uid()) then
+  if exists (select 1 from careca.admins) and not exists (select 1 from careca.admins where user_id = auth.uid()) then
     raise exception 'Só a conta de administrador pode alterar a configuração' using errcode = '42501';
   end if;
   if not exists (select 1 from careca.gemini_precos where modelo = p_modelo) then
@@ -54,8 +56,8 @@ begin
     atualizado_em = now();
   update careca.gemini_limites set valor = p_orcamento_usd where chave = 'orcamento_mensal_usd';
 end $$;
-revoke all on function public.careca_gemini_config_guardar(text, text, numeric) from public, anon;
-grant execute on function public.careca_gemini_config_guardar(text, text, numeric) to authenticated;
+revoke all on function public.careca_gemini_config_guardar(text, text, numeric) from public;
+grant execute on function public.careca_gemini_config_guardar(text, text, numeric) to anon, authenticated;
 
 -- Só para a Edge Function (service_role): chave, modelo a usar e gasto real do mês.
 create function public.careca_gemini_preparar(p_modelo text) returns jsonb

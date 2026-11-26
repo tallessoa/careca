@@ -1430,7 +1430,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const isCrit = a.severity === 'critical';
                 const borderCol = isCrit ? 'border-rose-500/35 bg-rose-500/5' : 'border-amber-500/35 bg-amber-500/5';
                 const pillCol = isCrit ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300';
-                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', idle_stock: 'PARADO' }[a.type] || 'ALERTA';
+                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', idle_stock: 'PARADO', new_supplier: 'NOVO', new_ingredient: 'NOVO' }[a.type] || 'ALERTA';
 
                 return `
                     <div class="p-4 rounded-xl border ${a.unread ? borderCol : 'border-[#1E293B] bg-[#111827]/60 opacity-75'} transition-all">
@@ -2116,7 +2116,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <label class="text-slate-300">Número<input id="ie-number" class="${field}" value="${escHtml(inv.id)}"></label>
                     <label class="text-slate-300">Data<input id="ie-date" type="date" class="${field}" value="${escHtml(inv.date)}"></label>
                     <label class="text-slate-300">ATCUD<input id="ie-atcud" class="${field}" value="${escHtml(inv.atcud || '')}"></label>
-                    <label class="text-slate-300">Fornecedor<select id="ie-supplier" class="${field} font-sans">${appState.suppliers.map(s => `<option value="${s.id}" ${s.id === inv.supplierId ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('')}</select></label>
+                    <label class="text-slate-300">Fornecedor<select id="ie-supplier" class="${field} font-sans">${appState.suppliers.map(s => `<option value="${s.id}" ${s.id === inv.supplierId ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)}</option>`).join('')}</select></label>
                 </div>
                 ${mode === 'lines' ? `<div id="ie-lines" class="space-y-2">${inv.lines.map(l => invoiceEditRow(l, field)).join('')}</div>
                     <div class="flex flex-wrap items-center justify-between gap-2"><button type="button" onclick="document.getElementById('ie-lines').insertAdjacentHTML('beforeend', invoiceEditRow({ ing: appState.ingredients[0].id, qty: 1, price: 0, vat: 6 }, '${field}')); updateInvoiceEditTotal()" class="px-3 py-1.5 rounded-lg text-xs text-sky-300 border border-sky-400/30">+ Linha</button>
@@ -2242,7 +2242,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 return;
             }
             const defaultStore = RESTAURANT;
-            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" class="bg-[#0B1120]">${escHtml(s.name)} (NIF ${escHtml(s.nif)})</option>`).join('');
+            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" class="bg-[#0B1120]">${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('');
             const ingOpts = appState.ingredients.map(i => {
                 const m = getIngMetricsForStore(i, defaultStore);
                 return `<option value="${i.id}" class="bg-[#0B1120]">${escHtml(i.name)} — Último: ${fmtEur(m.lastCost)}/${escHtml(i.baseUnit)}</option>`;
@@ -2394,8 +2394,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         }
         // --- LEITURA DE FATURAS COM GOOGLE GEMINI ---
         // O pedido vai para a Edge Function careca-ocr, que junta a chave e o modelo configurados no superadmin (metricas.html) e regista o gasto.
-        const OCR_URL = 'https://fgxxaenvuzkbmllnsdxj.supabase.co/functions/v1/careca-ocr';
-        const OCR_APIKEY = 'sb_publishable_AwB8iD34jREa3LrkJSw3cw_ubDTXh5b'; // chave publicável, pode estar no browser
+        const OCR_URL = 'https://inqgarcghwidlljgxsle.supabase.co/functions/v1/careca-ocr';
+        const OCR_APIKEY = 'sb_publishable_bpDgU7_gBaQTojVKUDcMnA_FwZ3EvZG'; // chave publicável, pode estar no browser
         try { localStorage.removeItem('kareca_gemini_api_key'); } catch {} // a chave antiga deixa de ficar neste browser
         const OCR_SCHEMA = {
             type: 'OBJECT',
@@ -2492,14 +2492,16 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             pdf.destroy();
             return rows;
         }
-        async function readInvoiceFile(input) {
-            const file = input.files[0];
-            input.value = '';
+        // Com cropped, a foto já passou pelo corte: segue direto para a leitura.
+        async function readInvoiceFile(input, cropped) {
+            const file = cropped || input.files[0];
+            if (input) input.value = '';
             if (!file) return;
             const mime = invoiceMime(file);
             if (!mime) { showToast('Formato não suportado', `«${file.name}» (${file.type || 'tipo desconhecido'}). Use PDF, JPG, PNG, WEBP ou HEIC.`, 'warning'); return; }
             // O pedido ao Gemini aceita até 20 MB e o base64 aumenta o ficheiro em 1/3.
             if (file.size > 14 * 1024 * 1024) { showToast('Ficheiro grande demais', `${fmtNum(file.size / 1048576, 1)} MB. Máximo 14 MB.`, 'warning'); return; }
+            if (!cropped && mime.startsWith('image/') && await openInvoiceCrop(file)) return;
             openModal('A ler a fatura…', file.name, '<p class="text-sm text-slate-300"><span id="ocr-stage">A preparar o ficheiro</span>… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
             const started = performance.now();
             const ticker = setInterval(() => { const el = document.getElementById('ocr-elapsed'); if (el) el.textContent = Math.round((performance.now() - started) / 1000) + ' s'; }, 500);
@@ -2539,7 +2541,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                             } })
                         });
                     } catch (e) {
-                        throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear fgxxaenvuzkbmllnsdxj.supabase.co.');
+                        throw Error(e.name === 'AbortError' ? 'O OCR não respondeu em 120 s.' : 'Sem ligação ao serviço OCR (' + e.message + '). Verifique a internet ou se um bloqueador de anúncios/firewall está a bloquear inqgarcghwidlljgxsle.supabase.co.');
                     } finally { clearTimeout(timer); }
                 };
                 const base = { responseMimeType: 'application/json', responseSchema: OCR_SCHEMA, maxOutputTokens: 32768 };
@@ -2579,6 +2581,54 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         }
         // Fotos: reduz para 1600 px no lado maior, passa a cinzento e estica o contraste, para gastar menos tokens no Gemini.
         // O ficheiro original não é alterado. PDFs seguem como estão; se o browser não souber abrir a imagem (ex.: HEIC), envia o original.
+        // Mini editor para cortar a foto antes da leitura. Devolve false se o browser não consegue abrir a imagem (ex.: HEIC), e a leitura segue sem corte.
+        async function openInvoiceCrop(file) {
+            let bitmap;
+            try { bitmap = await createImageBitmap(file); } catch { return false; }
+            const url = URL.createObjectURL(file), r = { x: 0, y: 0, w: 1, h: 1 };
+            const handle = c => `<div data-h="${c}" class="absolute w-6 h-6 -m-3 rounded-full bg-sky-400 border-2 border-white" style="${c.includes('n') ? 'top:0' : 'top:100%'};${c.includes('w') ? 'left:0' : 'left:100%'}"></div>`;
+            openModal('Cortar a foto', file.name, `<div class="space-y-3 text-sm">
+                <p class="text-xs text-slate-400">Arraste os cantos para deixar só a fatura. Arraste o meio para mover o corte.</p>
+                <div class="flex justify-center"><div class="p-3 overflow-hidden select-none"><div id="crop-box" class="relative" style="touch-action:none">
+                    <img id="crop-img" src="${url}" alt="Foto da fatura" class="block" draggable="false">
+                    <div id="crop-rect" data-h="move" class="absolute border-2 border-sky-400 cursor-move" style="box-shadow:0 0 0 9999px rgba(0,0,0,.55)">${['nw', 'ne', 'sw', 'se'].map(handle).join('')}</div>
+                </div></div></div>
+                <!-- Botão principal à esquerda: no telemóvel o assistente flutuante fica no canto inferior direito. -->
+                <div class="flex flex-wrap gap-3"><button id="crop-ok" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Cortar e ler</button>
+                <button id="crop-full" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B]">Usar foto inteira</button></div></div>`, 'lg');
+            const box = document.getElementById('crop-box'), rect = document.getElementById('crop-rect');
+            // Tamanho fixo calculado: com max-width em % dentro de inline-block a imagem transborda e o corte deixa de bater certo.
+            const k = Math.min(1, (box.closest('.flex').clientWidth - 24) / bitmap.width, innerHeight * 0.62 / bitmap.height);
+            Object.assign(document.getElementById('crop-img').style, { width: bitmap.width * k + 'px', height: bitmap.height * k + 'px' });
+            const draw = () => Object.assign(rect.style, { left: r.x * 100 + '%', top: r.y * 100 + '%', width: r.w * 100 + '%', height: r.h * 100 + '%' });
+            draw();
+            let drag = null;
+            box.addEventListener('pointerdown', e => { const h = e.target.dataset.h; if (!h) return; drag = { h, x: e.clientX, y: e.clientY, r: { ...r } }; box.setPointerCapture(e.pointerId); e.preventDefault(); });
+            box.addEventListener('pointermove', e => {
+                if (!drag) return;
+                const b = box.getBoundingClientRect(), dx = (e.clientX - drag.x) / b.width, dy = (e.clientY - drag.y) / b.height, o = drag.r, min = 0.08, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+                if (drag.h === 'move') { r.x = clamp(o.x + dx, 0, 1 - o.w); r.y = clamp(o.y + dy, 0, 1 - o.h); }
+                else {
+                    if (drag.h.includes('w')) { r.x = clamp(o.x + dx, 0, o.x + o.w - min); r.w = o.x + o.w - r.x; } else r.w = clamp(o.w + dx, min, 1 - o.x);
+                    if (drag.h.includes('n')) { r.y = clamp(o.y + dy, 0, o.y + o.h - min); r.h = o.y + o.h - r.y; } else r.h = clamp(o.h + dy, min, 1 - o.y);
+                }
+                draw();
+            });
+            box.addEventListener('pointerup', () => { drag = null; });
+            const finish = async crop => {
+                URL.revokeObjectURL(url);
+                if (!crop) { bitmap.close(); return readInvoiceFile(null, file); }
+                const canvas = document.createElement('canvas'), sx = Math.round(r.x * bitmap.width), sy = Math.round(r.y * bitmap.height);
+                canvas.width = Math.round(r.w * bitmap.width); canvas.height = Math.round(r.h * bitmap.height);
+                canvas.getContext('2d').drawImage(bitmap, sx, sy, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+                bitmap.close();
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+                readInvoiceFile(null, blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file);
+            };
+            document.getElementById('crop-full').onclick = () => finish(false);
+            document.getElementById('crop-ok').onclick = () => finish(true);
+            return true;
+        }
         async function prepareInvoiceImage(file, mime = file.type) {
             if (!mime.startsWith('image/')) return file;
             try {
@@ -2662,9 +2712,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <label class="text-slate-300">Data<input id="ocr-date" type="date" class="${field}" value="${escHtml(/^\d{4}-\d{2}-\d{2}$/.test(ex.date) ? ex.date : new Date().toLocaleDateString('sv-SE'))}"></label>
                     <label class="text-slate-300">ATCUD<input id="ocr-atcud" class="${field}" value="${escHtml(ex.atcud || '')}"></label>
                 </div>
+                ${supplier ? '' : `<div class="p-3 rounded-xl bg-sky-500/10 border border-sky-400/40 text-xs text-sky-200"><strong>Fornecedor novo.</strong> É a primeira fatura de ${escHtml(ex.supplier_name || 'este fornecedor')} (NIF ${escHtml(ex.supplier_nif || '—')}). Ao aprovar, o fornecedor é criado e fica um alerta para completar a ficha.</div>`}
                 <label class="block text-xs text-slate-300">Fornecedor (NIF lido: ${escHtml(ex.supplier_nif || '—')})<select id="ocr-supplier" class="${field} font-sans">
                     ${supplier ? '' : `<option value="__new">+ Criar fornecedor «${escHtml(ex.supplier_name || 'Sem nome')}» (NIF ${escHtml(ex.supplier_nif || '—')})</option>`}
-                    ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
+                    ${appState.suppliers.map(s => `<option value="${s.id}" ${s === supplier ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)} (NIF ${escHtml(s.nif)})</option>`).join('')}</select></label>
                 <div class="space-y-2">${rows}</div>
                 <div class="text-xs font-mono text-slate-300">Total lido: líquido ${fmtEur(ex.totals?.net)} · IVA ${fmtEur(ex.totals?.vat)} · total ${fmtEur(ex.totals?.gross)}${diff > 0.05 ? ` <span class="text-amber-300">· a soma das linhas (${fmtEur(net)}) não bate com o total: confira o documento.</span>` : ''}</div>
                 ${nifIssue ? '<label class="flex items-center gap-2 text-xs text-rose-200"><input type="checkbox" id="ocr-nif-ok"> Confirmo que a mercadoria foi recebida e quero lançar este documento mesmo assim.</label>' : ''}
@@ -2860,14 +2911,19 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (unnamed) { openNewIngredientDialog(unnamed); return; }
             const before = structuredClone(appState);
             let supplierId = document.getElementById('ocr-supplier').value;
+            const newAlert = (type, title, message) => appState.alerts.unshift({ id: crypto.randomUUID(), type, severity: 'warning', store: RESTAURANT, unread: true,
+                time: new Date().toLocaleString('pt-PT'), document: number, title, message });
             if (supplierId === '__new') {
                 supplierId = 'sup_' + Date.now();
                 appState.suppliers.unshift({ id: supplierId, name: ex.supplier_name || 'Fornecedor ' + ex.supplier_nif, nif: ex.supplier_nif || '', category: 'Por classificar', email: '', phone: '', terms: '30 dias' });
+                newAlert('new_supplier', 'Fornecedor novo: ' + appState.suppliers[0].name, `Criado a partir da fatura ${number}. Complete a ficha em Fornecedores: nome comercial, categoria, prazo de pagamento, e-mail e telefone.`);
             }
             rows.forEach((row, idx) => {
                 if (lines[idx].ing !== '__new') return;
-                lines[idx].ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
-                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' }).id;
+                const ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
+                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' });
+                lines[idx].ing = ing.id;
+                newAlert('new_ingredient', 'Artigo novo: ' + ing.name, `Criado a partir da fatura ${number}. Confirme em Insumos a categoria, a zona, o stock mínimo, os alergénios e a validade.`);
             });
             // Guarda o nome que o fornecedor usa na fatura («Ovos 15dz Classe L»): o artigo fica com o nome curto, a fatura seguinte reconhece-o.
             rows.forEach((row, idx) => {
@@ -2958,7 +3014,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         return `
                                             <tr class="hover:bg-[#111827]/70">
                                                 <td class="py-4 px-5">
-                                                    <div class="font-semibold text-white">${escHtml(s.name)}</div>
+                                                    <div class="font-semibold text-white">${escHtml(s.tradeName || s.name)}</div>
+                                                    ${s.tradeName ? `<div class="text-xs text-slate-400">${escHtml(s.name)}</div>` : ''}
                                                     <div class="text-xs font-mono text-slate-400">NIF ${escHtml(s.nif)} • Prazo: ${escHtml(s.terms)}</div>
                                                 </td>
                                                 <td class="py-4 px-4 text-xs text-slate-300">${escHtml(s.category)}</td>
@@ -3097,13 +3154,18 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <form onsubmit="saveSupplierForm(event, '${sup ? sup.id : ''}')" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome da Empresa / Fornecedor *</label>
+                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome jurídico (firma / denominação social) *</label>
                             <input id="sup-name" type="text" required value="${sup ? escHtml(sup.name) : ''}" placeholder="Ex: Marisqueira do Norte, Lda." class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">NIF *</label>
                             <input id="sup-nif" type="text" required value="${sup ? escHtml(sup.nif) : ''}" placeholder="509 123 456" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome comercial (marca / designação comercial)</label>
+                        <input id="sup-trade" type="text" value="${sup ? escHtml(sup.tradeName || '') : ''}" placeholder="Ex: Marisqueira do Norte" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
+                        <p class="mt-1 text-[11px] text-slate-500">O nome jurídico é o que vem na fatura. O nome comercial é o nome por que a equipa conhece o fornecedor.</p>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3147,6 +3209,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
             const payload = {
                 name: document.getElementById('sup-name').value.trim(),
+                tradeName: document.getElementById('sup-trade').value.trim(),
                 nif: document.getElementById('sup-nif').value.trim(),
                 category: document.getElementById('sup-cat').value.trim(),
                 terms: document.getElementById('sup-terms').value,
@@ -3214,7 +3277,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const m = ing ? getIngMetricsForStore(ing, appState.activeStore) : { stockTheoretical: 10.0, minStock: 6.0, cmp: 8.50, lastCost: 8.50 };
             const isEdit = Boolean(ing);
             const lossPct = ing ? Math.round((1 - ing.yieldFactor) * 100) : 0;
-            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" ${ing && ing.supplierId === s.id ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('');
+            const supOpts = appState.suppliers.map(s => `<option value="${s.id}" ${ing && ing.supplierId === s.id ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)}</option>`).join('');
             const zones = ['Câmara Fria', 'Congelador', 'Despensa Seca', 'Bar'];
 
             const units = ['kg', 'L', 'un'];
