@@ -26,3 +26,11 @@ Uma linha com vários produtos (por exemplo, um kit) pode ser dividida na revis�
 ## Validades e artigos parados
 
 Cada artigo do catálogo pode ter «Validade após receção (dias)». Ao receber mercadoria, a validade do stock passa a ser a data do documento mais esses dias, exceto se o lote anterior ainda estava dentro do prazo e termina antes: nesse caso mantém-se a data mais próxima. Pode corrigir a data em Inventário → Validades e artigos parados. Há alertas para validade passada, validade a terminar (2 dias) e artigos sem saídas há mais dias do que o definido em Definições (14 por omissão).
+
+## Painel de métricas (dono)
+
+`metricas.html` mostra restaurantes, subscrições e planos, pagamentos, vouchers e o gasto estimado com o Gemini. Abre em `/metricas.html` (por exemplo https://kareca.netlify.app/metricas.html) e pede login com a conta Supabase do administrador.
+
+Os dados vivem no Supabase, no esquema `careca` (ver `supabase/migrations/`). Esse esquema não está exposto na API: o painel só lê através da função `public.careca_painel()`, que recusa quem não estiver em `careca.admins`. Para dar acesso a outra conta: `insert into careca.admins (user_id) select id from auth.users where email = '...';`
+
+Por enquanto as tabelas têm dados de demonstração (`supabase/demo_metricas.sql`, linhas com `demo = true` e nomes «[DEMO]»), porque a app ainda não envia dados. O custo do Gemini é uma estimativa: cada pedido grava os tokens de `usageMetadata` e um trigger calcula o custo com `careca.gemini_precos`. O valor faturado exato só se vê no Google Cloud Billing; os limites de pedidos por minuto/dia, no AI Studio. Quando a Google mudar preços, acrescente uma linha a `careca.gemini_precos` com a nova data.
