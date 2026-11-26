@@ -40,11 +40,21 @@ function getRecipeSold30d(recipe, storeId = appState.activeStore) {
 // ====================================================================
 // 4. MOTOR DE CÁLCULO RECURSIVO (DAG) & MATRIZ BCG DINÂMICA
 // ====================================================================
+// Tabela local de unidades: [grandeza, quantas unidades base]. Não depende de servidor.
+// Peso em kg, volume em L, contagem em un.
+const UNIT_TABLE = {
+    kg: ['kg', 1], kgs: ['kg', 1], quilo: ['kg', 1], quilos: ['kg', 1], g: ['kg', 0.001], gr: ['kg', 0.001], grs: ['kg', 0.001], grama: ['kg', 0.001], gramas: ['kg', 0.001], mg: ['kg', 0.000001],
+    l: ['L', 1], lt: ['L', 1], lts: ['L', 1], litro: ['L', 1], litros: ['L', 1], dl: ['L', 0.1], cl: ['L', 0.01], ml: ['L', 0.001],
+    un: ['un', 1], uni: ['un', 1], und: ['un', 1], unid: ['un', 1], u: ['un', 1], uds: ['un', 1], pc: ['un', 1], 'pç': ['un', 1], unidades: ['un', 1],
+    dz: ['un', 12], 'dúzia': ['un', 12], 'dúzias': ['un', 12], duzia: ['un', 12], duzias: ['un', 12], 'meia dúzia': ['un', 6], 'meia duzia': ['un', 6]
+};
+function unitInfo(unit) { return UNIT_TABLE[String(unit ?? '').trim().toLowerCase().replace(/\.$/, '')] || null; }
+
+// Converte entre unidades da mesma grandeza (1 kg = 1000 g, 1 L = 1000 ml, 1 dz = 12 un). NaN se forem de grandezas diferentes.
 function convertToBaseQty(qty, fromUnit, targetBaseUnit) {
-    const f = {kg:1000,g:1,L:1000,cl:10,ml:1,un:1};
-    const groups = [['kg','g'],['L','ml','cl'],['un']];
-    if (!groups.some(g=>g.includes(fromUnit) && g.includes(targetBaseUnit))) return NaN;
-    return Number(qty)*f[fromUnit]/f[targetBaseUnit];
+    const a = unitInfo(fromUnit), b = unitInfo(targetBaseUnit);
+    if (!a || !b || a[0] !== b[0]) return NaN;
+    return Number(qty) * a[1] / b[1];
 }
 
 function calculateRecipeCost(recipe, prices = null, visited = new Set(), storeId = appState.activeStore) {
@@ -372,7 +382,10 @@ function invoiceLineBase(line) {
     const qty = Number(line.qty);
     if (INVOICE_BASE_UNITS[u]) return { unit: INVOICE_BASE_UNITS[u][0], qty: qty * INVOICE_BASE_UNITS[u][1] };
     const pack = packSize(line.description);
-    return pack ? { unit: pack.unit, qty: qty * pack.qty, pack } : { unit: 'un', qty };
+    if (pack) return { unit: pack.unit, qty: qty * pack.qty, pack };
+    // «2 dz» sem caixa na descrição são 24 ovos.
+    const info = unitInfo(u);
+    return info && info[0] === 'un' ? { unit: 'un', qty: qty * info[1] } : { unit: 'un', qty };
 }
 
 // Converte uma linha lida (qtd na unidade da fatura) para a unidade base do insumo. Devolve null se as unidades não forem compatíveis.

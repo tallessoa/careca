@@ -475,3 +475,16 @@ test('invoiceLineToBase: «OVOS 15 DZ CLASSE L» 2 × 31,80 € = 360 ovos a 0,1
         near(r.qty, 360, unit); near(r.price, 63.6 / 360, unit);
     }
 });
+
+test('convertToBaseQty: tabela local de unidades', () => {
+    const ctx = load({ ingredients: [] });
+    near(ctx.convertToBaseQty(1, 'kg', 'g'), 1000);
+    near(ctx.convertToBaseQty(1, 'L', 'ml'), 1000);
+    near(ctx.convertToBaseQty(15, 'dz', 'un'), 180);
+    near(ctx.convertToBaseQty(250, 'g', 'kg'), 0.25);
+    near(ctx.convertToBaseQty(33, 'cl', 'L'), 0.33);
+    assert.ok(Number.isNaN(ctx.convertToBaseQty(1, 'kg', 'L')));
+    // «2 dz» sem caixa na descrição = 24 un; «2 cx» de «15 DZ» = 360 un.
+    near(ctx.invoiceLineToBase({ description: 'OVOS CLASSE M', qty: 2, unit: 'dz', line_total_net: 4 }, { baseUnit: 'un' }).qty, 24);
+    near(ctx.invoiceLineToBase({ description: 'OVOS 15 DZ CLASSE L', qty: 2, unit: 'dz', line_total_net: 63.6 }, { baseUnit: 'un' }).qty, 360);
+});

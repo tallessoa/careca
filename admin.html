@@ -2672,7 +2672,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const row = el.closest('.ocr-row'), choice = row.querySelector('.ocr-ing').value, ing = getIngredient(choice);
             const l = ocrLine(row), lineBase = invoiceLineBase(l);
             // Mostra a conta da embalagem (3 Saco × 20 kg = 60 kg) para se perceber de onde vem a quantidade.
-            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || 'emb.'} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ` : '';
+            const packNote = lineBase.pack ? `${fmtNum(l.qty, 3)} ${l.unit || 'emb.'} × ${fmtNum(lineBase.pack.qty, 3)} ${lineBase.pack.unit} = ${fmtNum(lineBase.qty, 3)} ${lineBase.unit} · ${fmtEur(Number(row.dataset.total) / Number(l.qty))}/emb. ÷ ${fmtNum(lineBase.pack.qty, 0)} ${lineBase.pack.unit} = ` : '';
             row.querySelector('.ocr-new').classList.toggle('hidden', choice !== '__new');
             if (el.classList.contains('ocr-ing')) {
                 if (choice === '__new') {
@@ -2698,7 +2698,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const out = row.querySelector('.ocr-price');
             if (keepHint && out.textContent) return;
             out.className = 'ocr-price text-[11px] font-mono text-slate-400';
-            if (choice === '__new') { const u = row.querySelector('.ocr-new-unit').value; out.textContent = qty > 0 ? `${packNote}Artigo novo · ${fmtEur(total / qty, 4)}/${u} passa a ser o custo inicial.` : 'Indique a quantidade.'; return; }
+            if (choice === '__new') { const u = row.querySelector('.ocr-new-unit').value; out.textContent = qty > 0 ? `${packNote}${fmtEur(total / qty, 4)}/${u} · artigo novo, passa a ser o custo inicial.` : 'Indique a quantidade.'; return; }
             if (!ing) { out.textContent = 'Lançada como despesa, sem movimento de stock.'; return; }
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
@@ -2803,7 +2803,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             // Aprende a embalagem: se a linha vem em «un»/«cx» sem tamanho e a quantidade foi corrigida (2 caixas → 360 ovos), guarda 180 un por embalagem.
             rows.forEach((row, idx) => {
                 const ing = !lines[idx].service && getIngredient(lines[idx].ing), l = ocrLine(row), q = Number(l.qty);
-                if (!ing || !(q > 0) || invoiceLineBase(l).pack || packSize(ing.packLabel) || ['kg', 'L'].includes(invoiceLineBase(l).unit)) return;
+                // Também guarda a embalagem lida na descrição («15 DZ» → 180 un), para a compra manual a conhecer.
+                if (!ing || !(q > 0) || packSize(ing.packLabel) || unitInfo(l.unit)?.[0] === ing.baseUnit && unitInfo(l.unit)[0] !== 'un') return;
                 const per = +(lines[idx].qty / q).toFixed(4);
                 if (per !== 1) ing.packLabel = `Embalagem → ${String(per).replace('.', ',')} ${ing.baseUnit}`;
             });
