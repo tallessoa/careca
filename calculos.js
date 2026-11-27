@@ -678,3 +678,33 @@ function orderCheck(orderLines, received) {
             priceDiff: r.charged && r.ordered && orderedPrice > 0 ? price / orderedPrice - 1 : 0 };
     });
 }
+
+// Prefixo do SKU pela categoria: 1.ª letra e as duas consoantes seguintes, sem acentos
+// (Proteínas → PRT, Laticínios → LTC, Frescos → FRS, Bebidas → BBD, Hortícolas → HRT, Secos → SCS, Embalagens → EMB).
+function skuPrefix(category) {
+    const s = String(category ?? '').toUpperCase().normalize('NFD').replace(/[^A-Z]/g, '');
+    if (!s) return 'INS';
+    return (s[0] + s.slice(1).replace(/[AEIOUY]/g, '') + s.slice(1) + 'XX').slice(0, 3);
+}
+
+// Próximo SKU livre do prefixo da categoria (PRT-0001, PRT-0002…), a seguir ao maior já usado com esse prefixo.
+function nextSku(category, ingredients = appState.ingredients) {
+    const prefix = skuPrefix(category), re = new RegExp('^' + prefix + '-(\\d+)$', 'i');
+    const max = ingredients.reduce((m, i) => Math.max(m, Number(re.exec(String(i.sku ?? '').trim())?.[1] ?? 0)), 0);
+    return prefix + '-' + String(max + 1).padStart(4, '0');
+}
+
+// Contagens lidas pela IA na folha de inventário → valores do rascunho, por código (exato) ou, sem código, pelo nome.
+// items: [{ id, code, name }]; lines: [{ code, name, qty }]. Linhas sem quantidade são ignoradas.
+function matchCounts(items, lines) {
+    const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const values = {}, unmatched = [];
+    for (const l of lines || []) {
+        const q = Number(l.qty);
+        if (l.qty == null || l.qty === '' || !Number.isFinite(q) || q < 0) continue;
+        const it = (norm(l.code) && items.find(i => norm(i.code) === norm(l.code))) || (norm(l.name) && items.find(i => norm(i.name) === norm(l.name)));
+        if (it) values[it.id] = String(Math.round(q * 10000) / 10000).replace('.', ',');
+        else unmatched.push(l);
+    }
+    return { values, unmatched };
+}
