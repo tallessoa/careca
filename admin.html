@@ -2302,7 +2302,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 : `<p class="text-sm text-slate-400">${escHtml(inv.itemsSummary || '')}<br><span class="text-xs">Documento sem linhas detalhadas${inv.status !== 'Aprovada' ? ': as linhas são preenchidas ao aprovar' : ''}.</span></p>`}
                 <div class="flex justify-end gap-6 text-sm font-mono"><span class="text-slate-400">Líquido <strong class="text-white">${fmtEur(inv.net)}</strong></span><span class="text-slate-400">IVA <strong class="text-white">${fmtEur(inv.vat)}</strong></span><span class="text-slate-400">Total <strong class="text-white">${fmtEur(inv.total)}</strong></span></div>
                 ${inv.edits?.length ? `<details class="text-xs text-slate-400"><summary>Editado ${inv.edits.length} vez(es)</summary>${inv.edits.map(e => `<div>${escHtml(new Date(e.date).toLocaleString('pt-PT'))} · ${escHtml(e.by)} · antes: ${escHtml(e.before.id)}, ${escHtml(e.before.date)}, ${fmtEur(e.before.total)}</div>`).join('')}</details>` : ''}
-                <div class="flex justify-end gap-3">${isOwner() ? `<button onclick="deleteInvoice(${idx})" class="px-4 py-2 rounded-xl text-sm text-rose-300 border border-rose-500/30">Excluir</button><button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+                <div class="flex flex-wrap justify-end gap-3"><button onclick="downloadInvoicePdf(${idx})" class="px-4 py-2 rounded-xl text-sm text-slate-200 border border-[#1E293B]" title="Cópia só para consulta">Descarregar PDF</button>${isOwner() ? `<button onclick="deleteInvoice(${idx})" class="px-4 py-2 rounded-xl text-sm text-rose-300 border border-rose-500/30">Excluir</button><button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
             if (inv.qr) drawInvoiceQr(inv.qr);
         }
         // Faturas lidas antes de se guardar o QR: lê o QR da foto ou do PDF e guarda só o texto.
@@ -2329,6 +2329,68 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 box().innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true, alt: 'Código QR da fatura' });
                 box().firstChild.setAttribute('width', '100%');
             } catch (e) { if (box()) box().textContent = 'QR indisponível'; }
+        }
+        // Cópia da fatura em PDF, só para consulta: fornecedor, adquirente, linhas, totais e QR (se guardado).
+        async function downloadInvoicePdf(idx) {
+            const inv = appState.invoices[idx];
+            if (!inv) return;
+            const sup = getSupplier(inv.supplierId) || {}, biz = businessData(), sign = inv.docType === 'Nota de Crédito' ? -1 : 1;
+            const t = s => String(s ?? '').replace(/[  ]/g, ' '); // espaços do pt-PT que a fonte do PDF não tem
+            const date = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d.split('-').reverse().join('-') : d || '—';
+            try {
+                for (const src of EXPORT_LIBS.pdf) await loadScript(src);
+                const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), dark = [30, 41, 59];
+                doc.setFontSize(9); doc.setTextColor(2, 132, 199); doc.text('CÓPIA PARA CONSULTA', 14, 16);
+                doc.setFontSize(15); doc.setTextColor(15, 23, 42); doc.text('Dados referentes à fatura: ' + inv.id, 14, 24, { maxWidth: inv.qr ? 140 : 182 });
+                let y = 30;
+                if (inv.qr) {
+                    await loadScript('vendor/qrcode.js');
+                    const qr = qrcode(0, 'M'); qr.addData(inv.qr); qr.make();
+                    const n = qr.getModuleCount(), size = 34, cell = size / n, x0 = 196 - size;
+                    doc.setFillColor(0, 0, 0);
+                    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) doc.rect(x0 + c * cell, 10 + r * cell, cell + 0.02, cell + 0.02, 'F');
+                    y = 46;
+                }
+                const box = (title, rows) => [[{ content: title, colSpan: 2, styles: { fillColor: dark, textColor: 255, fontStyle: 'bold' } }],
+                    ...rows.filter(r => r[1]).map(([k, v]) => [k, t(v)])];
+                const sideBySide = [box('FORNECEDOR', [['Nome', sup.name || 'Fornecedor removido'], ['Nome comercial', sup.tradeName], ['NIF', sup.nif], ['E-mail', sup.email], ['Telefone', sup.phone]]),
+                    box('ADQUIRENTE', [['Nome', biz.legalName || biz.tradeName], ['Nome comercial', biz.legalName && biz.tradeName], ['NIF', inv.customerNif || biz.nif],
+                        ['Morada', [biz.address, [biz.postalCode, biz.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')], ['E-mail', biz.email], ['Telefone', biz.phone]])];
+                sideBySide.forEach((body, i) => {
+                    doc.autoTable({ startY: y, theme: 'grid', body, margin: { left: i ? 107 : 14, right: i ? 14 : 107 }, styles: { fontSize: 8.5, cellPadding: 1.6 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 28 } } });
+                    sideBySide[i] = doc.lastAutoTable.finalY;
+                });
+                y = Math.max(...sideBySide);
+                doc.autoTable({ startY: y + 4, theme: 'grid', margin: { left: 14, right: 14 }, styles: { fontSize: 8.5, cellPadding: 1.6 }, headStyles: { fillColor: dark, textColor: 255 },
+                    head: [['Tipo', 'Número', 'Data', 'ATCUD', 'Prazo de pagamento', 'Estado']],
+                    body: [[inv.docType || 'Fatura', inv.id, date(inv.date), inv.atcud || '—', sup.terms || '—', inv.status || '—'].map(t)] });
+                y = doc.lastAutoTable.finalY;
+                const lines = inv.lines || [], hasLot = lines.some(l => l.lot || l.expiry);
+                const body = lines.map(l => {
+                    const ing = !l.service && getIngredient(l.ing), net = sign * l.qty * l.price;
+                    return [ing?.sku || '—', (l.service ? l.label || 'Despesa' : ing?.supplierNames?.[inv.supplierId] || ing?.name || 'Artigo removido') + (l.offer ? ' (oferta)' : ''),
+                        fmtNum(l.qty, 3), l.service ? '' : ing?.baseUnit || '', fmtEur(l.price, 4), fmtNum(l.vat, 0) + '%', fmtEur(net), fmtEur(net * (1 + (Number(l.vat) || 0) / 100)),
+                        ...(hasLot ? [[l.lot && 'Lote ' + l.lot, l.expiry && 'Val. ' + date(l.expiry)].filter(Boolean).join('\n')] : [])].map(t);
+                });
+                const right = { halign: 'right' };
+                doc.autoTable({ startY: y + 4, theme: 'grid', margin: { left: 14, right: 14 }, rowPageBreak: 'avoid', styles: { fontSize: 8, cellPadding: 1.5 }, headStyles: { fillColor: dark, textColor: 255 },
+                    head: [['Código', 'Descrição', 'Qtd.', 'Unid.', 'Preço s/ IVA', 'IVA', 'Total s/ IVA', 'Total c/ IVA', ...(hasLot ? ['Lote / Validade'] : [])]],
+                    body: body.length ? body : [[{ content: t(inv.itemsSummary || 'Documento sem linhas detalhadas.'), colSpan: hasLot ? 9 : 8 }]],
+                    columnStyles: { 0: { font: 'courier' }, 2: right, 4: right, 5: right, 6: right, 7: right, 8: { cellWidth: 26 } } });
+                doc.autoTable({ startY: doc.lastAutoTable.finalY + 3, theme: 'plain', margin: { left: 120, right: 14 }, styles: { fontSize: 9.5, cellPadding: 1.2 },
+                    body: [['Líquido', fmtEur(inv.net)], ['IVA', fmtEur(inv.vat)], ['Total', fmtEur(inv.total)]].map(r => r.map(t)),
+                    columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } }, didParseCell: c => { if (c.row.index === 2) c.cell.styles.fontStyle = 'bold'; } });
+                y = doc.lastAutoTable.finalY + 8;
+                if (y > 280) { doc.addPage(); y = 20; }
+                doc.setDrawColor(148, 163, 184); doc.line(14, y - 4, 196, y - 4);
+                doc.setFontSize(9); doc.setTextColor(71, 85, 105);
+                doc.text('Este documento não serve como fatura, apenas para consulta.', 14, y);
+                doc.setFontSize(7.5); doc.text(t('Gerado em ' + new Date().toLocaleString('pt-PT')), 196, y, { align: 'right' });
+                doc.save('fatura-' + String(inv.id).replace(/[^\w.-]+/g, '-') + '.pdf');
+            } catch (err) {
+                console.error('PDF da fatura falhou', err);
+                showToast('Não foi possível criar o PDF', err.message, 'warning');
+            }
         }
         const ING_CATEGORIES = ['Proteínas', 'Hortícolas', 'Laticínios', 'Secos', 'Bebidas', 'Embalagens'];
         // Categorias de insumos: a lista gerida (ou, antes da 1.ª edição, as de base mais as criadas) e as que já estão em uso no catálogo.
