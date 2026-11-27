@@ -2302,7 +2302,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 : `<p class="text-sm text-slate-400">${escHtml(inv.itemsSummary || '')}<br><span class="text-xs">Documento sem linhas detalhadas${inv.status !== 'Aprovada' ? ': as linhas são preenchidas ao aprovar' : ''}.</span></p>`}
                 <div class="flex justify-end gap-6 text-sm font-mono"><span class="text-slate-400">Líquido <strong class="text-white">${fmtEur(inv.net)}</strong></span><span class="text-slate-400">IVA <strong class="text-white">${fmtEur(inv.vat)}</strong></span><span class="text-slate-400">Total <strong class="text-white">${fmtEur(inv.total)}</strong></span></div>
                 ${inv.edits?.length ? `<details class="text-xs text-slate-400"><summary>Editado ${inv.edits.length} vez(es)</summary>${inv.edits.map(e => `<div>${escHtml(new Date(e.date).toLocaleString('pt-PT'))} · ${escHtml(e.by)} · antes: ${escHtml(e.before.id)}, ${escHtml(e.before.date)}, ${fmtEur(e.before.total)}</div>`).join('')}</details>` : ''}
-                <div class="flex justify-end gap-3">${appState.roles[appState.activeRole].canApproveInvoices ? `<button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
+                <div class="flex justify-end gap-3">${isOwner() ? `<button onclick="deleteInvoice(${idx})" class="px-4 py-2 rounded-xl text-sm text-rose-300 border border-rose-500/30">Excluir</button><button onclick="openInvoiceEdit(${idx})" class="px-4 py-2 rounded-xl text-sm text-sky-300 border border-sky-400/30">Editar</button>` : ''}<button onclick="closeModal()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600">Fechar</button></div></div>`, 'lg');
             if (inv.qr) drawInvoiceQr(inv.qr);
         }
         // Faturas lidas antes de se guardar o QR: lê o QR da foto ou do PDF e guarda só o texto.
@@ -2578,7 +2578,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             }
         }
         function invoiceEditBlock(inv) {
-            if (!appState.roles[appState.activeRole].canApproveInvoices) return 'O perfil atual não pode editar documentos.';
+            if (!isOwner()) return 'Só o dono (admin) pode editar ou excluir documentos.';
             if ((appState.periodCloses || []).some(c => c.period === String(inv.date).slice(0, 7))) return 'O mês deste documento já foi fechado.';
             if (inv.billedBy) return `Esta guia já foi faturada na ${inv.billedBy}. Corrija a fatura ou emita uma nota de crédito.`;
             return '';
@@ -2664,6 +2664,24 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             refreshStockCheckAlerts();
             persistState(); updateChrome(); renderActiveView(); openInvoiceDetail(idx);
             showToast('Documento atualizado', header.id + (mode === 'lines' ? ' · stock e CMP recalculados' : ''), 'success');
+        }
+        // Só o dono (admin) exclui: desfaz a entrada em stock/CMP, solta a guia faturada e a encomenda ligada.
+        async function deleteInvoice(idx) {
+            const inv = appState.invoices[idx];
+            const blocked = inv && invoiceEditBlock(inv);
+            if (!inv || blocked) { showToast('Não é possível excluir', blocked || 'Documento não encontrado.', 'warning'); return; }
+            const stock = inv.status === 'Aprovada' && inv.lines?.length && !inv.receiptRef;
+            if (!await askConfirm(`${inv.docType} ${inv.id} vai ser apagada${stock ? ' e a entrada em stock e CMP é anulada' : ''}.`)) return;
+            if (!appState.invoices.includes(inv) || invoiceEditBlock(inv)) return;
+            reverseReceipt(inv);
+            const guide = inv.receiptRef && appState.invoices.find(g => g.id === inv.receiptRef && g.billedBy === inv.id);
+            if (guide) delete guide.billedBy;
+            const order = inv.orderId && (appState.purchaseOrders || []).find(o => o.id === inv.orderId && o.receivedBy === inv.id);
+            if (order) { delete order.receivedBy; delete order.check; }
+            appState.invoices.splice(appState.invoices.indexOf(inv), 1);
+            refreshStockCheckAlerts();
+            persistState(); updateChrome(); renderActiveView(); closeModal();
+            showToast('Documento excluído', inv.docType + ' ' + inv.id + (stock ? ' · stock e CMP recalculados' : ''), 'success');
         }
         function postReceipt(inv) {
             if (!appState.roles[appState.activeRole].canApproveInvoices) throw Error('Perfil sem permissão de aprovação.');
