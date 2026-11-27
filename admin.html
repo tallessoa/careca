@@ -1524,6 +1524,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 
         function setActiveTab(tab) {
             appState.activeTab = tab;
+            supplierInvoicesId = '';
             persistState();
             toggleSidebar(false);
             updateChrome();
@@ -2154,6 +2155,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         // --------------------------------------------------------------------
         // Período da lista de faturas: um mês ou De/Até. Fica em memória enquanto a página está aberta.
         const invPeriod = { month: '', from: '', to: '' };
+        // Fornecedor aberto em Fornecedores para ver as faturas dele ('' = lista de fornecedores).
+        let supplierInvoicesId = '';
+        function showSupplierInvoices(supId = '') { supplierInvoicesId = supId; renderActiveView(); }
         function setInvoicePeriod(field, value = '') {
             if (field === 'clear') Object.assign(invPeriod, { month: '', from: '', to: '' });
             else if (field === 'month') {
@@ -2210,9 +2214,17 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     ${from || to ? `<button type="button" onclick="setInvoicePeriod('clear')" class="px-3 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:text-white">Todas as datas</button>` : ''}
                 </div>
 
+                ${invoiceTableHtml(list, 'invoices')}
+            `;
+        }
+
+        // Tabela de faturas (com pesquisa e paginação pelo data-paged); usada em Compras e no detalhe de cada fornecedor.
+        function invoiceTableHtml(list, key) {
+            const role = appState.roles[appState.activeRole];
+            return `
                 <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table data-paged="invoices" class="w-full text-left border-collapse">
+                        <table data-paged="${key}" class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b border-[#1E293B] text-[11px] font-mono uppercase text-slate-400 bg-[#050814]/60 whitespace-nowrap">
                                     <th class="py-3.5 px-5">Documento</th>
@@ -2237,7 +2249,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                     const items = (inv.lines || []).map(l => l.service ? l.label : getIngredient(l.ing)?.name).concat(inv.itemsSummary || '').join(' ');
                                     return `
                                         <tr class="hover:bg-[#111827]/70 transition-colors cursor-pointer" tabindex="0" title="Ver itens e detalhe" onclick="openInvoiceDetail(${idx})" onkeydown="if(event.key==='Enter')openInvoiceDetail(${idx})">
-                                            <td class="py-3.5 px-5 font-mono font-semibold text-white whitespace-nowrap">${escHtml(inv.id)}<span hidden> ${escHtml(items)}</span></td>
+                                            <td class="py-3.5 px-5 font-mono font-semibold text-white whitespace-nowrap">${escHtml(inv.id)}<span hidden> ${escHtml(items)} ${escHtml(inv.status)}</span></td>
                                             <td class="py-3.5 px-4">
                                                 <div class="font-medium text-white">${sup ? escHtml(sup.name) : 'Fornecedor Removido'}</div>
                                                 ${sup?.tradeName ? `<div class="text-xs text-slate-400">${escHtml(sup.tradeName)}</div>` : ''}
@@ -3577,6 +3589,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         // --------------------------------------------------------------------
         function setSupplierSubTab(sub) {
             appState.supplierSubTab = sub;
+            supplierInvoicesId = '';
             persistState();
             renderActiveView();
         }
@@ -3605,7 +3618,20 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             });
 
             let tabContent = '';
-            if (sub === 'suppliers') {
+            const invSup = sub === 'suppliers' && getSupplier(supplierInvoicesId);
+            if (invSup) {
+                const list = appState.invoices.filter(inv => inv.store === appState.activeStore && inv.supplierId === invSup.id).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+                tabContent = `
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <button type="button" onclick="showSupplierInvoices()" class="mb-2 px-3 py-1.5 rounded-xl text-xs text-slate-300 border border-[#1E293B] hover:text-white">‹ Voltar aos fornecedores</button>
+                            <h2 class="font-bold text-base text-white">Faturas de ${escHtml(invSup.tradeName || invSup.name)} (${list.length})</h2>
+                            <p class="text-xs text-slate-400">${invSup.tradeName ? escHtml(invSup.name) + ' • ' : ''}NIF ${escHtml(invSup.nif)} • Total ${fmtEur(list.reduce((a, i) => a + (i.total || 0), 0))}</p>
+                        </div>
+                    </div>
+                    ${list.length ? invoiceTableHtml(list, 'invoices-' + invSup.id) : '<p class="text-sm text-slate-400">Ainda não há faturas deste fornecedor.</p>'}
+                `;
+            } else if (sub === 'suppliers') {
                 tabContent = `
                     <div class="rounded-2xl bg-[#0B1120] border border-[#1E293B] overflow-hidden">
                         <div class="px-5 py-4 border-b border-[#1E293B] flex flex-wrap items-center justify-between gap-2">
@@ -3636,7 +3662,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                         const trend = supplierPriceTrend(s.id);
                                         const isHigh = trend.inflationPct > 5;
                                         return `
-                                            <tr class="hover:bg-[#111827]/70">
+                                            <tr class="hover:bg-[#111827]/70 cursor-pointer" tabindex="0" title="Ver faturas deste fornecedor" onclick="showSupplierInvoices('${s.id}')" onkeydown="if(event.key==='Enter'&&event.target===this)showSupplierInvoices('${s.id}')">
                                                 <td class="py-4 px-5">
                                                     <div class="font-semibold text-white">${escHtml(s.tradeName || s.name)}</div>
                                                     ${s.tradeName ? `<div class="text-xs text-slate-400">${escHtml(s.name)}</div>` : ''}
@@ -3653,7 +3679,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                                 <td class="py-4 px-4 text-right">
                                                     ${buildSparklineSvg(trend.history, isHigh ? '#F59E0B' : '#10B981')}
                                                 </td>
-                                                <td class="py-4 px-5 text-right">
+                                                <td class="py-4 px-5 text-right" onclick="event.stopPropagation()">
                                                     ${role.canManageOrders ? `<button onclick="openOrderModal('${s.id}')" class="mb-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white">Encomendar</button>` : ''}
                                                     ${role.canEditIngredients ? `<button onclick="openSupplierPrices('${s.id}')" class="mb-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600/15 hover:bg-blue-600/25 border border-sky-400/30 text-sky-300">Preços</button>` : ''}
                                                     ${role.canEditSuppliers ? `
