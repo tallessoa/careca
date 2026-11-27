@@ -2373,8 +2373,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const subs = ingSubcategories(cat);
             return `<option value="">Sem subcategoria</option>` + [...new Set([...subs, ...(selected ? [selected] : [])])].map(s => `<option value="${escHtml(s)}" ${s === selected ? 'selected' : ''}>${escHtml(s)}</option>`).join('');
         }
-        // Gestão de zonas e subcategorias: renomear propaga aos artigos; apagar uma zona só se estiver vazia.
-        function openStorageSettings() {
+        // Gestão de zonas (aba Inventário) e subcategorias (Insumos): renomear propaga aos artigos; apagar uma zona só se estiver vazia.
+        function openStorageSettings(kind) {
             if (!appState.roles[appState.activeRole].canEditIngredients) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não pode alterar o catálogo.', 'warning'); return; }
             const field = 'flex-1 min-w-0 px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400';
             const btn = 'px-3 py-2 rounded-xl text-xs';
@@ -2387,21 +2387,21 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <input name="nome" class="${field}" maxlength="40" placeholder="${placeholder}" aria-label="${placeholder}" required>
                 <button class="${btn} font-semibold text-white bg-blue-600">Adicionar</button></form>`;
             const html = `<div class="space-y-6">
-                <section><h3 class="text-xs font-mono uppercase text-sky-400 mb-2">Zonas de armazém</h3>
+                ${kind === 'zone' ? `<section>
                     <div class="space-y-2">${storageZones().map(z => row('zone', '', z, zoneCount(z))).join('')}</div>
-                    ${addForm('zone', '', 'Nova zona (ex.: Frigorífico 2)')}</section>
-                <section><h3 class="text-xs font-mono uppercase text-sky-400 mb-2">Subcategorias por categoria</h3>
+                    ${addForm('zone', '', 'Nova zona (ex.: Frigorífico 2)')}</section>` : `<section>
                     <div class="space-y-4">${ingCategories().map(c => `<div class="p-3 rounded-xl bg-[#050814] border border-[#1E293B]">
                         <div class="text-sm font-semibold text-white mb-2">${escHtml(c)}</div>
                         <div class="space-y-2">${ingSubcategories(c).map(s => row('sub', c, s, appState.ingredients.filter(i => i.category === c && i.subcategory === s).length)).join('')}</div>
-                        ${addForm('sub', c, 'Nova subcategoria de ' + c)}</div>`).join('')}</ul></section>
+                        ${addForm('sub', c, 'Nova subcategoria de ' + c)}</div>`).join('')}</div></section>`}
                 <div class="flex justify-end"><button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Fechar</button></div></div>`;
-            openModal('Zonas e subcategorias', 'Onde se guarda cada artigo e como se agrupa dentro da categoria', html, 'lg');
+            if (kind === 'zone') openModal('Zonas de armazém', 'Onde se guarda cada artigo. As zonas organizam o inventário físico.', html, 'lg');
+            else openModal('Subcategorias de insumos', 'Como se agrupam os artigos dentro de cada categoria', html, 'lg');
         }
-        function storageChanged() {
+        function storageChanged(kind) {
             persistState();
             renderActiveView();
-            openStorageSettings();
+            openStorageSettings(kind);
         }
         function addStorageEntry(form) {
             const { kind, cat } = form.dataset, name = form.elements.nome.value.trim().replace(/\s+/g, ' ');
@@ -2409,7 +2409,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (list.some(x => x.toLowerCase() === name.toLowerCase())) { showToast('Já existe', name, 'info'); return; }
             if (kind === 'zone') appState.storageZones = [...list, name];
             else appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: [...list, name] };
-            storageChanged();
+            storageChanged(kind);
             showToast(kind === 'zone' ? 'Zona criada' : 'Subcategoria criada', name, 'success');
         }
         function renameStorageEntry(input) {
@@ -2426,7 +2426,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: renamed };
                 appState.ingredients.forEach(i => { if (i.category === cat && i.subcategory === from) i.subcategory = to; });
             }
-            storageChanged();
+            storageChanged(kind);
             showToast('Nome alterado', `${from} → ${to}`, 'success');
         }
         function deleteStorageEntry(button) {
@@ -2441,7 +2441,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 used.forEach(i => { i.subcategory = ''; });
                 appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: ingSubcategories(cat).filter(s => s !== name) };
             }
-            storageChanged();
+            storageChanged(kind);
             showToast(kind === 'zone' ? 'Zona apagada' : 'Subcategoria apagada', name, 'success');
         }
         // Artigo novo no catálogo, sem stock: a entrada vem do documento que o criou.
@@ -3608,7 +3608,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 <p class="text-xs text-slate-400">Stock e custo médio de cada ingrediente.</p>
                             </div>
                             ${role.canEditIngredients ? `
-                                <div class="flex flex-wrap gap-2"><button onclick="openStorageSettings()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-sky-400">Zonas e subcategorias</button>
+                                <div class="flex flex-wrap gap-2"><button onclick="openStorageSettings('sub')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-sky-400">Subcategorias</button>
                                 <button onclick="openIngredientModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
                                     + Novo Insumo
                                 </button></div>
@@ -5965,7 +5965,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <form class="work-fields" onsubmit="event.preventDefault();startCount(RESTAURANT,this.elements.zone.value)">
                 <label class="work-field">Zona a contar<select name="zone" ${draft?'disabled':''}><option value="">Todas as zonas</option>${zones.map(z=>`<option ${draft?.zone===z?'selected':''}>${escHtml(z)}</option>`).join('')}</select></label>
                 <div><button class="work-btn primary">${draft?'Retomar contagem':'Iniciar contagem'}</button></div></form></section>`:''}
-                ${role.canLogWaste?'<button class="work-btn" onclick="openWasteModal()">Registar quebra</button>':''}
+                ${role.canLogWaste||role.canEditIngredients?`<div class="flex flex-wrap gap-2">${role.canLogWaste?'<button class="work-btn" onclick="openWasteModal()">Registar quebra</button>':''}${role.canEditIngredients?`<button class="work-btn" onclick="openStorageSettings('zone')">Zonas de armazém</button>`:''}</div>`:''}
                 ${(appState.countHistory || []).filter(h=>h.store===appState.activeStore).length ? `<details class="p-3 rounded-xl bg-[#0B1120]"><summary>Contagens fechadas</summary>
                     ${(appState.countHistory || []).filter(h=>h.store===appState.activeStore).map(h=>`<details class="p-2"><summary>${escHtml(new Date(h.date).toLocaleString('pt-PT'))} · ${escHtml(appState.stores[h.store].name)} · ${escHtml(h.zone)} · ${fmtEur(h.rows.reduce((n,r)=>n+r.variance,0))}</summary>
                     ${h.entries?`<p>${h.adjusted?'Stock acertado':'Apenas contagem física'}</p><details><summary>Quantidades introduzidas</summary>${h.entries.map(e=>`<div>${escHtml(e.name)} · ${fmtNum(e.qty,4)} ${escHtml(e.unit)}</div>`).join('')}</details>`:''}
