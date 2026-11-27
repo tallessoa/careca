@@ -1678,7 +1678,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const isCrit = a.severity === 'critical';
                 const borderCol = isCrit ? 'border-rose-500/35 bg-rose-500/5' : 'border-amber-500/35 bg-amber-500/5';
                 const pillCol = isCrit ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300';
-                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', idle_stock: 'PARADO', new_supplier: 'NOVO', new_ingredient: 'NOVO' }[a.type] || 'ALERTA';
+                const typeLabel = { price_inflation: 'INFLAÇÃO', low_margin: 'MARGEM', low_stock: 'STOCK', high_variance: 'VARIÂNCIA', nif_mismatch: 'NIF', expiry: 'VALIDADE', lot_expiry: 'LOTE', negotiated_price: 'NEGOCIADO', idle_stock: 'PARADO', new_supplier: 'NOVO', new_ingredient: 'NOVO' }[a.type] || 'ALERTA';
 
                 return `
                     <div class="p-4 rounded-xl border ${a.unread ? borderCol : 'border-[#1E293B] bg-[#111827]/60 opacity-75'} transition-all">
@@ -2731,6 +2731,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     id:crypto.randomUUID(),type:'price_inflation',severity:'warning',store:inv.store,unread:true,time:'Agora',
                     title:ing.name+' · aumento '+fmtPct((l.price/previous-1)*100),message:'Última compra da loja: '+fmtEur(previous)+' → '+fmtEur(l.price)
                 });
+                const gap = sign > 0 && !l.offer && negotiatedPriceGap(ing.negotiatedPrice, l.price);
+                if (gap) appState.alerts.unshift({
+                    id:crypto.randomUUID(),type:'negotiated_price',severity:'warning',store:inv.store,unread:true,time:'Agora',
+                    title:ing.name+' · '+(gap.diff>0?'acima':'abaixo')+' do preço negociado',message:negotiatedGapText(ing, l.price, gap)+' · '+inv.docType+' '+inv.id
+                });
             }
             const vat = round(sign * inv.lines.reduce((n,l)=>n+l.qty*l.price*l.vat/100,0));
             Object.assign(inv,{net,vat,total:round(net+vat),status:'Aprovada'});
@@ -2868,6 +2873,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <label class="block text-xs text-slate-300 col-span-1 sm:col-span-2">Lote (opcional)<input class="mp-lot mt-1 ${field}"></label>
                     <label class="block text-xs text-slate-300 col-span-1 sm:col-span-2">Validade (opcional)<input class="mp-exp mt-1 ${field}" type="date"></label>
                 </div>
+                <div class="mp-gap hidden text-[11px] font-mono text-amber-300" role="status"></div>
             </div>`;
         }
         function addManualPurchaseRow() {
@@ -2897,6 +2903,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const net = lines.reduce((n,l) => n + l.qty*l.price, 0);
             const vat = lines.reduce((n,l) => n + l.qty*l.price*l.vat/100, 0);
             el.textContent = `${lines.length} linha(s) · Líquido ${fmtEur(net)} · IVA ${fmtEur(vat)} · Total ${fmtEur(net+vat)}`;
+            const all = manualPurchaseLines();
+            document.querySelectorAll('#mp-lines .mp-row').forEach((row, i) => {
+                const l = all[i], ing = getIngredient(l.ing), gap = ing && !l.offer && l.qty > 0 && negotiatedPriceGap(ing.negotiatedPrice, l.price);
+                row.querySelector('.mp-gap').classList.toggle('hidden', !gap);
+                row.querySelector('.mp-gap').textContent = gap ? '⚠ ' + negotiatedGapText(ing, l.price, gap) : '';
+            });
             const order = openOrders().find(o => o.id === document.getElementById('mp-order')?.value), box = document.getElementById('mp-check');
             if (order && box) box.innerHTML = orderCheckHtml(orderCheck(order.lines, lines.filter(l => getIngredient(l.ing))));
         }
@@ -2913,7 +2925,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const pack = packSize(ing.packLabel), per = pack && convertToBaseQty(pack.qty, pack.unit, ing.baseUnit);
                 if (ev !== 'factor') row.querySelector('.mp-factor').value = per > 0 ? +per.toFixed(4) : 1;
                 const m = getIngMetricsForStore(ing, RESTAURANT);
-                row.querySelector('.mp-price').value = (m.lastCost * Number(row.querySelector('.mp-factor').value || 1)).toFixed(4);
+                row.querySelector('.mp-price').value = ((ing.negotiatedPrice || m.lastCost) * Number(row.querySelector('.mp-factor').value || 1)).toFixed(4);
             }
             updateManualPurchaseTotal();
         }
@@ -3451,6 +3463,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const m = getIngMetricsForStore(ing);
             const price = qty > 0 ? total / qty : 0;
             out.textContent = qty > 0 ? `${packNote}${fmtEur(price, 4)}/${ing.baseUnit} · último ${fmtEur(m.lastCost, 4)} · CMP ${fmtEur(m.cmp, 4)}` + (m.lastCost > 0 ? ` · ${price >= m.lastCost ? '+' : ''}${fmtPct((price / m.lastCost - 1) * 100)}` : '') : 'Indique a quantidade.';
+            const gap = qty > 0 && !row.querySelector('.ocr-offer')?.checked && negotiatedPriceGap(ing.negotiatedPrice, price);
+            if (gap) { out.className = 'ocr-price text-[11px] font-mono text-amber-300'; out.textContent += ' · ⚠ ' + negotiatedGapText(ing, price, gap); }
+        }
+        // «Negociado 2,0000 €/kg · fatura 2,2000 €/kg · +0,2000 € (+10,0%)»
+        function negotiatedGapText(ing, price, gap) {
+            return `Negociado ${fmtEur(ing.negotiatedPrice, 4)}/${ing.baseUnit} · fatura ${fmtEur(price, 4)}/${ing.baseUnit} · ${gap.diff > 0 ? '+' : '−'}${fmtEur(Math.abs(gap.diff), 4)} (${gap.diff > 0 ? '+' : ''}${fmtPct(gap.pct)})`;
         }
         // Resposta a «quanto veio»: converte para a unidade base do artigo (dúzias × 12; gramas → kg; ml → L) e recalcula o preço por unidade.
         function ocrAskChanged(el) {
@@ -3999,6 +4017,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Último Custo de Compra (€)</label>
                                 <input ${isEdit ? 'disabled' : ''} id="ing-last" type="number" step="any" min="0.01" value="${m.lastCost.toFixed(2)}" required class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                             </div>
+                            <div class="sm:col-span-2">
+                                <label for="ing-negotiated" class="block text-xs font-medium text-slate-300 mb-1.5">Preço negociado (€/${escHtml(ing?.baseUnit || 'unid. base')} s/ IVA)</label>
+                                <input id="ing-negotiated" type="number" step="any" min="0" value="${ing?.negotiatedPrice ?? ''}" placeholder="Opcional" class="w-full px-3.5 py-2.5 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm font-mono text-emerald-300 focus:outline-none focus:border-sky-400">
+                                <p class="mt-1 text-[11px] text-slate-500">Preço esperado quando a mercadoria chega. Ao ler ou lançar uma fatura com outro preço (diferença acima de 0,5%), é lançado um alerta. Não altera o CMP nem o stock.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -4057,7 +4080,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 packLabel: document.getElementById('ing-pack').value.trim(),
                 yieldFactor,
                 allergens: [...document.querySelectorAll('.ing-allergen:checked')].map(c => c.value),
-                shelfLifeDays: Math.max(0, Math.round(Number(document.getElementById('ing-shelf').value) || 0)) || null
+                shelfLifeDays: Math.max(0, Math.round(Number(document.getElementById('ing-shelf').value) || 0)) || null,
+                negotiatedPrice: Number(document.getElementById('ing-negotiated').value) > 0 ? Number(document.getElementById('ing-negotiated').value) : null
             };
             const previousQuotes = getIngredient(ingId)?.supplierPrices || {};
             baseMeta.supplierNames = Object.fromEntries([...document.querySelectorAll('.ing-supname')].filter(i => i.value.trim()).map(i => [i.dataset.sup, i.value.trim()]));
@@ -4232,12 +4256,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (!appState.roles[appState.activeRole].canManageOrders) return;
             const lines = [...document.querySelectorAll(`#po-sup-${CSS.escape(supId)} .po-qty`)].map(input => {
                 const ing = getIngredient(input.dataset.ing);
-                return { ing: ing.id, qty: Number(input.value), price: ing.supplierPrices?.[supId]?.price ?? getIngMetricsForStore(ing).lastCost };
+                return { ing: ing.id, qty: Number(input.value), price: orderPrice(ing, supId) };
             }).filter(l => l.qty > 0);
             if (!lines.length) { showToast('Encomenda vazia', 'Indique pelo menos uma quantidade.', 'warning'); return; }
             openOrderModal(supId, lines);
         }
-        const orderPrice = (ing, supId) => ing.supplierPrices?.[supId]?.price ?? getIngMetricsForStore(ing).lastCost;
+        const orderPrice = (ing, supId) => (supId === ing.supplierId && ing.negotiatedPrice) || (ing.supplierPrices?.[supId]?.price ?? getIngMetricsForStore(ing).lastCost);
         function fmtDeliveryDate(iso) {
             return new Date(iso + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         }

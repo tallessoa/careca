@@ -575,3 +575,13 @@ test('Contagens lidas pela IA: por código, senão pelo nome; quantidades em bra
     assert.deepEqual({ ...r.values }, { a: '2,5', b: '0' });
     assert.equal(r.unmatched.length, 1);
 });
+
+test('negotiatedPriceGap: alerta fora da tolerância de 0,5%, nos dois sentidos', () => {
+    const { negotiatedPriceGap } = load({});
+    assert.equal(negotiatedPriceGap(undefined, 5), null, 'sem preço negociado');
+    assert.equal(negotiatedPriceGap(2, 2.01), null, '0,5% é arredondamento');
+    const up = negotiatedPriceGap(2, 2.2);
+    near(up.diff, 0.2); near(up.pct, 10);
+    const down = negotiatedPriceGap(2, 1.9);
+    near(down.diff, -0.1); near(down.pct, -5);
+});
