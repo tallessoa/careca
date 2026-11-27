@@ -2322,7 +2322,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         }
         function categoryChanged(sel) {
             const box = sel.parentElement.querySelector('.newcat');
-            if (sel.value !== '__newcat') { sel.dataset.prev = sel.value; box.classList.add('hidden'); return; }
+            if (sel.value !== '__newcat') { sel.dataset.prev = sel.value; box.classList.add('hidden'); refreshSubcategories(sel); return; }
             box.classList.remove('hidden');
             const input = box.querySelector('input');
             input.value = '';
@@ -2341,16 +2341,113 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             sel.value = value;
             sel.dataset.prev = value;
             box.classList.add('hidden');
+            refreshSubcategories(sel);
             showToast(existing ? 'Categoria já existia' : 'Categoria criada', value, existing ? 'info' : 'success');
+        }
+        function refreshSubcategories(sel) {
+            const sub = sel.id === 'ing-cat' && document.getElementById('ing-subcat');
+            if (sub) sub.innerHTML = subcategoryOptions(sel.value, '');
         }
         function cancelCategory(el) {
             const box = el.closest('.newcat'), sel = box.parentElement.querySelector('select');
             sel.value = sel.dataset.prev;
             box.classList.add('hidden');
         }
+        const DEFAULT_ZONES = ['Câmara Fria', 'Congelador', 'Despensa Seca', 'Bar'];
+        const DEFAULT_SUBCATEGORIES = {
+            'Proteínas': ['Peixe', 'Marisco', 'Novilho', 'Porco', 'Aves'],
+            'Hortícolas': ['Legumes', 'Fruta', 'Ervas aromáticas'],
+            'Laticínios': ['Queijo', 'Leite', 'Natas', 'Manteiga', 'Iogurte'],
+            'Secos': ['Arroz', 'Massas', 'Farinhas', 'Especiarias', 'Conservas'],
+            'Bebidas': ['Vinhos', 'Cervejas', 'Refrigerantes', 'Águas', 'Espirituosas'],
+            'Embalagens': ['Take-away', 'Descartáveis']
+        };
+        // Zonas de armazém: as configuradas mais as que algum artigo ainda usa (nunca some uma zona com artigos).
+        function storageZones() {
+            return [...new Set([...(appState.storageZones || DEFAULT_ZONES), ...appState.ingredients.map(i => i.zone), ...appState.subRecipesInventory.map(s => s.zone)].filter(Boolean))];
+        }
+        function ingSubcategories(cat) {
+            return (appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES)[cat] || [];
+        }
+        function subcategoryOptions(cat, selected) {
+            const subs = ingSubcategories(cat);
+            return `<option value="">Sem subcategoria</option>` + [...new Set([...subs, ...(selected ? [selected] : [])])].map(s => `<option value="${escHtml(s)}" ${s === selected ? 'selected' : ''}>${escHtml(s)}</option>`).join('');
+        }
+        // Gestão de zonas (aba Inventário) e subcategorias (Insumos): renomear propaga aos artigos; apagar uma zona só se estiver vazia.
+        function openStorageSettings(kind) {
+            if (!appState.roles[appState.activeRole].canEditIngredients) { showToast('Acesso Restrito (RBAC)', 'O perfil atual não pode alterar o catálogo.', 'warning'); return; }
+            const field = 'flex-1 min-w-0 px-3 py-2 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400';
+            const btn = 'px-3 py-2 rounded-xl text-xs';
+            const zoneCount = z => appState.ingredients.filter(i => i.zone === z).length + appState.subRecipesInventory.filter(s => s.zone === z).length;
+            const row = (kind, cat, name, n) => `<div class="flex items-center gap-2" data-kind="${kind}" data-cat="${escHtml(cat)}" data-name="${escHtml(name)}">
+                <input class="${field}" maxlength="40" value="${escHtml(name)}" aria-label="Nome de ${escHtml(name)}" onchange="renameStorageEntry(this)">
+                <span class="w-28 text-right text-[11px] font-mono text-slate-400">${n} artigo${n === 1 ? '' : 's'}</span>
+                <button type="button" onclick="deleteStorageEntry(this)" class="${btn} text-rose-300 border border-rose-500/30 hover:bg-rose-500/15">Apagar</button></div>`;
+            const addForm = (kind, cat, placeholder) => `<form class="flex gap-2 mt-2" data-kind="${kind}" data-cat="${escHtml(cat)}" onsubmit="event.preventDefault();addStorageEntry(this)">
+                <input name="nome" class="${field}" maxlength="40" placeholder="${placeholder}" aria-label="${placeholder}" required>
+                <button class="${btn} font-semibold text-white bg-blue-600">Adicionar</button></form>`;
+            const html = `<div class="space-y-6">
+                ${kind === 'zone' ? `<section>
+                    <div class="space-y-2">${storageZones().map(z => row('zone', '', z, zoneCount(z))).join('')}</div>
+                    ${addForm('zone', '', 'Nova zona (ex.: Frigorífico 2)')}</section>` : `<section>
+                    <div class="space-y-4">${ingCategories().map(c => `<div class="p-3 rounded-xl bg-[#050814] border border-[#1E293B]">
+                        <div class="text-sm font-semibold text-white mb-2">${escHtml(c)}</div>
+                        <div class="space-y-2">${ingSubcategories(c).map(s => row('sub', c, s, appState.ingredients.filter(i => i.category === c && i.subcategory === s).length)).join('')}</div>
+                        ${addForm('sub', c, 'Nova subcategoria de ' + c)}</div>`).join('')}</div></section>`}
+                <div class="flex justify-end"><button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Fechar</button></div></div>`;
+            if (kind === 'zone') openModal('Zonas de armazém', 'Onde se guarda cada artigo. As zonas organizam o inventário físico.', html, 'lg');
+            else openModal('Subcategorias de insumos', 'Como se agrupam os artigos dentro de cada categoria', html, 'lg');
+        }
+        function storageChanged(kind) {
+            persistState();
+            renderActiveView();
+            openStorageSettings(kind);
+        }
+        function addStorageEntry(form) {
+            const { kind, cat } = form.dataset, name = form.elements.nome.value.trim().replace(/\s+/g, ' ');
+            const list = kind === 'zone' ? storageZones() : ingSubcategories(cat);
+            if (list.some(x => x.toLowerCase() === name.toLowerCase())) { showToast('Já existe', name, 'info'); return; }
+            if (kind === 'zone') appState.storageZones = [...list, name];
+            else appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: [...list, name] };
+            storageChanged(kind);
+            showToast(kind === 'zone' ? 'Zona criada' : 'Subcategoria criada', name, 'success');
+        }
+        function renameStorageEntry(input) {
+            const { kind, cat, name: from } = input.closest('[data-kind]').dataset, to = input.value.trim().replace(/\s+/g, ' ');
+            const list = kind === 'zone' ? storageZones() : ingSubcategories(cat);
+            if (!to || to === from) { input.value = from; return; }
+            if (list.some(x => x !== from && x.toLowerCase() === to.toLowerCase())) { showToast('Já existe', to, 'warning'); input.value = from; return; }
+            const renamed = list.map(x => x === from ? to : x);
+            if (kind === 'zone') {
+                appState.storageZones = renamed;
+                [...appState.ingredients, ...appState.subRecipesInventory].forEach(i => { if (i.zone === from) i.zone = to; });
+                Object.values(appState.countDrafts || {}).forEach(d => { if (d.zone === from) d.zone = to; d.items?.forEach(i => { if (i.zone === from) i.zone = to; }); });
+            } else {
+                appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: renamed };
+                appState.ingredients.forEach(i => { if (i.category === cat && i.subcategory === from) i.subcategory = to; });
+            }
+            storageChanged(kind);
+            showToast('Nome alterado', `${from} → ${to}`, 'success');
+        }
+        function deleteStorageEntry(button) {
+            const { kind, cat, name } = button.closest('[data-kind]').dataset;
+            if (kind === 'zone') {
+                const used = [...appState.ingredients, ...appState.subRecipesInventory].filter(i => i.zone === name).length;
+                if (used) { showToast('Zona com artigos', `Mude os ${used} artigo(s) de «${name}» para outra zona antes de apagar.`, 'warning'); return; }
+                appState.storageZones = storageZones().filter(z => z !== name);
+            } else {
+                const used = appState.ingredients.filter(i => i.category === cat && i.subcategory === name);
+                if (used.length && !window.confirm(`${used.length} artigo(s) ficam sem subcategoria. Apagar «${name}»?`)) return;
+                used.forEach(i => { i.subcategory = ''; });
+                appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: ingSubcategories(cat).filter(s => s !== name) };
+            }
+            storageChanged(kind);
+            showToast(kind === 'zone' ? 'Zona apagada' : 'Subcategoria apagada', name, 'success');
+        }
         // Artigo novo no catálogo, sem stock: a entrada vem do documento que o criou.
         function createIngredient({ name, baseUnit, category, supplierId, price, sku = '' }) {
-            const zone = ['Proteínas', 'Hortícolas', 'Laticínios'].includes(category) ? 'Câmara Fria' : category === 'Bebidas' ? 'Bar' : 'Despensa Seca';
+            const guess = ['Proteínas', 'Hortícolas', 'Laticínios'].includes(category) ? 'Câmara Fria' : category === 'Bebidas' ? 'Bar' : 'Despensa Seca';
+            const zone = storageZones().includes(guess) ? guess : storageZones()[0] || guess;
             const byStore = Object.fromEntries(STORE_KEYS.map(k => [k, { stockTheoretical: 0, stockCounted: 0, minStock: 0, cmp: price, lastCost: price, prevCost: price }]));
             const ing = { id: 'ing_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), sku, name, category, supplierId, zone, baseUnit, packLabel: '', yieldFactor: 1, allergens: [],
                 supplierPrices: {}, priceHistory: [price], byStore };
@@ -3511,9 +3608,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 <p class="text-xs text-slate-400">Stock e custo médio de cada ingrediente.</p>
                             </div>
                             ${role.canEditIngredients ? `
+                                <div class="flex flex-wrap gap-2"><button onclick="openStorageSettings('sub')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-sky-400">Subcategorias</button>
                                 <button onclick="openIngredientModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
                                     + Novo Insumo
-                                </button>
+                                </button></div>
                             ` : `<span class="text-[11px] font-mono text-slate-500">🔒 Só leitura (${escHtml(role.label)})</span>`}
                         </div>
                         <div class="overflow-x-auto">
@@ -3539,7 +3637,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                             <tr class="hover:bg-[#111827]/70">
                                                 <td class="py-3.5 px-5">
                                                     <div class="font-semibold text-white">${escHtml(i.name)}</div>
-                                                    <div class="text-[11px] font-mono text-slate-400">${escHtml(i.sku)} • ${escHtml(i.category)} • ${escHtml(i.zone)}</div>
+                                                    <div class="text-[11px] font-mono text-slate-400">${escHtml(i.sku)} • ${escHtml(i.category)}${i.subcategory ? ' › ' + escHtml(i.subcategory) : ''} • ${escHtml(i.zone)}</div>
                                                     ${Object.entries(i.supplierNames || {}).map(([sid, n]) => `<div class="text-[11px] text-slate-400">${escHtml(getSupplier(sid)?.name || 'Fornecedor removido')} = <span class="text-slate-300">${escHtml(n)}</span></div>`).join('')}
                                                 </td>
                                                 <td class="py-3.5 px-4 text-xs font-mono text-sky-300">${escHtml(i.packLabel)}</td>
@@ -3730,7 +3828,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const isEdit = Boolean(ing);
             const lossPct = ing ? Math.round((1 - ing.yieldFactor) * 100) : 0;
             const supOpts = appState.suppliers.map(s => `<option value="${s.id}" ${ing && ing.supplierId === s.id ? 'selected' : ''}>${escHtml(s.tradeName ? s.tradeName + ' · ' + s.name : s.name)}</option>`).join('');
-            const zones = ['Câmara Fria', 'Congelador', 'Despensa Seca', 'Bar'];
+            const zones = storageZones();
+            const firstCat = ing?.category || ingCategories()[0];
 
             const units = ['kg', 'L', 'un'];
 
@@ -3747,15 +3846,21 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">Categoria</label>
                             ${categoryPicker('ing-cat', ing?.category, 'w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400')}
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Zona Armazenamento</label>
+                            <label for="ing-subcat" class="block text-xs font-medium text-slate-300 mb-1.5">Subcategoria</label>
+                            <select id="ing-subcat" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
+                                ${subcategoryOptions(firstCat, ing?.subcategory)}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="ing-zone" class="block text-xs font-medium text-slate-300 mb-1.5">Zona Armazenamento</label>
                             <select id="ing-zone" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm text-white focus:outline-none focus:border-sky-400">
-                                ${zones.map(z => `<option value="${z}" ${ing && ing.zone === z ? 'selected' : ''}>${z}</option>`).join('')}
+                                ${zones.map(z => `<option value="${escHtml(z)}" ${ing && ing.zone === z ? 'selected' : ''}>${escHtml(z)}</option>`).join('')}
                             </select>
                         </div>
                         <div>
@@ -3865,6 +3970,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 name: document.getElementById('ing-name').value.trim(),
                 sku: document.getElementById('ing-sku').value.trim(),
                 category: document.getElementById('ing-cat').value,
+                subcategory: document.getElementById('ing-subcat').value,
                 zone: document.getElementById('ing-zone').value,
                 baseUnit: document.getElementById('ing-unit').value,
                 supplierId: document.getElementById('ing-sup').value,
@@ -5859,7 +5965,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <form class="work-fields" onsubmit="event.preventDefault();startCount(RESTAURANT,this.elements.zone.value)">
                 <label class="work-field">Zona a contar<select name="zone" ${draft?'disabled':''}><option value="">Todas as zonas</option>${zones.map(z=>`<option ${draft?.zone===z?'selected':''}>${escHtml(z)}</option>`).join('')}</select></label>
                 <div><button class="work-btn primary">${draft?'Retomar contagem':'Iniciar contagem'}</button></div></form></section>`:''}
-                ${role.canLogWaste?'<button class="work-btn" onclick="openWasteModal()">Registar quebra</button>':''}
+                ${role.canLogWaste||role.canEditIngredients?`<div class="flex flex-wrap gap-2">${role.canLogWaste?'<button class="work-btn" onclick="openWasteModal()">Registar quebra</button>':''}${role.canEditIngredients?`<button class="work-btn" onclick="openStorageSettings('zone')">Zonas de armazém</button>`:''}</div>`:''}
                 ${(appState.countHistory || []).filter(h=>h.store===appState.activeStore).length ? `<details class="p-3 rounded-xl bg-[#0B1120]"><summary>Contagens fechadas</summary>
                     ${(appState.countHistory || []).filter(h=>h.store===appState.activeStore).map(h=>`<details class="p-2"><summary>${escHtml(new Date(h.date).toLocaleString('pt-PT'))} · ${escHtml(appState.stores[h.store].name)} · ${escHtml(h.zone)} · ${fmtEur(h.rows.reduce((n,r)=>n+r.variance,0))}</summary>
                     ${h.entries?`<p>${h.adjusted?'Stock acertado':'Apenas contagem física'}</p><details><summary>Quantidades introduzidas</summary>${h.entries.map(e=>`<div>${escHtml(e.name)} · ${fmtNum(e.qty,4)} ${escHtml(e.unit)}</div>`).join('')}</details>`:''}
