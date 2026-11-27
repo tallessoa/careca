@@ -709,3 +709,12 @@ function matchCounts(items, lines) {
     }
     return { values, unmatched };
 }
+
+// Preço da fatura face ao preço negociado (ambos s/ IVA, por unidade base). Devolve null se não há preço negociado
+// ou se a diferença cabe na tolerância de arredondamento (0,5%); senão { diff, pct } com o sinal da fatura − negociado.
+const NEGOTIATED_TOLERANCE = 0.005;
+function negotiatedPriceGap(negotiated, price, tolerance = NEGOTIATED_TOLERANCE) {
+    if (!(negotiated > 0) || !Number.isFinite(price)) return null;
+    const diff = price - negotiated;
+    return Math.abs(diff) <= negotiated * tolerance ? null : { diff, pct: diff / negotiated * 100 };
+}
