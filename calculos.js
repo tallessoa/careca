@@ -688,8 +688,9 @@ function skuPrefix(category) {
 }
 
 // Próximo SKU livre do prefixo da categoria (PRT-0001, PRT-0002…), a seguir ao maior já usado com esse prefixo.
-function nextSku(category, ingredients = appState.ingredients) {
-    const prefix = skuPrefix(category), re = new RegExp('^' + prefix + '-(\\d+)$', 'i');
+// prefixes: prefixo guardado quando a categoria mudou de nome ({ 'Carnes': 'PRT' }), para a série continuar.
+function nextSku(category, ingredients = appState.ingredients, prefixes = typeof appState === 'undefined' ? {} : appState.categorySkuPrefixes) {
+    const prefix = prefixes?.[category] || skuPrefix(category), re = new RegExp('^' + prefix + '-(\\d+)$', 'i');
     const max = ingredients.reduce((m, i) => Math.max(m, Number(re.exec(String(i.sku ?? '').trim())?.[1] ?? 0)), 0);
     return prefix + '-' + String(max + 1).padStart(4, '0');
 }

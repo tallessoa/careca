@@ -564,6 +564,7 @@ test('SKU automático: prefixo da categoria e sequencial a seguir ao maior', () 
         ['PRT', 'LTC', 'FRS', 'BBD', 'HRT', 'SCS', 'EMB', 'INS']);
     assert.equal(c.nextSku('Proteínas', []), 'PRT-0001');
     assert.equal(c.nextSku('Proteínas', [{ sku: 'PRT-0007' }, { sku: 'prt-0002' }, { sku: 'LTC-0040' }, { sku: 'INS-512' }]), 'PRT-0008');
+    assert.equal(c.nextSku('Carnes', [{ sku: 'PRT-0007' }], { Carnes: 'PRT' }), 'PRT-0008'); // categoria renomeada mantém a série
 });
 
 test('Contagens lidas pela IA: por código, senão pelo nome; quantidades em branco ignoradas', () => {

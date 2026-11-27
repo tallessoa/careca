@@ -1501,7 +1501,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 const data = JSON.parse(await file.text());
                 const st = data?.state;
                 if (data?.app !== 'kareca-backoffice' || !Array.isArray(st?.ingredients) || !Array.isArray(st?.recipes) || !st?.storeFinancials?.[RESTAURANT]) throw Error('Ficheiro não é uma cópia do backoffice.');
-                if (!window.confirm('Substituir todos os dados deste browser pela cópia de ' + new Date(data.exportedAt).toLocaleString('pt-PT') + '?')) return;
+                if (!await askConfirm('Os dados atuais vão ser apagados e substituídos pela cópia de ' + new Date(data.exportedAt).toLocaleString('pt-PT') + '.', { title: 'Tem a certeza que quer substituir os dados?', yes: 'Sim, substituir' })) return;
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
                 location.reload();
             } catch (error) { showToast('Importação falhou', error.message, 'warning'); }
@@ -1716,6 +1716,30 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const modal = document.getElementById('app-modal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        }
+
+        // Pergunta antes de apagar: janela própria por cima de tudo, para não fechar a janela que estiver aberta. Resolve true/false.
+        function askConfirm(message, { title = 'Tem a certeza que quer excluir?', yes = 'Sim, excluir' } = {}) {
+            return new Promise(resolve => {
+                document.getElementById('confirm-dialog')?.remove();
+                const ov = document.createElement('div'), prev = document.activeElement;
+                ov.id = 'confirm-dialog';
+                ov.className = 'fixed inset-0 flex items-start justify-center p-4 overflow-y-auto';
+                Object.assign(ov.style, { zIndex: '70', background: 'rgba(0,0,0,.65)', paddingTop: '12vh' });
+                ov.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-title" aria-describedby="cd-msg" class="w-full max-w-md rounded-2xl bg-[#0B1120] border border-rose-500/40 p-5 space-y-4 shadow-2xl">
+                    <h3 id="cd-title" class="font-bold text-lg text-white"></h3><p id="cd-msg" class="text-sm text-slate-300"></p>
+                    <div class="flex justify-end gap-3"><button type="button" data-v="0" class="px-4 py-2 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Cancelar</button>
+                    <button type="button" data-v="1" class="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white"></button></div></div>`;
+                ov.querySelector('#cd-title').textContent = title;
+                ov.querySelector('#cd-msg').textContent = message;
+                ov.querySelector('[data-v="1"]').textContent = yes;
+                const done = ok => { ov.remove(); document.removeEventListener('keydown', onKey, true); if (prev?.isConnected) prev.focus(); resolve(ok); };
+                const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+                ov.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) done(b.dataset.v === '1'); else if (e.target === ov) done(false); });
+                document.addEventListener('keydown', onKey, true);
+                document.body.appendChild(ov);
+                ov.querySelector('[data-v="0"]').focus(); // Cancelar com foco: um Enter distraído não apaga nada
+            });
         }
 
         // ====================================================================
@@ -2307,9 +2331,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             } catch (e) { if (box()) box().textContent = 'QR indisponível'; }
         }
         const ING_CATEGORIES = ['Proteínas', 'Hortícolas', 'Laticínios', 'Secos', 'Bebidas', 'Embalagens'];
-        // Categorias de insumos: as de base, as criadas pelo utilizador e as que já estão em uso no catálogo.
+        // Categorias de insumos: a lista gerida (ou, antes da 1.ª edição, as de base mais as criadas) e as que já estão em uso no catálogo.
         function ingCategories() {
-            return [...new Set([...ING_CATEGORIES, ...(appState.ingredientCategories || []), ...appState.ingredients.map(i => i.category).filter(Boolean)])];
+            const list = appState.ingredientCategoryList || [...ING_CATEGORIES, ...(appState.ingredientCategories || [])];
+            return [...new Set([...list, ...appState.ingredients.map(i => i.category).filter(Boolean)])];
         }
         // Lista de categorias com a opção «+ Nova categoria», que abre um campo para escrever o nome.
         function categoryPicker(id, selected, cls) {
@@ -2333,7 +2358,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             if (!name) { showToast('Falta o nome', 'Escreva o nome da categoria.', 'warning'); return; }
             const existing = ingCategories().find(c => c.toLowerCase() === name.toLowerCase());
             if (!existing) {
-                appState.ingredientCategories = [...(appState.ingredientCategories || []), name];
+                appState.ingredientCategoryList = [...ingCategories(), name];
                 persistState();
             }
             const value = existing || name;
@@ -2397,30 +2422,34 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                     <div class="space-y-2">${storageZones().map(z => row('zone', '', z, zoneCount(z))).join('')}</div>
                     ${addForm('zone', '', 'Nova zona (ex.: Frigorífico 2)')}</section>` : `<section>
                     <div class="space-y-4">${ingCategories().map(c => `<div class="p-3 rounded-xl bg-[#050814] border border-[#1E293B]">
-                        <div class="text-sm font-semibold text-white mb-2">${escHtml(c)}</div>
-                        <div class="space-y-2">${ingSubcategories(c).map(s => row('sub', c, s, appState.ingredients.filter(i => i.category === c && i.subcategory === s).length)).join('')}</div>
-                        ${addForm('sub', c, 'Nova subcategoria de ' + c)}</div>`).join('')}</div></section>`}
+                        <div class="mb-3 font-semibold">${row('cat', '', c, appState.ingredients.filter(i => i.category === c).length)}</div>
+                        <div class="space-y-2 pl-4 border-l border-[#1E293B]">${ingSubcategories(c).map(s => row('sub', c, s, appState.ingredients.filter(i => i.category === c && i.subcategory === s).length)).join('')}
+                        ${addForm('sub', c, 'Nova subcategoria de ' + c)}</div></div>`).join('')}</div>
+                    ${addForm('cat', '', 'Nova categoria (ex.: Congelados)')}</section>`}
                 <div class="flex justify-end"><button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-300 border border-[#1E293B] hover:bg-[#111827]">Fechar</button></div></div>`;
             if (kind === 'zone') openModal('Zonas de armazém', 'Onde se guarda cada artigo. As zonas organizam o inventário físico.', html, 'lg');
-            else openModal('Subcategorias de insumos', 'Como se agrupam os artigos dentro de cada categoria', html, 'lg');
+            else openModal('Categorias e subcategorias', 'Como se agrupam os artigos do catálogo. Mudar o nome não altera os SKU já criados.', html, 'lg');
         }
         function storageChanged(kind) {
             persistState();
             renderActiveView();
-            openStorageSettings(kind);
+            openStorageSettings(kind === 'zone' ? 'zone' : 'sub');
         }
+        const STORAGE_LABEL = { zone: 'Zona', cat: 'Categoria', sub: 'Subcategoria' };
+        const storageList = (kind, cat) => kind === 'zone' ? storageZones() : kind === 'cat' ? ingCategories() : ingSubcategories(cat);
         function addStorageEntry(form) {
             const { kind, cat } = form.dataset, name = form.elements.nome.value.trim().replace(/\s+/g, ' ');
-            const list = kind === 'zone' ? storageZones() : ingSubcategories(cat);
+            const list = storageList(kind, cat);
             if (list.some(x => x.toLowerCase() === name.toLowerCase())) { showToast('Já existe', name, 'info'); return; }
             if (kind === 'zone') appState.storageZones = [...list, name];
+            else if (kind === 'cat') appState.ingredientCategoryList = [...list, name];
             else appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: [...list, name] };
             storageChanged(kind);
-            showToast(kind === 'zone' ? 'Zona criada' : 'Subcategoria criada', name, 'success');
+            showToast(STORAGE_LABEL[kind] + ' criada', name, 'success');
         }
         function renameStorageEntry(input) {
             const { kind, cat, name: from } = input.closest('[data-kind]').dataset, to = input.value.trim().replace(/\s+/g, ' ');
-            const list = kind === 'zone' ? storageZones() : ingSubcategories(cat);
+            const list = storageList(kind, cat);
             if (!to || to === from) { input.value = from; return; }
             if (list.some(x => x !== from && x.toLowerCase() === to.toLowerCase())) { showToast('Já existe', to, 'warning'); input.value = from; return; }
             const renamed = list.map(x => x === from ? to : x);
@@ -2428,6 +2457,17 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 appState.storageZones = renamed;
                 [...appState.ingredients, ...appState.subRecipesInventory].forEach(i => { if (i.zone === from) i.zone = to; });
                 Object.values(appState.countDrafts || {}).forEach(d => { if (d.zone === from) d.zone = to; d.items?.forEach(i => { if (i.zone === from) i.zone = to; }); });
+            } else if (kind === 'cat') {
+                // Os SKU já criados ficam como estão; os novos continuam a série do prefixo antigo (PRT-0008 a seguir a PRT-0007).
+                const prefixes = { ...(appState.categorySkuPrefixes || {}) };
+                prefixes[to] = prefixes[from] || skuPrefix(from);
+                delete prefixes[from];
+                appState.categorySkuPrefixes = prefixes;
+                const subs = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES) };
+                if (from in subs) { subs[to] = subs[from]; delete subs[from]; }
+                appState.ingredientSubcategories = subs;
+                appState.ingredientCategoryList = renamed;
+                appState.ingredients.forEach(i => { if (i.category === from) i.category = to; });
             } else {
                 appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: renamed };
                 appState.ingredients.forEach(i => { if (i.category === cat && i.subcategory === from) i.subcategory = to; });
@@ -2435,20 +2475,30 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             storageChanged(kind);
             showToast('Nome alterado', `${from} → ${to}`, 'success');
         }
-        function deleteStorageEntry(button) {
+        async function deleteStorageEntry(button) {
             const { kind, cat, name } = button.closest('[data-kind]').dataset;
             if (kind === 'zone') {
                 const used = [...appState.ingredients, ...appState.subRecipesInventory].filter(i => i.zone === name).length;
                 if (used) { showToast('Zona com artigos', `Mude os ${used} artigo(s) de «${name}» para outra zona antes de apagar.`, 'warning'); return; }
+                if (!await askConfirm(`A zona de armazém «${name}» vai ser apagada.`)) return;
                 appState.storageZones = storageZones().filter(z => z !== name);
+            } else if (kind === 'cat') {
+                const used = appState.ingredients.filter(i => i.category === name).length;
+                if (used) { showToast('Categoria com artigos', `Mude os ${used} artigo(s) de «${name}» para outra categoria antes de apagar.`, 'warning'); return; }
+                const subs = ingSubcategories(name).length;
+                if (!await askConfirm(`A categoria «${name}» vai ser apagada${subs ? `, com as suas ${subs} subcategoria(s)` : ''}.`)) return;
+                appState.ingredientCategoryList = ingCategories().filter(c => c !== name);
+                const map = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES) };
+                delete map[name];
+                appState.ingredientSubcategories = map;
             } else {
                 const used = appState.ingredients.filter(i => i.category === cat && i.subcategory === name);
-                if (used.length && !window.confirm(`${used.length} artigo(s) ficam sem subcategoria. Apagar «${name}»?`)) return;
+                if (!await askConfirm(`A subcategoria «${name}» vai ser apagada.${used.length ? ` ${used.length} artigo(s) ficam sem subcategoria.` : ''}`)) return;
                 used.forEach(i => { i.subcategory = ''; });
                 appState.ingredientSubcategories = { ...(appState.ingredientSubcategories || DEFAULT_SUBCATEGORIES), [cat]: ingSubcategories(cat).filter(s => s !== name) };
             }
             storageChanged(kind);
-            showToast(kind === 'zone' ? 'Zona apagada' : 'Subcategoria apagada', name, 'success');
+            showToast(STORAGE_LABEL[kind] + ' apagada', name, 'success');
         }
         // Artigo novo no catálogo, sem stock: a entrada vem do documento que o criou.
         function createIngredient({ name, baseUnit, category, supplierId, price, sku = nextSku(category) }) {
@@ -2541,7 +2591,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <label class="sm:col-span-2 text-xs text-slate-300">Preço s/ IVA<input class="ie-price ${field}" type="number" step="any" min="0" value="${+Number(l.price).toFixed(4)}" oninput="updateInvoiceEditTotal()"></label>
                 <label class="sm:col-span-2 text-xs text-slate-300">IVA %<input class="ie-vat ${field}" type="number" step="any" min="0" value="${l.vat}" oninput="updateInvoiceEditTotal()"></label>
                 ${l.service ? '' : `<label class="sm:col-span-5 text-xs text-slate-300">Lote<input class="ie-lot ${field}" value="${escHtml(l.lot || '')}"></label><label class="sm:col-span-6 text-xs text-slate-300">Validade<input class="ie-exp ${field}" type="date" value="${escHtml(l.expiry || '')}"></label>`}
-                <button type="button" onclick="this.closest('.ie-row').remove(); updateInvoiceEditTotal()" class="sm:col-span-1 px-2 py-1.5 rounded-lg text-xs text-rose-300 border border-rose-500/30" aria-label="Remover linha">✕</button></div>`;
+                <button type="button" onclick="askConfirm('Esta linha vai ser removida do documento.').then(ok => { if (ok) { this.closest('.ie-row').remove(); updateInvoiceEditTotal(); } })" class="sm:col-span-1 px-2 py-1.5 rounded-lg text-xs text-rose-300 border border-rose-500/30" aria-label="Remover linha">✕</button></div>`;
         }
         function updateInvoiceEditTotal() {
             const el = document.getElementById('ie-total');
@@ -2807,8 +2857,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             box.insertAdjacentHTML('beforeend', manualPurchaseRow(box.dataset.options));
             prefillManualPrice(box.lastElementChild);
         }
-        function removeManualPurchaseRow(btn) {
+        async function removeManualPurchaseRow(btn) {
             if (document.querySelectorAll('#mp-lines .mp-row').length <= 1) { showToast('Mínimo 1 linha', 'O documento precisa de pelo menos um artigo.', 'warning'); return; }
+            if (!await askConfirm('Esta linha vai ser removida do documento.')) return;
             btn.closest('.mp-row').remove();
             updateManualPurchaseTotal();
         }
@@ -3309,9 +3360,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             updateSplitStatus(box);
             if (!part.description) row.querySelector('.ocr-part-desc').focus();
         }
-        function removeOcrPart(el) {
+        async function removeOcrPart(el) {
             const box = el.closest('.ocr-split');
             if (box.querySelectorAll('.ocr-row').length <= 2) { showToast('Mínimo de duas partes', 'Para voltar à linha original use «Desfazer divisão».', 'warning'); return; }
+            if (!await askConfirm('Esta parte da linha vai ser removida.')) return;
             el.closest('.ocr-row').remove();
             updateSplitStatus(box);
         }
@@ -3614,7 +3666,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                                 <p class="text-xs text-slate-400">Stock e custo médio de cada ingrediente.</p>
                             </div>
                             ${role.canEditIngredients ? `
-                                <div class="flex flex-wrap gap-2"><button onclick="openStorageSettings('sub')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-sky-400">Subcategorias</button>
+                                <div class="flex flex-wrap gap-2"><button onclick="openStorageSettings('sub')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1E293B] border border-[#1E293B] text-sky-400">Categorias e subcategorias</button>
                                 <button onclick="openIngredientModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow">
                                     + Novo Insumo
                                 </button></div>
@@ -4198,7 +4250,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             row.innerHTML = `<select aria-label="Artigo" class="po-ing ${cls}" data-value="${escHtml(line.ing || '')}" onchange="refreshOrderLines()"></select>
                 <span class="whitespace-nowrap text-xs text-slate-400"><input aria-label="Quantidade" class="po-q ${cls} font-mono text-right" type="number" step="any" min="0" required value="${line.qty ?? ''}"> <span class="po-unit"></span></span>
                 <input aria-label="Observação do artigo" class="po-note ${cls}" placeholder="Observação (opcional)" value="${escHtml(line.note || '')}">
-                <button type="button" aria-label="Remover artigo" onclick="this.parentElement.remove()" class="px-2 py-1 text-rose-400 text-sm">✕</button>`;
+                <button type="button" aria-label="Remover artigo" onclick="askConfirm('Este artigo vai ser removido da encomenda.').then(ok => { if (ok) { this.parentElement.remove(); } })" class="px-2 py-1 text-rose-400 text-sm">✕</button>`;
             document.getElementById('po-lines').appendChild(row);
             refreshOrderLines();
         }
@@ -4983,7 +5035,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             persistState();
             renderActiveView();
         }
-        function removeSalesChannel(id) {
+        async function removeSalesChannel(id) {
+            if (!await askConfirm(`O canal de venda «${salesChannels().find(c => c.id === id)?.name || ''}» vai ser removido.`)) return;
             appState.salesChannels = salesChannels().filter(c => c.id !== id);
             persistState();
             renderActiveView();
@@ -5091,7 +5144,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             [...document.querySelectorAll('#recipe-form-rows-container .ft-search')].pop()?.focus();
         }
 
-        function removeRecipeFormRow(idx) {
+        async function removeRecipeFormRow(idx) {
+            const name = recipeRowRef(appState.recipeFormRows[idx])?.name;
+            if (!await askConfirm(name ? `«${name}» vai ser removido da ficha.` : 'Esta linha vai ser removida da ficha.')) return;
             appState.recipeFormRows.splice(idx, 1);
             renderRecipeFormRows();
             recalcRecipeModalPreview();
@@ -5543,8 +5598,9 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             persistState(); renderActiveView(); showToast('Código associado',code,'success');
         }
 
-        function removePosMapping(code) {
+        async function removePosMapping(code) {
             if (!appState.roles[appState.activeRole].canApproveInvoices) return;
+            if (!await askConfirm(`O código POS ${code} vai deixar de estar associado. O histórico de vendas mantém-se.`)) return;
             appState.posMappings = appState.posMappings.filter(m => m.posCode !== code);
             persistState(); renderActiveView(); showToast('Código removido', code + ' deixa de abater stock. O histórico de vendas mantém-se.', 'info');
         }
@@ -5913,8 +5969,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             d.paused=true;persistState();renderActiveView();
         }
 
-        function discardCount() {
-            const d=currentCount();if (!d || !window.confirm('Descartar as quantidades deste rascunho?')) return;
+        async function discardCount() {
+            const d=currentCount();if (!d || !await askConfirm('As quantidades deste rascunho de contagem vão ser apagadas.', { yes: 'Sim, descartar' })) return;
             delete appState.countDrafts[d.store];persistState();renderActiveView();
         }
 
