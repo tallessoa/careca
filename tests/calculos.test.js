@@ -557,3 +557,20 @@ test('ingredientUsage segue as sub-receitas até à dose do prato', () => {
     const bowl = c.getRecipe('rec_bowl');
     near(c.calculateRecipeCost(bowl, prices).unitCost - c.calculateRecipeCost(bowl).unitCost, u.grossQty * (20 - 12.35));
 });
+
+test('SKU automático: prefixo da categoria e sequencial a seguir ao maior', () => {
+    const c = load({ ingredients: [] });
+    assert.deepEqual(['Proteínas', 'Laticínios', 'Frescos', 'Bebidas', 'Hortícolas', 'Secos', 'Embalagens', ''].map(c.skuPrefix),
+        ['PRT', 'LTC', 'FRS', 'BBD', 'HRT', 'SCS', 'EMB', 'INS']);
+    assert.equal(c.nextSku('Proteínas', []), 'PRT-0001');
+    assert.equal(c.nextSku('Proteínas', [{ sku: 'PRT-0007' }, { sku: 'prt-0002' }, { sku: 'LTC-0040' }, { sku: 'INS-512' }]), 'PRT-0008');
+});
+
+test('Contagens lidas pela IA: por código, senão pelo nome; quantidades em branco ignoradas', () => {
+    const c = load({ ingredients: [] });
+    const items = [{ id: 'a', code: 'PRT-0001', name: 'Salmão' }, { id: 'b', code: '', name: 'Molho de tomate' }, { id: 'c', code: 'LTC-0001', name: 'Natas' }];
+    const r = c.matchCounts(items, [{ code: 'prt-0001', name: 'Salmao fresco', qty: 2.5 }, { code: '', name: 'Molho de Tomate', qty: 0 },
+        { code: 'LTC-0001', name: 'Natas', qty: null }, { code: 'XYZ-9', name: 'Polvo', qty: 1 }]);
+    assert.deepEqual({ ...r.values }, { a: '2,5', b: '0' });
+    assert.equal(r.unmatched.length, 1);
+});

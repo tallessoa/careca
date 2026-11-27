@@ -2322,7 +2322,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
         }
         function categoryChanged(sel) {
             const box = sel.parentElement.querySelector('.newcat');
-            if (sel.value !== '__newcat') { sel.dataset.prev = sel.value; box.classList.add('hidden'); return; }
+            if (sel.value !== '__newcat') { sel.dataset.prev = sel.value; box.classList.add('hidden'); autoSku(sel); return; }
             box.classList.remove('hidden');
             const input = box.querySelector('input');
             input.value = '';
@@ -2341,7 +2341,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             sel.value = value;
             sel.dataset.prev = value;
             box.classList.add('hidden');
+            autoSku(sel);
             showToast(existing ? 'Categoria já existia' : 'Categoria criada', value, existing ? 'info' : 'success');
+        }
+        // Insumo novo: o SKU segue a categoria enquanto o utilizador não escrever outro código.
+        function autoSku(sel) {
+            const el = document.getElementById('ing-sku');
+            if (sel.id === 'ing-cat' && el && el.dataset.auto !== undefined) el.value = el.dataset.auto = nextSku(sel.value);
         }
         function cancelCategory(el) {
             const box = el.closest('.newcat'), sel = box.parentElement.querySelector('select');
@@ -2349,7 +2355,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             box.classList.add('hidden');
         }
         // Artigo novo no catálogo, sem stock: a entrada vem do documento que o criou.
-        function createIngredient({ name, baseUnit, category, supplierId, price, sku = '' }) {
+        function createIngredient({ name, baseUnit, category, supplierId, price, sku = nextSku(category) }) {
             const zone = ['Proteínas', 'Hortícolas', 'Laticínios'].includes(category) ? 'Câmara Fria' : category === 'Bebidas' ? 'Bar' : 'Despensa Seca';
             const byStore = Object.fromEntries(STORE_KEYS.map(k => [k, { stockTheoretical: 0, stockCounted: 0, minStock: 0, cmp: price, lastCost: price, prevCost: price }]));
             const ing = { id: 'ing_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), sku, name, category, supplierId, zone, baseUnit, packLabel: '', yieldFactor: 1, allergens: [],
@@ -3371,7 +3377,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             rows.forEach((row, idx) => {
                 if (lines[idx].ing !== '__new') return;
                 const ing = createIngredient({ name: row.querySelector('.ocr-new-name').value.trim(), baseUnit: row.querySelector('.ocr-new-unit').value,
-                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price, sku: ocrLine(row).sku || '' });
+                    category: row.querySelector('.ocr-new-cat').value, supplierId, price: lines[idx].price });
                 lines[idx].ing = ing.id;
                 newAlert('new_ingredient', 'Artigo novo: ' + ing.name, `Criado a partir da fatura ${number}. Confirme em Insumos a categoria, a zona, o stock mínimo, os alergénios e a validade.`);
             });
@@ -3743,7 +3749,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-300 mb-1.5">Código SKU *</label>
-                            <input id="ing-sku" type="text" required value="${ing ? escHtml(ing.sku) : 'INS-' + Math.floor(100 + Math.random() * 899)}" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
+                            <input id="ing-sku" type="text" required maxlength="20" value="${ing ? escHtml(ing.sku) : nextSku(ingCategories()[0])}" ${ing ? '' : `data-auto="${nextSku(ingCategories()[0])}"`} oninput="delete this.dataset.auto" title="Preenchido pela categoria; pode escrever outro código" class="w-full px-3.5 py-2.5 rounded-xl bg-[#050814] border border-[#1E293B] text-sm font-mono text-white focus:outline-none focus:border-sky-400">
                         </div>
                     </div>
 
@@ -3860,6 +3866,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             const lastVal = parseFloat(document.getElementById('ing-last').value);
             const stockVal = parseFloat(document.getElementById('ing-stock').value);
             const minVal = parseFloat(document.getElementById('ing-min').value);
+
+            const skuVal = document.getElementById('ing-sku').value.trim();
+            const dup = appState.ingredients.find(i => i.id !== ingId && String(i.sku || '').trim().toLowerCase() === skuVal.toLowerCase());
+            if (dup) { showToast('Código SKU repetido', `${skuVal} já é de ${dup.name}. Escolha outro código.`, 'warning'); return; }
 
             const baseMeta = {
                 name: document.getElementById('ing-name').value.trim(),
@@ -5630,7 +5640,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 id:s.id, name:s.name, zone:s.zone, unit:s.unit, prepared:true, parent:s.parentIngredientId
             })), ...appState.recipes.filter(r=>r.recipeType==='sub_recipe' && r.prepStock).map(r=>({
                 id:'prep_'+r.id, name:r.name+' (produzida)', zone:'Preparações', unit:r.yieldUnit, produced:true, recipeId:r.id, expected:r.prepStock[store] || 0
-            }))].filter(i=>!zone || i.zone===zone).sort((a,b)=>a.zone.localeCompare(b.zone,'pt') || a.name.localeCompare(b.name,'pt'));
+            }))].filter(i=>!zone || i.zone===zone).sort((a,b)=>a.zone.localeCompare(b.zone,'pt') || a.name.localeCompare(b.name,'pt',{numeric:true}));
         }
 
         function startCount(store, zone) {
@@ -5642,6 +5652,100 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
             appState.countDrafts[store].paused=false;
             appState.activeStore=store;
             persistState();updateChrome();renderActiveView();
+        }
+
+        // Código impresso no modelo e usado pela IA para ligar a contagem ao artigo.
+        function countCode(i) {
+            return (i.produced ? getRecipe(i.recipeId)?.code : i.prepared ? appState.subRecipesInventory.find(s => s.id === i.id)?.code : getIngredient(i.id)?.sku) || '';
+        }
+
+        // Folha para imprimir: artigos por zona com código e nome, quantidade em branco e uma caixa de rascunho que a IA ignora.
+        async function downloadCountTemplate(zone) {
+            const items = countItems(appState.activeStore, zone || '');
+            if (!items.length) { showToast('Zona sem artigos', '', 'warning'); return; }
+            try {
+                for (const src of EXPORT_LIBS.pdf) await loadScript(src);
+                const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), dark = [30, 41, 59];
+                let y = 16;
+                doc.setFontSize(9); doc.setTextColor(2, 132, 199); doc.text('INVENTÁRIO FÍSICO · FOLHA DE CONTAGEM', 14, y);
+                doc.setFontSize(14); doc.setTextColor(15, 23, 42); doc.text(appState.stores[appState.activeStore].name + ' · ' + (zone || 'Todas as zonas'), 14, y += 7);
+                doc.setFontSize(9); doc.setTextColor(71, 85, 105); doc.text('Data: ____ / ____ / ________        Contado por: ______________________________', 14, y += 7);
+                doc.text('Escreva a quantidade na unidade indicada. Sem unidades, escreva 0. Contas e notas vão na caixa RASCUNHO, no fim.', 14, y += 5);
+                for (const z of [...new Set(items.map(i => i.zone))]) {
+                    doc.autoTable({ startY: y + 4, theme: 'grid', margin: { left: 14, right: 14 }, rowPageBreak: 'avoid',
+                        head: [[{ content: z.toUpperCase(), colSpan: 4, styles: { fillColor: dark, textColor: 255 } }], ['Código', 'Artigo', 'Unid.', 'Quantidade']],
+                        body: items.filter(i => i.zone === z).map(i => [countCode(i) || '—', i.name, i.unit, '']),
+                        headStyles: { fillColor: [226, 232, 240], textColor: 15, fontStyle: 'bold' }, styles: { fontSize: 10, cellPadding: 2, minCellHeight: 9, valign: 'middle', textColor: 15 },
+                        columnStyles: { 0: { cellWidth: 28, font: 'courier' }, 2: { cellWidth: 16 }, 3: { cellWidth: 40 } } });
+                    y = doc.lastAutoTable.finalY;
+                }
+                const h = 70;
+                if (y + 10 + h > 285) { doc.addPage(); y = 6; }
+                doc.setDrawColor(100, 116, 139); doc.setLineDashPattern([2, 1.5], 0); doc.rect(14, y + 10, 182, h);
+                doc.setLineDashPattern([], 0); doc.setFontSize(9); doc.setTextColor(71, 85, 105);
+                doc.text('RASCUNHO · não é lido pela IA (contas, notas)', 17, y + 15);
+                doc.save('modelo-inventario-' + String(zone || 'todas-as-zonas').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-') + '.pdf');
+            } catch (err) {
+                console.error('Modelo de inventário falhou', err);
+                showToast('Não foi possível criar o modelo', err.message, 'warning');
+            }
+        }
+
+        function pickCountFile() {
+            if (!currentCount()) return;
+            let input = document.getElementById('count-file');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'file'; input.id = 'count-file'; input.hidden = true;
+                input.accept = 'application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif';
+                input.onchange = () => readCountFile(input);
+                document.body.appendChild(input);
+            }
+            input.click();
+        }
+
+        const COUNT_OCR_SCHEMA = { type: 'OBJECT', properties: { counts: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+            code: { type: 'STRING', description: 'código impresso na linha' }, name: { type: 'STRING', description: 'nome do artigo impresso na linha' },
+            qty: { type: 'NUMBER', nullable: true, description: 'quantidade escrita à mão; null se estiver em branco' } }, required: ['name'] } } }, required: ['counts'] };
+
+        // Lê a folha de contagem preenchida (foto ou PDF) com o mesmo OCR das faturas e preenche o rascunho; nada fecha sem «Rever contagem».
+        async function readCountFile(input) {
+            const file = input.files[0];
+            input.value = '';
+            const d = currentCount();
+            if (!file || !d) return;
+            const mime = invoiceMime(file);
+            if (!mime) { showToast('Formato não suportado', `«${file.name}». Use PDF ou foto (JPG, PNG, WEBP, HEIC).`, 'warning'); return; }
+            if (file.size > 14 * 1024 * 1024) { showToast('Ficheiro grande demais', `${fmtNum(file.size / 1048576, 1)} MB. Máximo 14 MB.`, 'warning'); return; }
+            if (!await invoiceMagicOk(file, mime).catch(() => false)) { showToast('Ficheiro recusado', `«${file.name}» não é um ${mime === 'application/pdf' ? 'PDF' : 'imagem'} válido.`, 'warning'); return; }
+            openModal('A ler a contagem…', file.name, '<p class="text-sm text-slate-300"><span id="ocr-stage">A preparar o ficheiro</span>… <span id="ocr-elapsed" class="font-mono text-sky-300">0 s</span></p>');
+            const started = performance.now();
+            const ticker = setInterval(() => { const el = document.getElementById('ocr-elapsed'); if (el) el.textContent = Math.round((performance.now() - started) / 1000) + ' s'; }, 500);
+            const setStage = (label, text) => { const el = document.getElementById('ocr-stage'); if (el) el.textContent = text; };
+            try {
+                const upload = await prepareInvoiceImage(file, mime);
+                const data = await readAsBase64(upload);
+                const items = d.items.map(i => ({ id: i.id, code: countCode(i), name: i.name }));
+                const { ex } = await geminiOcr(data, upload === file ? mime : upload.type,
+                    'Isto é uma folha de inventário físico de restaurante preenchida à mão, com as colunas Código, Artigo, Unid. e Quantidade. ' +
+                    'Para cada linha da tabela devolve o código e o nome impressos e a quantidade escrita à mão na coluna Quantidade (vírgula decimal: 1,5 = 1.5). ' +
+                    'Se a quantidade estiver em branco ou ilegível, devolve qty null. Não inventes valores. ' +
+                    'Ignora por completo a caixa RASCUNHO e tudo o que estiver escrito dentro dela ou fora da tabela. ' +
+                    'Artigos esperados (código · nome):\n' + items.map(i => (i.code || '—') + ' · ' + i.name).join('\n'),
+                    COUNT_OCR_SCHEMA, setStage);
+                const { values, unmatched } = matchCounts(items, ex.counts);
+                const n = Object.keys(values).length;
+                if (!n) throw Error('Não encontrei quantidades preenchidas nesta folha.');
+                Object.assign(d.values, values); d.review = false;
+                persistState(); closeModal(); renderActiveView();
+                const missing = d.items.filter(i => countQuantity(d.values[i.id]) === null).length;
+                showToast('Contagem lida: ' + file.name, `${n} artigo(s) preenchido(s).` + (missing ? ` ${missing} por preencher.` : '') +
+                    (unmatched.length ? ` ${unmatched.length} linha(s) não reconhecida(s): ${unmatched.slice(0, 3).map(l => l.name || l.code).join(', ')}.` : '') + ' Confira e clique em Rever contagem.', missing || unmatched.length ? 'warning' : 'success');
+            } catch (e) {
+                console.error('Leitura da contagem falhou', e);
+                closeModal();
+                showToast('Não foi possível ler a contagem', e.message.split('\n')[0], 'warning');
+            } finally { clearInterval(ticker); }
         }
 
         function currentCount() {
@@ -5688,6 +5792,8 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 <button class="work-btn primary" onclick="finishCount()">Confirmar e fechar inventário</button></div></section>`;
             return heading+`<section class="work-panel"><h2>Contar artigos</h2><p>Introduz o que encontraste. Se não houver unidades de um artigo, escreve 0.</p>
                 <p class="work-muted" id="count-progress">${countProgress(d)}</p>
+                <div class="work-actions"><button class="work-btn" onclick="downloadCountTemplate(currentCount()?.zone)">Descarregar modelo (PDF)</button>
+                <button class="work-btn" onclick="pickCountFile()">Ler contagem com IA</button></div>
                 ${[...new Set(d.items.map(i=>i.zone))].map(z=>`<h3>${escHtml(z)}</h3><div class="work-list">${d.items.filter(i=>i.zone===z).map(i=>`
                     <label class="work-row count-entry"><span><strong>${escHtml(i.name)}</strong><small>${i.prepared?'Preparação pronta · ':''}Quantidade em ${escHtml(i.unit)}</small></span>
                     <input id="count-${i.id}" inputmode="decimal" autocomplete="off" maxlength="16" placeholder="—" value="${escHtml(d.values[i.id] ?? '')}" oninput="writeCount('${i.id}',this.value)"></label>`).join('')}</div>`).join('')}
@@ -5858,7 +5964,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
                 ${role.canCountInventory?`<section class="work-panel"><h2>Fazer inventário físico</h2>
                 <form class="work-fields" onsubmit="event.preventDefault();startCount(RESTAURANT,this.elements.zone.value)">
                 <label class="work-field">Zona a contar<select name="zone" ${draft?'disabled':''}><option value="">Todas as zonas</option>${zones.map(z=>`<option ${draft?.zone===z?'selected':''}>${escHtml(z)}</option>`).join('')}</select></label>
-                <div><button class="work-btn primary">${draft?'Retomar contagem':'Iniciar contagem'}</button></div></form></section>`:''}
+                <div class="work-actions"><button class="work-btn primary">${draft?'Retomar contagem':'Contar manualmente'}</button>
+                <button type="button" class="work-btn" onclick="downloadCountTemplate(this.form.elements.zone.value)">Descarregar modelo (PDF)</button>
+                <button type="button" class="work-btn" onclick="startCount(RESTAURANT,this.form.elements.zone.value);pickCountFile()">Ler contagem com IA</button></div>
+                <p class="work-muted">A leitura com IA precisa do modelo: imprima-o, escreva as quantidades e fotografe ou digitalize a folha.</p></form></section>`:''}
                 ${role.canLogWaste?'<button class="work-btn" onclick="openWasteModal()">Registar quebra</button>':''}
                 ${(appState.countHistory || []).filter(h=>h.store===appState.activeStore).length ? `<details class="p-3 rounded-xl bg-[#0B1120]"><summary>Contagens fechadas</summary>
                     ${(appState.countHistory || []).filter(h=>h.store===appState.activeStore).map(h=>`<details class="p-2"><summary>${escHtml(new Date(h.date).toLocaleString('pt-PT'))} · ${escHtml(appState.stores[h.store].name)} · ${escHtml(h.zone)} · ${fmtEur(h.rows.reduce((n,r)=>n+r.variance,0))}</summary>
